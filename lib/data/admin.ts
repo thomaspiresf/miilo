@@ -340,6 +340,34 @@ export async function adminAddImageUrl(
   if (ins.error) throw ins.error;
 }
 
+/** Reordena as fotos do produto conforme a lista de ids. */
+export async function adminReorderImages(
+  productId: string,
+  ids: string[],
+): Promise<void> {
+  assertPersistable();
+
+  if (!hasSupabaseAdmin()) {
+    const p = mockDB().products.find((x) => x.id === productId);
+    if (!p) return;
+    p.images = [...p.images]
+      .sort((a, b) => {
+        const ia = ids.indexOf(a.id);
+        const ib = ids.indexOf(b.id);
+        return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+      })
+      .map((im, i) => ({ ...im, sort: i }));
+    return;
+  }
+
+  const admin = createAdminClient();
+  await Promise.all(
+    ids.map((id, i) =>
+      admin.from("product_images").update({ sort: i }).eq("id", id).eq("product_id", productId),
+    ),
+  );
+}
+
 /** Define (ou limpa) a cor de uma imagem. */
 export async function adminSetImageColor(
   imageId: string,

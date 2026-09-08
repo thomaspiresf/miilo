@@ -11,6 +11,7 @@ import {
   adminDeleteProduct,
   adminAddImageUrl,
   adminSetImageColor,
+  adminReorderImages,
   adminDeleteImage,
   adminCreateCategory,
   adminDeleteCategory,
@@ -138,6 +139,17 @@ export async function addImageUrlAction(formData: FormData) {
     console.error("addImageUrl:", (err as Error).message);
   }
   revalidatePath(`/admin/produtos/${formData.get("productId")}`);
+}
+
+export async function reorderImagesAction(productId: string, ids: string[]) {
+  await requireAdmin();
+  try {
+    await adminReorderImages(productId, ids);
+  } catch (err) {
+    console.error("reorderImages:", (err as Error).message);
+  }
+  revalidatePath(`/admin/produtos/${productId}`);
+  revalidatePath("/");
 }
 
 export async function setProductVideoAction(formData: FormData) {
