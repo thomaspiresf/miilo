@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Logo } from "@/components/site/logo";
 import { cn } from "@/lib/utils";
 
 type Slide = {
+  /** cor de fundo (usada quando não há imagem) */
   bg: string;
+  /** imagem 1920×1080 (16:9) — caminho em /public ou URL pública */
+  image?: string;
   content: React.ReactNode;
   href?: string;
 };
@@ -17,7 +21,7 @@ const slides: Slide[] = [
     href: "/c/roupas",
     content: (
       <div className="flex h-full items-center justify-center">
-        <Logo variant="horizontal" tone="negativo" className="h-12 w-auto sm:h-16" priority />
+        <Logo variant="horizontal" tone="negativo" className="h-14 w-auto sm:h-24" priority />
       </div>
     ),
   },
@@ -27,7 +31,7 @@ const slides: Slide[] = [
     content: (
       <div className="flex h-full flex-col justify-center">
         <p className="text-xs font-bold uppercase tracking-widest text-white/80">novidade</p>
-        <p className="mt-1 max-w-xs text-2xl font-black leading-tight text-white sm:text-3xl">
+        <p className="mt-1 max-w-md text-2xl font-black leading-tight text-white sm:text-4xl">
           Bodies em algodão pima, do RN ao G.
         </p>
       </div>
@@ -37,10 +41,10 @@ const slides: Slide[] = [
     bg: "bg-accent",
     content: (
       <div className="flex h-full flex-col justify-center">
-        <p className="text-2xl font-black leading-tight text-white sm:text-3xl">
+        <p className="text-2xl font-black leading-tight text-white sm:text-4xl">
           Frete grátis acima de R$ 299
         </p>
-        <p className="mt-1 text-white/80">para todo o Brasil, no PAC.</p>
+        <p className="mt-1 text-white/80 sm:text-lg">para todo o Brasil, no PAC.</p>
       </div>
     ),
   },
@@ -56,8 +60,27 @@ export function HeroBanner() {
 
   const slide = slides[i];
   const inner = (
-    <div className={cn("h-44 rounded-3xl px-6 py-5 sm:h-56 sm:px-10", slide.bg)}>
-      {slide.content}
+    <div
+      className={cn(
+        "relative aspect-[16/9] w-full overflow-hidden rounded-3xl",
+        !slide.image && slide.bg,
+      )}
+    >
+      {slide.image && (
+        <>
+          <Image
+            src={slide.image}
+            alt=""
+            fill
+            priority
+            sizes="(max-width: 1152px) 100vw, 1152px"
+            className="object-cover"
+          />
+          {/* leve escurecida pra deixar o texto legível */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent" />
+        </>
+      )}
+      <div className="relative h-full px-6 py-6 sm:px-12 sm:py-10">{slide.content}</div>
     </div>
   );
 
