@@ -94,7 +94,7 @@ export default async function AdminProductEditPage(
         <section className="rounded-2xl border border-border bg-surface p-5">
           <h2 className="mb-1 font-bold">Vídeo (opcional)</h2>
           <p className="mb-3 text-xs text-muted">
-            Aparece como o primeiro item da galeria na página do produto.
+            Aparece logo depois da primeira foto na galeria da página do produto.
           </p>
           <VideoUploader productId={product.id} video={product.video_url} />
         </section>

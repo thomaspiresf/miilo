@@ -17,10 +17,11 @@ export function ProductGallery({
   video?: string | null;
 }) {
   const parsedVideo = parseVideo(video);
-  // slides: vídeo primeiro (se houver), depois as imagens
+  // slides: 1ª foto, depois o vídeo (se houver), depois as demais fotos
   const slides = [
+    ...(images[0] ? [{ type: "image" as const, key: images[0].id, im: images[0] }] : []),
     ...(parsedVideo ? [{ type: "video" as const, key: "video" }] : []),
-    ...images.map((im) => ({ type: "image" as const, key: im.id, im })),
+    ...images.slice(1).map((im) => ({ type: "image" as const, key: im.id, im })),
   ];
 
   const [active, setActive] = useState(0);
