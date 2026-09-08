@@ -49,7 +49,11 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
             <span className="font-bold">{o.number}</span>
             <span className="text-muted">{formatDate(o.created_at)}</span>
             <span className="text-muted">{o.customer_name ?? o.email}</span>
-            {o.delivery_mode === "pickup" && <Badge tone="warning">retirada</Badge>}
+            {o.channel === "pos" ? (
+              <Badge tone="primary">loja</Badge>
+            ) : (
+              o.delivery_mode === "pickup" && <Badge tone="warning">retirada</Badge>
+            )}
             <Badge tone={ORDER_STATUS[o.status].tone}>{ORDER_STATUS[o.status].label}</Badge>
             <span className="ml-auto font-bold">{formatBRL(o.total)}</span>
           </Link>

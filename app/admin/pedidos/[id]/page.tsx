@@ -30,6 +30,11 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
         <p className="text-sm text-muted">
           {formatDateTime(order.created_at)} · {order.email}
         </p>
+        {order.channel === "pos" && (
+          <p className="mt-1 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+            Venda presencial (PDV)
+          </p>
+        )}
       </div>
 
       <section className="rounded-2xl border border-border bg-surface p-5 text-sm">

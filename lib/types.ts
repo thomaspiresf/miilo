@@ -112,6 +112,9 @@ export type OrderItem = {
 
 export type DeliveryMode = "delivery" | "pickup";
 
+/** Origem do pedido: loja online ou venda presencial (PDV). */
+export type OrderChannel = "online" | "pos";
+
 export type Order = {
   id: string;
   number: string;
@@ -120,6 +123,7 @@ export type Order = {
   customer_name: string | null;
   phone: string | null;
   delivery_mode: DeliveryMode;
+  channel: OrderChannel;
   status: OrderStatus;
   subtotal: number;
   shipping_cost: number;

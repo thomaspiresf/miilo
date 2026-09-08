@@ -4,7 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseAdmin, hasSupabase } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
 import { imageUrl } from "@/lib/data/catalog";
-import type { DeliveryMode, Order, OrderStatus, ShippingOption } from "@/lib/types";
+import type {
+  DeliveryMode,
+  Order,
+  OrderChannel,
+  OrderStatus,
+  ShippingOption,
+} from "@/lib/types";
 
 export type NewOrderLine = { variantId: string; qty: number };
 
@@ -17,6 +23,8 @@ export type NewOrderInput = {
   address: Order["address"];
   shipping: Pick<ShippingOption, "company" | "service" | "price">;
   lines: NewOrderLine[];
+  /** "pos" para vendas presenciais no /admin/pdv. Padrão: "online". */
+  channel?: OrderChannel;
 };
 
 type ResolvedLine = {
@@ -96,6 +104,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
   }
 
   const pickup = input.deliveryMode === "pickup";
+  const channel: OrderChannel = input.channel === "pos" ? "pos" : "online";
   const subtotal = round2(
     resolved.reduce((sum, l) => sum + l.unitPrice * l.qty, 0),
   );
@@ -118,6 +127,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       customer_name: input.name,
       phone: input.phone,
       delivery_mode: input.deliveryMode,
+      channel,
       status: "pending",
       subtotal,
       shipping_cost: shippingCost,
@@ -156,20 +166,28 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
     total,
     address,
   };
-  let ins = await admin
-    .from("orders")
-    .insert({
+  // Tenta com todas as colunas; se alguma migração ainda não foi aplicada,
+  // vai removendo campos até o insert passar (channel -> trio do checkout).
+  const rowAttempts = [
+    {
       ...baseRow,
       customer_name: input.name,
       phone: input.phone,
       delivery_mode: input.deliveryMode,
-    })
-    .select("*")
-    .single();
-
-  // fallback se a migração migration-checkout.sql ainda não foi aplicada
-  if (ins.error && /column .* does not exist|schema cache/i.test(ins.error.message)) {
-    ins = await admin.from("orders").insert(baseRow).select("*").single();
+      channel,
+    },
+    {
+      ...baseRow,
+      customer_name: input.name,
+      phone: input.phone,
+      delivery_mode: input.deliveryMode,
+    },
+    baseRow,
+  ];
+  const missingColumn = /column .* does not exist|schema cache|could not find/i;
+  let ins = await admin.from("orders").insert(rowAttempts[0]).select("*").single();
+  for (let i = 1; i < rowAttempts.length && ins.error && missingColumn.test(ins.error.message); i++) {
+    ins = await admin.from("orders").insert(rowAttempts[i]).select("*").single();
   }
   if (ins.error) throw ins.error;
   const orderRow = ins.data;
@@ -202,6 +220,7 @@ function mapOrder(row: any, items: any[]): Order {
     customer_name: row.customer_name ?? null,
     phone: row.phone ?? null,
     delivery_mode: row.delivery_mode === "pickup" ? "pickup" : "delivery",
+    channel: row.channel === "pos" ? "pos" : "online",
     status: row.status,
     subtotal: Number(row.subtotal),
     shipping_cost: Number(row.shipping_cost),
