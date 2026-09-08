@@ -393,7 +393,7 @@ export async function adminUploadImage(
   };
 }
 
-const VIDEO_MAX_BYTES = 60 * 1024 * 1024;
+const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 const VIDEO_OK_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 
 /** Grava o vídeo do produto (path do bucket, link YouTube/Vimeo, ou null pra remover). */
@@ -424,7 +424,7 @@ export async function adminUploadVideo(
     throw new Error("Formato não suportado. Use MP4, WebM ou MOV.");
   }
   if (file.size > VIDEO_MAX_BYTES) {
-    throw new Error("Vídeo muito grande (máx. 60 MB). Deixe o clipe curto ou use um link do YouTube/Vimeo.");
+    throw new Error("Vídeo muito grande (máx. 50 MB). Deixe o clipe curto ou use um link do YouTube/Vimeo.");
   }
 
   const ext = file.type === "video/quicktime" ? "mov" : file.type.split("/")[1];

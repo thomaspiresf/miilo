@@ -100,7 +100,7 @@ export function VideoUploader({
         >
           {busy ? <Spinner /> : <><Film className="h-4 w-4" /> Enviar vídeo</>}
         </Button>
-        <span className="text-xs text-muted">MP4, WebM ou MOV até 60 MB — deixe curto (até ~1 min).</span>
+        <span className="text-xs text-muted">MP4, WebM ou MOV até 50 MB — deixe curto (até ~1 min).</span>
       </div>
 
       <div className="flex flex-wrap gap-2">
