@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   miilo — tokens de marca
+   Paleta oficial: Amarelo #fdd307 · Azul #2c4fc9 · Azul bebê #89baff
+   · Rosa bebê #ff83aa · Vermelho #ff514f. Loja é sempre "light".
+   ========================================================================== */
+:root {
+  --background: #fbfbfd;
+  --surface: #ffffff;
+  --foreground: #16181d;
+  --muted: #6b7280;
+  --border: #e9e9ef;
+
+  --primary: #ff514f; /* vermelho */
+  --primary-fg: #ffffff;
+  --accent: #2c4fc9; /* azul */
+  --accent-fg: #ffffff;
+
+  /* apoios lúdicos */
+  --yellow: #fdd307;
+  --sky: #89baff;
+  --pink: #ff83aa;
+
+  --success: #16a34a;
+  --warning: #b45309;
+  --danger: #dc2626;
+
+  --radius: 0.9rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-fg);
+  --color-yellow: var(--yellow);
+  --color-sky: var(--sky);
+  --color-pink: var(--pink);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 0.4rem);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Esconde a barra de rolagem horizontal dos carrosséis mantendo o scroll */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Área segura para a barra de ações fixa no rodapé (iOS) */
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}

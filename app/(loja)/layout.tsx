@@ -1,0 +1,55 @@
+import Link from "next/link";
+import { getCategories } from "@/lib/data/catalog";
+import { getUser, isDemoMode } from "@/lib/auth";
+import { SiteHeader } from "@/components/site/header";
+import { Logo } from "@/components/site/logo";
+import { env } from "@/lib/env";
+
+export default async function LojaLayout({ children }: LayoutProps<"/">) {
+  const [categories, user, demo] = await Promise.all([
+    getCategories(),
+    getUser(),
+    isDemoMode(),
+  ]);
+
+  return (
+    <>
+      {demo && (
+        <div className="bg-warning/15 px-4 py-1.5 text-center text-xs font-medium text-warning">
+          Modo demonstração — catálogo de exemplo, frete estimado e pagamento
+          simulado. Configure o <code>.env.local</code> para dados reais.
+        </div>
+      )}
+      <SiteHeader
+        categories={categories}
+        user={
+          user
+            ? { name: user.name, email: user.email, isAdmin: user.role === "admin" }
+            : null
+        }
+      />
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-4 sm:px-6">
+        {children}
+      </main>
+      <footer className="border-t border-border bg-surface">
+        <div className="mx-auto w-full max-w-6xl px-4 py-10 text-sm text-muted sm:px-6">
+          <Logo variant="horizontal" className="h-8 w-auto" />
+          <p className="mt-3 max-w-md">
+            Roupas e brinquedos infantis escolhidos com carinho. Enviamos para
+            todo o Brasil.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
+            <Link href="/c/roupas">Roupas</Link>
+            <Link href="/c/brinquedos">Brinquedos</Link>
+            <Link href="/conta">Minha conta</Link>
+            <Link href="/conta/pedidos">Meus pedidos</Link>
+          </div>
+          <p className="mt-6 text-xs">
+            © {new Date().getFullYear()} {env.site.storeName}. Pagamentos via
+            Mercado Pago. Fretes via Melhor Envio.
+          </p>
+        </div>
+      </footer>
+    </>
+  );
+}

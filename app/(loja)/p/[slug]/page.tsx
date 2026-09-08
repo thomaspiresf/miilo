@@ -1,0 +1,115 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getAllProductSlugs, getProductBySlug, listProducts } from "@/lib/data/catalog";
+import { formatAgeRange } from "@/lib/format";
+import { ProductGallery } from "@/components/site/product-gallery";
+import { ProductBuyBox } from "@/components/site/product-buy-box";
+import { ProductGrid } from "@/components/site/product-card";
+import { Rating } from "@/components/site/rating";
+import { ExpandableText } from "@/components/site/expandable-text";
+import { Accordion } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/misc";
+
+export async function generateStaticParams() {
+  try {
+    const slugs = await getAllProductSlugs();
+    return slugs.map((slug) => ({ slug }));
+  } catch {
+    return [];
+  }
+}
+
+export async function generateMetadata(
+  props: PageProps<"/p/[slug]">,
+): Promise<Metadata> {
+  const { slug } = await props.params;
+  const product = await getProductBySlug(slug);
+  if (!product) return { title: "Produto não encontrado" };
+  return {
+    title: product.name,
+    description: product.description ?? undefined,
+    openGraph: {
+      title: product.name,
+      images: product.images[0]?.url ? [product.images[0].url] : undefined,
+    },
+  };
+}
+
+export default async function ProductPage(props: PageProps<"/p/[slug]">) {
+  const { slug } = await props.params;
+  const product = await getProductBySlug(slug);
+  if (!product) notFound();
+
+  const related = (await listProducts({ categorySlug: product.category.slug }))
+    .filter((p) => p.id !== product.id)
+    .slice(0, 4);
+
+  const age = formatAgeRange(product.age_min_months, product.age_max_months);
+
+  return (
+    <div className="space-y-12">
+      <nav className="text-xs text-muted">
+        <Link href="/">Início</Link>
+        <span className="mx-1.5">/</span>
+        <Link href={`/c/${product.category.slug}`}>{product.category.name}</Link>
+      </nav>
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        <ProductGallery images={product.images} name={product.name} />
+
+        <div>
+          {product.brand && (
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              {product.brand}
+            </p>
+          )}
+          <h1 className="mt-1 text-2xl font-black leading-tight">{product.name}</h1>
+
+          <div className="mt-2">
+            <Rating avg={product.rating_avg} count={product.rating_count} size="md" />
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {age && <Badge tone="neutral">{age}</Badge>}
+            {product.gender && product.gender !== "unissex" && (
+              <Badge tone="neutral">{product.gender}</Badge>
+            )}
+          </div>
+
+          <div className="mt-6">
+            <ProductBuyBox product={product} />
+          </div>
+        </div>
+      </div>
+
+      {/* Sobre a peça */}
+      <section className="max-w-2xl">
+        <h2 className="mb-3 text-lg font-black">Sobre a peça</h2>
+        {product.composition && (
+          <p className="mb-2 text-sm">
+            <span className="font-bold">Composição:</span>{" "}
+            <span className="text-muted">{product.composition}</span>
+          </p>
+        )}
+        {product.description && <ExpandableText text={product.description} />}
+
+        <div className="mt-4">
+          {product.fit_notes && <Accordion title="Modelagem">{product.fit_notes}</Accordion>}
+          {product.care_notes && <Accordion title="Cuidados">{product.care_notes}</Accordion>}
+          <Accordion title="Trocas e devoluções">
+            Você tem 7 dias corridos após o recebimento para solicitar troca ou
+            devolução, com a peça sem uso e com etiqueta. É só falar com a gente.
+          </Accordion>
+        </div>
+      </section>
+
+      {related.length > 0 && (
+        <section>
+          <h2 className="mb-4 text-xl font-black">Você também pode gostar</h2>
+          <ProductGrid products={related} />
+        </section>
+      )}
+    </div>
+  );
+}

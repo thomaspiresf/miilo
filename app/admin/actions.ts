@@ -1,0 +1,147 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { requireAdmin } from "@/lib/auth";
+import {
+  adminCreateProduct,
+  adminUpdateProduct,
+  adminSetProductActive,
+  adminAddImageUrl,
+  adminDeleteImage,
+  adminCreateCategory,
+} from "@/lib/data/admin";
+import { setOrderStatus } from "@/lib/data/orders";
+import type { OrderStatus } from "@/lib/types";
+
+const variantSchema = z.object({
+  id: z.string().optional(),
+  size: z.string().trim().nullable().default(null),
+  color: z.string().trim().nullable().default(null),
+  colorHex: z.string().trim().nullable().default(null),
+  price: z.number().nonnegative(),
+  stock: z.number().int().nonnegative(),
+  weightGrams: z.number().int().positive(),
+});
+
+const productSchema = z.object({
+  name: z.string().min(2),
+  description: z.string().nullable(),
+  categoryId: z.string().min(1),
+  brand: z.string().nullable(),
+  gender: z.enum(["menino", "menina", "unissex"]).nullable(),
+  ageMinMonths: z.number().int().nonnegative().nullable(),
+  ageMaxMonths: z.number().int().nonnegative().nullable(),
+  compareAtPrice: z.number().nonnegative().nullable(),
+  composition: z.string().nullable(),
+  fitNotes: z.string().nullable(),
+  careNotes: z.string().nullable(),
+  active: z.boolean(),
+  variants: z.array(variantSchema).min(1),
+});
+
+function num(v: FormDataEntryValue | null): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+export async function saveProductAction(_prev: unknown, formData: FormData) {
+  await requireAdmin();
+
+  const str = (k: string) => (String(formData.get(k) ?? "").trim() || null) as string | null;
+  const raw = {
+    name: String(formData.get("name") ?? "").trim(),
+    description: str("description"),
+    categoryId: String(formData.get("categoryId") ?? ""),
+    brand: str("brand"),
+    gender: (formData.get("gender") || null) as "menino" | "menina" | "unissex" | null,
+    ageMinMonths: num(formData.get("ageMinMonths")),
+    ageMaxMonths: num(formData.get("ageMaxMonths")),
+    compareAtPrice: num(formData.get("compareAtPrice")),
+    composition: str("composition"),
+    fitNotes: str("fitNotes"),
+    careNotes: str("careNotes"),
+    active: formData.get("active") === "on",
+    variants: JSON.parse(String(formData.get("variants") ?? "[]")),
+  };
+
+  const parsed = productSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const id = String(formData.get("id") ?? "");
+  const { variants, ...product } = parsed.data;
+
+  try {
+    if (id && id !== "novo") {
+      await adminUpdateProduct(id, product, variants);
+    } else {
+      await adminCreateProduct(product, variants);
+    }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Falha ao salvar" };
+  }
+
+  revalidatePath("/admin/produtos");
+  revalidatePath("/");
+  redirect("/admin/produtos");
+}
+
+export async function toggleProductActiveAction(formData: FormData) {
+  await requireAdmin();
+  try {
+    await adminSetProductActive(
+      String(formData.get("id")),
+      formData.get("active") === "true",
+    );
+  } catch (err) {
+    console.error("toggleProductActive:", (err as Error).message);
+  }
+  revalidatePath("/admin/produtos");
+  revalidatePath("/");
+}
+
+export async function addImageUrlAction(formData: FormData) {
+  await requireAdmin();
+  const url = String(formData.get("url") ?? "").trim();
+  try {
+    if (url) await adminAddImageUrl(String(formData.get("productId")), url);
+  } catch (err) {
+    console.error("addImageUrl:", (err as Error).message);
+  }
+  revalidatePath(`/admin/produtos/${formData.get("productId")}`);
+}
+
+export async function deleteImageAction(formData: FormData) {
+  await requireAdmin();
+  try {
+    await adminDeleteImage(String(formData.get("imageId")));
+  } catch (err) {
+    console.error("deleteImage:", (err as Error).message);
+  }
+  revalidatePath(`/admin/produtos/${formData.get("productId")}`);
+}
+
+export async function createCategoryAction(_prev: unknown, formData: FormData) {
+  await requireAdmin();
+  const name = String(formData.get("name") ?? "").trim();
+  const kind = formData.get("kind") === "brinquedos" ? "brinquedos" : "roupas";
+  if (name.length < 2) return { error: "Nome muito curto" };
+  await adminCreateCategory(name, kind);
+  revalidatePath("/admin/categorias");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function updateOrderStatusAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status")) as OrderStatus;
+  const trackingCode = String(formData.get("trackingCode") ?? "").trim() || null;
+  await setOrderStatus(id, status, { trackingCode });
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/pedidos");
+}
