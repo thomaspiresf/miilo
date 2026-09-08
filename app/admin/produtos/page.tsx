@@ -2,7 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { adminListProducts } from "@/lib/data/admin";
 import { formatBRL } from "@/lib/format";
-import { toggleProductActiveAction } from "@/app/admin/actions";
+import { toggleProductActiveAction, deleteProductAction } from "@/app/admin/actions";
+import { ConfirmSubmit } from "@/components/admin/confirm-submit";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 
@@ -46,6 +47,15 @@ export default async function AdminProductsPage() {
                 <button className="text-xs font-semibold text-primary">
                   {p.active ? "desativar" : "ativar"}
                 </button>
+              </form>
+              <form action={deleteProductAction}>
+                <input type="hidden" name="id" value={p.id} />
+                <ConfirmSubmit
+                  message={`Apagar "${p.name}" de vez? Isso não pode ser desfeito. (O histórico de pedidos é mantido.)`}
+                  className="text-xs font-semibold text-danger hover:underline"
+                >
+                  apagar
+                </ConfirmSubmit>
               </form>
             </div>
           );

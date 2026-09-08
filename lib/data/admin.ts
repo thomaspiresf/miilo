@@ -280,6 +280,35 @@ export async function adminSetProductActive(id: string, active: boolean): Promis
   await admin.from("products").update({ active }).eq("id", id);
 }
 
+/**
+ * Apaga o produto de vez. Variações, imagens e movimentações de estoque somem
+ * junto (cascade). O histórico de pedidos é preservado — cada item de pedido
+ * guarda nome/preço/qtd e só perde o vínculo com a variação (set null).
+ */
+export async function adminDeleteProduct(id: string): Promise<void> {
+  assertPersistable();
+
+  if (!hasSupabaseAdmin()) {
+    const db = mockDB();
+    db.products = db.products.filter((p) => p.id !== id);
+    return;
+  }
+
+  const admin = createAdminClient();
+  // remove os arquivos de imagem do Storage (o cascade só apaga as linhas)
+  const { data: imgs } = await admin
+    .from("product_images")
+    .select("storage_path")
+    .eq("product_id", id);
+  const paths = (imgs ?? [])
+    .map((r) => r.storage_path as string)
+    .filter((p) => p && !p.startsWith("http") && !p.startsWith("data:"));
+  if (paths.length) await admin.storage.from(BUCKET).remove(paths);
+
+  const { error } = await admin.from("products").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function adminAddImageUrl(
   productId: string,
   storagePathOrUrl: string,

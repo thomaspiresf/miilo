@@ -8,6 +8,7 @@ import {
   adminCreateProduct,
   adminUpdateProduct,
   adminSetProductActive,
+  adminDeleteProduct,
   adminAddImageUrl,
   adminSetImageColor,
   adminDeleteImage,
@@ -97,6 +98,19 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
   revalidatePath("/");
   // ao criar, vai direto pra tela do produto (onde ficam as fotos)
   redirect(newId ? `/admin/produtos/${newId}?criado=1` : "/admin/produtos");
+}
+
+export async function deleteProductAction(formData: FormData) {
+  await requireAdmin();
+  try {
+    await adminDeleteProduct(String(formData.get("id")));
+  } catch (err) {
+    console.error("deleteProduct:", (err as Error).message);
+  }
+  revalidatePath("/admin/produtos");
+  revalidatePath("/admin");
+  revalidatePath("/");
+  redirect("/admin/produtos");
 }
 
 export async function toggleProductActiveAction(formData: FormData) {
