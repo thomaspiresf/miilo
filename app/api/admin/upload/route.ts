@@ -8,13 +8,14 @@ export async function POST(request: Request) {
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");
   const productId = String(form?.get("productId") ?? "");
+  const color = String(form?.get("color") ?? "").trim() || null;
 
   if (!(file instanceof File) || !productId) {
     return NextResponse.json({ error: "Envie um arquivo e o productId." }, { status: 400 });
   }
 
   try {
-    const { url } = await adminUploadImage(productId, file);
+    const { url } = await adminUploadImage(productId, file, color);
     return NextResponse.json({ ok: true, url });
   } catch (err) {
     return NextResponse.json(

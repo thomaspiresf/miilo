@@ -13,6 +13,8 @@ export type ProductImage = {
   url: string;
   alt: string | null;
   sort: number;
+  /** cor da variação a que a foto pertence; null = vale para todas */
+  color: string | null;
 };
 
 export type ProductVariant = {

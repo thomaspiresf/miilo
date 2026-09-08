@@ -9,6 +9,7 @@ import {
   adminUpdateProduct,
   adminSetProductActive,
   adminAddImageUrl,
+  adminSetImageColor,
   adminDeleteImage,
   adminCreateCategory,
 } from "@/lib/data/admin";
@@ -111,10 +112,22 @@ export async function toggleProductActiveAction(formData: FormData) {
 export async function addImageUrlAction(formData: FormData) {
   await requireAdmin();
   const url = String(formData.get("url") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim() || null;
   try {
-    if (url) await adminAddImageUrl(String(formData.get("productId")), url);
+    if (url) await adminAddImageUrl(String(formData.get("productId")), url, color);
   } catch (err) {
     console.error("addImageUrl:", (err as Error).message);
+  }
+  revalidatePath(`/admin/produtos/${formData.get("productId")}`);
+}
+
+export async function setImageColorAction(formData: FormData) {
+  await requireAdmin();
+  const color = String(formData.get("color") ?? "").trim() || null;
+  try {
+    await adminSetImageColor(String(formData.get("imageId")), color);
+  } catch (err) {
+    console.error("setImageColor:", (err as Error).message);
   }
   revalidatePath(`/admin/produtos/${formData.get("productId")}`);
 }

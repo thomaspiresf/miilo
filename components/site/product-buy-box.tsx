@@ -15,7 +15,15 @@ function variantLabel(v: ProductVariant) {
   return [v.size, v.color].filter(Boolean).join(" · ") || "Único";
 }
 
-export function ProductBuyBox({ product }: { product: Product }) {
+export function ProductBuyBox({
+  product,
+  color,
+  onColorChange,
+}: {
+  product: Product;
+  color: string | null;
+  onColorChange: (c: string | null) => void;
+}) {
   const router = useRouter();
   const variants = product.variants;
   const sizes = useMemo(
@@ -29,7 +37,6 @@ export function ProductBuyBox({ product }: { product: Product }) {
   }, [variants]);
 
   const firstAvailable = variants.find((v) => v.stock > 0) ?? variants[0];
-  const [color, setColor] = useState<string | null>(firstAvailable?.color ?? null);
   const [size, setSize] = useState<string | null>(firstAvailable?.size ?? null);
   const [added, setAdded] = useState(false);
 
@@ -126,7 +133,7 @@ export function ProductBuyBox({ product }: { product: Product }) {
               return (
                 <button
                   key={c.name}
-                  onClick={() => setColor(c.name)}
+                  onClick={() => onColorChange(c.name)}
                   title={c.name}
                   aria-label={c.name}
                   className={cn(

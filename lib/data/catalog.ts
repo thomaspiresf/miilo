@@ -14,7 +14,7 @@ export function imageUrl(path: string) {
 const PRODUCT_SELECT = `
   *,
   category:categories!inner(id, slug, name, kind),
-  images:product_images(id, storage_path, alt, sort),
+  images:product_images(*),
   variants:product_variants(id, sku, size, color, color_hex, price, stock, weight_grams, active)
 `;
 
@@ -26,6 +26,7 @@ export function mapProduct(row: any): Product {
       url: imageUrl(im.storage_path),
       alt: im.alt ?? null,
       sort: im.sort ?? 0,
+      color: im.color ?? null,
     }))
     .sort((a: any, b: any) => a.sort - b.sort);
 

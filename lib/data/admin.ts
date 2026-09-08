@@ -55,7 +55,7 @@ export type VariantInput = {
 const ADMIN_PRODUCT_SELECT = `
   *,
   category:categories(id, slug, name, kind),
-  images:product_images(id, storage_path, alt, sort),
+  images:product_images(*),
   variants:product_variants(id, sku, size, color, color_hex, price, stock, weight_grams, active)
 `;
 
@@ -278,7 +278,11 @@ export async function adminSetProductActive(id: string, active: boolean): Promis
   await admin.from("products").update({ active }).eq("id", id);
 }
 
-export async function adminAddImageUrl(productId: string, storagePathOrUrl: string): Promise<void> {
+export async function adminAddImageUrl(
+  productId: string,
+  storagePathOrUrl: string,
+  color: string | null = null,
+): Promise<void> {
   assertPersistable();
   if (!hasSupabaseAdmin()) {
     const p = mockDB().products.find((x) => x.id === productId);
@@ -288,6 +292,7 @@ export async function adminAddImageUrl(productId: string, storagePathOrUrl: stri
         url: storagePathOrUrl,
         alt: null,
         sort: p.images.length,
+        color: color || null,
       });
     return;
   }
@@ -296,9 +301,33 @@ export async function adminAddImageUrl(productId: string, storagePathOrUrl: stri
     .from("product_images")
     .select("id", { count: "exact", head: true })
     .eq("product_id", productId);
-  await admin
+  const row = { product_id: productId, storage_path: storagePathOrUrl, sort: count ?? 0 };
+  let ins = await admin.from("product_images").insert({ ...row, color: color || null });
+  if (ins.error && MISSING_COLUMN.test(ins.error.message)) {
+    ins = await admin.from("product_images").insert(row);
+  }
+  if (ins.error) throw ins.error;
+}
+
+/** Define (ou limpa) a cor de uma imagem. */
+export async function adminSetImageColor(
+  imageId: string,
+  color: string | null,
+): Promise<void> {
+  assertPersistable();
+  if (!hasSupabaseAdmin()) {
+    for (const p of mockDB().products) {
+      const im = p.images.find((x) => x.id === imageId);
+      if (im) im.color = color || null;
+    }
+    return;
+  }
+  const admin = createAdminClient();
+  const upd = await admin
     .from("product_images")
-    .insert({ product_id: productId, storage_path: storagePathOrUrl, sort: count ?? 0 });
+    .update({ color: color || null })
+    .eq("id", imageId);
+  if (upd.error && !MISSING_COLUMN.test(upd.error.message)) throw upd.error;
 }
 
 export async function adminDeleteImage(imageId: string): Promise<void> {
@@ -329,6 +358,7 @@ const OK_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 export async function adminUploadImage(
   productId: string,
   file: File,
+  color: string | null = null,
 ): Promise<{ url: string }> {
   assertPersistable();
   if (!OK_TYPES.includes(file.type)) {
@@ -345,7 +375,7 @@ export async function adminUploadImage(
     // mock: guarda como data URL só para visualizar
     const buf = Buffer.from(await file.arrayBuffer());
     const dataUrl = `data:${file.type};base64,${buf.toString("base64")}`;
-    await adminAddImageUrl(productId, dataUrl);
+    await adminAddImageUrl(productId, dataUrl, color);
     return { url: dataUrl };
   }
 
@@ -355,7 +385,7 @@ export async function adminUploadImage(
     .upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw new Error(`Falha no upload: ${error.message}`);
 
-  await adminAddImageUrl(productId, path);
+  await adminAddImageUrl(productId, path, color);
   return {
     url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`,
   };

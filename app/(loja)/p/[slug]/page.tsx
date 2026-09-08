@@ -3,8 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAllProductSlugs, getProductBySlug, listProducts } from "@/lib/data/catalog";
 import { formatAgeRange } from "@/lib/format";
-import { ProductGallery } from "@/components/site/product-gallery";
-import { ProductBuyBox } from "@/components/site/product-buy-box";
+import { ProductDetail } from "@/components/site/product-detail";
 import { ProductGrid } from "@/components/site/product-card";
 import { Rating } from "@/components/site/rating";
 import { ExpandableText } from "@/components/site/expandable-text";
@@ -55,33 +54,30 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
         <Link href={`/c/${product.category.slug}`}>{product.category.name}</Link>
       </nav>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <ProductGallery images={product.images} name={product.name} />
-
-        <div>
-          {product.brand && (
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-              {product.brand}
-            </p>
-          )}
-          <h1 className="mt-1 text-2xl font-black leading-tight">{product.name}</h1>
-
-          <div className="mt-2">
-            <Rating avg={product.rating_avg} count={product.rating_count} size="md" />
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            {age && <Badge tone="neutral">{age}</Badge>}
-            {product.gender && product.gender !== "unissex" && (
-              <Badge tone="neutral">{product.gender}</Badge>
+      <ProductDetail
+        product={product}
+        info={
+          <>
+            {product.brand && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                {product.brand}
+              </p>
             )}
-          </div>
+            <h1 className="mt-1 text-2xl font-black leading-tight">{product.name}</h1>
 
-          <div className="mt-6">
-            <ProductBuyBox product={product} />
-          </div>
-        </div>
-      </div>
+            <div className="mt-2">
+              <Rating avg={product.rating_avg} count={product.rating_count} size="md" />
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {age && <Badge tone="neutral">{age}</Badge>}
+              {product.gender && product.gender !== "unissex" && (
+                <Badge tone="neutral">{product.gender}</Badge>
+              )}
+            </div>
+          </>
+        }
+      />
 
       {/* Sobre o produto */}
       <section className="max-w-2xl">

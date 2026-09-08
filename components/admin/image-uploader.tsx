@@ -4,21 +4,28 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, X } from "lucide-react";
-import { deleteImageAction } from "@/app/admin/actions";
+import { deleteImageAction, setImageColorAction } from "@/app/admin/actions";
 import { Spinner } from "@/components/ui/misc";
 import type { ProductImage } from "@/lib/types";
+
+const ALL = "__all__";
 
 export function ImageUploader({
   productId,
   images,
+  colors,
 }: {
   productId: string;
   images: ProductImage[];
+  colors: string[];
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [uploadColor, setUploadColor] = useState<string>(ALL);
+
+  const hasColors = colors.length > 0;
 
   async function upload(files: FileList | null) {
     if (!files?.length) return;
@@ -28,6 +35,7 @@ export function ImageUploader({
       const fd = new FormData();
       fd.append("file", file);
       fd.append("productId", productId);
+      if (uploadColor !== ALL) fd.append("color", uploadColor);
       try {
         const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
         const data = await res.json();
@@ -44,28 +52,74 @@ export function ImageUploader({
 
   return (
     <div>
+      {hasColors && (
+        <label className="mb-3 flex items-center gap-2 text-sm">
+          <span className="font-semibold">Atrelar novas fotos a:</span>
+          <select
+            value={uploadColor}
+            onChange={(e) => setUploadColor(e.target.value)}
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm"
+          >
+            <option value={ALL}>Todas as cores</option>
+            {colors.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <div className="flex flex-wrap gap-3">
         {images.map((im) => (
-          <div key={im.id} className="relative">
-            <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-border bg-black/5">
-              <Image src={im.url} alt="" fill sizes="96px" className="object-cover" unoptimized />
-            </div>
-            <form
-              action={async (fd) => {
-                await deleteImageAction(fd);
-                router.refresh();
-              }}
-              className="absolute -right-2 -top-2"
-            >
-              <input type="hidden" name="imageId" value={im.id} />
-              <input type="hidden" name="productId" value={productId} />
-              <button
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-danger text-white"
-                aria-label="Remover imagem"
+          <div key={im.id} className="w-24">
+            <div className="relative">
+              <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-border bg-black/5">
+                <Image src={im.url} alt="" fill sizes="96px" className="object-cover" unoptimized />
+              </div>
+              <form
+                action={async (fd) => {
+                  await deleteImageAction(fd);
+                  router.refresh();
+                }}
+                className="absolute -right-2 -top-2"
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </form>
+                <input type="hidden" name="imageId" value={im.id} />
+                <input type="hidden" name="productId" value={productId} />
+                <button
+                  className="flex h-6 w-6 items-center justify-center rounded-full bg-danger text-white"
+                  aria-label="Remover imagem"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </form>
+            </div>
+
+            {hasColors && (
+              <form
+                action={async (fd) => {
+                  await setImageColorAction(fd);
+                  router.refresh();
+                }}
+                className="mt-1"
+              >
+                <input type="hidden" name="imageId" value={im.id} />
+                <input type="hidden" name="productId" value={productId} />
+                <select
+                  name="color"
+                  defaultValue={im.color ?? ""}
+                  onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                  className="h-8 w-24 rounded-lg border border-border bg-surface px-1 text-xs"
+                >
+                  <option value="">Todas</option>
+                  {colors.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </form>
+            )}
           </div>
         ))}
 
@@ -91,7 +145,8 @@ export function ImageUploader({
 
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       <p className="mt-2 text-xs text-muted">
-        JPG, PNG ou WebP até 6 MB. A primeira imagem é a principal.
+        JPG, PNG ou WebP até 6 MB. A primeira imagem “Todas” é a principal.
+        {hasColors && " Fotos atreladas a uma cor aparecem quando o cliente seleciona aquela cor."}
       </p>
     </div>
   );

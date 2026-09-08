@@ -22,6 +22,7 @@ function img(seed: string, i: number) {
     url: `https://picsum.photos/seed/${seed}${i}/900/1100`,
     alt: null,
     sort: i,
+    color: null as string | null,
   };
 }
 
