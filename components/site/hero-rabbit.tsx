@@ -43,9 +43,9 @@ export function HeroRabbit() {
       <div className="flex items-end gap-2 sm:gap-3">
         {/* coelho + toca */}
         <svg
-          viewBox="65 150 950 800"
+          viewBox="65 150 950 780"
           preserveAspectRatio="xMidYMax meet"
-          className="mb-1 h-11 w-auto sm:mb-1.5 sm:h-16"
+          className="h-[3.25rem] w-auto sm:h-[4.75rem]"
           role="img"
           aria-label="miilo"
         >
