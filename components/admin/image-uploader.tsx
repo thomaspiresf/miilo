@@ -141,45 +141,50 @@ export function ImageUploader({
               drop(im.id);
             }}
           >
-            <div
-              draggable
-              onDragStart={(e) => {
-                dragIdRef.current = im.id;
-                setDraggingId(im.id);
-                e.dataTransfer.effectAllowed = "move";
-              }}
-              onDragEnd={() => {
-                dragIdRef.current = null;
-                setDraggingId(null);
-                setOverId(null);
-              }}
-              className={cn(
-                "group relative h-24 w-24 cursor-grab overflow-hidden rounded-lg border border-border bg-black/5 active:cursor-grabbing",
-                draggingId === im.id && "opacity-40",
-                overId === im.id && "ring-2 ring-primary ring-offset-1",
-              )}
-            >
-              <Image src={im.url} alt="" fill sizes="96px" className="object-cover" unoptimized />
-              {i === 0 && (
-                <span className="absolute bottom-0 left-0 right-0 bg-foreground/70 py-0.5 text-center text-[10px] font-semibold text-background">
-                  principal
-                </span>
-              )}
-              <GripVertical className="absolute left-1 top-1 h-4 w-4 text-white/80 opacity-0 drop-shadow group-hover:opacity-100" />
+            <div className="relative">
+              <div
+                draggable
+                onDragStart={(e) => {
+                  dragIdRef.current = im.id;
+                  setDraggingId(im.id);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragEnd={() => {
+                  dragIdRef.current = null;
+                  setDraggingId(null);
+                  setOverId(null);
+                }}
+                className={cn(
+                  "relative h-24 w-24 cursor-grab overflow-hidden rounded-lg border border-border bg-black/5 active:cursor-grabbing",
+                  draggingId === im.id && "opacity-40",
+                  overId === im.id && "ring-2 ring-primary ring-offset-1",
+                )}
+              >
+                <Image src={im.url} alt="" fill sizes="96px" className="object-cover" unoptimized />
+                {i === 0 && (
+                  <span className="absolute bottom-0 left-0 right-0 bg-foreground/70 py-0.5 text-center text-[10px] font-semibold text-background">
+                    principal
+                  </span>
+                )}
+                <GripVertical className="pointer-events-none absolute left-1 top-1 h-4 w-4 text-white/90 drop-shadow" />
+              </div>
+
+              {/* botão remover — FORA do elemento draggable, pra não conflitar com o toque */}
               <form
                 action={async (fd) => {
                   await deleteImageAction(fd);
                   router.refresh();
                 }}
-                className="absolute -right-2 -top-2"
+                className="absolute -right-2 -top-2 z-10"
               >
                 <input type="hidden" name="imageId" value={im.id} />
                 <input type="hidden" name="productId" value={productId} />
                 <button
-                  className="flex h-6 w-6 items-center justify-center rounded-full bg-danger text-white"
+                  type="submit"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-danger text-white shadow"
                   aria-label="Remover imagem"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-4 w-4" />
                 </button>
               </form>
             </div>
