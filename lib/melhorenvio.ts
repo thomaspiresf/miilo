@@ -9,7 +9,8 @@ export type QuoteRequest = {
 };
 
 const SANDBOX_BASE = "https://sandbox.melhorenvio.com.br";
-const PROD_BASE = "https://melhorenvio.com.br";
+const PROD_BASE = "https://www.melhorenvio.com.br";
+const CALCULATE_PATH = "/api/v2/me/shipment/calculate";
 
 /**
  * Tabela de frete fixa usada no modo demonstração (ou sem token do Melhor Envio).
@@ -63,7 +64,7 @@ export async function quoteShipping(req: QuoteRequest): Promise<ShippingOption[]
   }));
 
   try {
-    const res = await fetch(`${base}/api/v2/me/shipping/calculate`, {
+    const res = await fetch(`${base}${CALCULATE_PATH}`, {
       method: "POST",
       headers: {
         Accept: "application/json",
