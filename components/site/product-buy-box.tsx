@@ -193,7 +193,9 @@ export function ProductBuyBox({
 
       <p className="text-xs text-muted">
         {outOfStock
-          ? "Combinação indisponível — escolha outro tamanho ou cor."
+          ? sizes.length > 0 || colors.length > 0
+            ? "Combinação indisponível — escolha outro tamanho ou cor."
+            : "Esgotado"
           : selected && selected.stock <= 5
             ? `Últimas ${selected.stock} unidades`
             : "Pronta entrega"}

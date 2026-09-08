@@ -45,6 +45,9 @@ export function ProductForm({
     [categories, categoryId],
   );
   const isToy = kind === "brinquedos";
+  // brinquedo comum = sem tamanho/cor. Se o produto já tiver 2+ variações (raro),
+  // mantém a grade pra não perder dados.
+  const toySimple = isToy && (product?.variants.length ?? 0) <= 1;
 
   // faixa etária — guardada em meses no banco, editável em meses ou anos.
   // só mostra em "anos" quando os valores são múltiplos exatos de 12 (sem perder precisão).
@@ -100,12 +103,13 @@ export function ProductForm({
     setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
   }
 
+  // brinquedo comum = 1 "variação" só, sem tamanho/cor; roupa = grade de variações
   const variantsJson = JSON.stringify(
-    rows.map((r) => ({
+    (toySimple ? rows.slice(0, 1) : rows).map((r) => ({
       id: r.id,
-      size: r.size.trim() || null,
-      color: r.color.trim() || null,
-      colorHex: r.colorHex.trim() || null,
+      size: toySimple ? null : r.size.trim() || null,
+      color: toySimple ? null : r.color.trim() || null,
+      colorHex: toySimple ? null : r.colorHex.trim() || null,
       price: Number(r.price) || 0,
       stock: parseInt(r.stock || "0", 10),
       weightGrams: parseInt(r.weightGrams || "300", 10),
@@ -281,6 +285,38 @@ export function ProductForm({
         </label>
       </div>
 
+      {toySimple ? (
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <Label>Preço e estoque</Label>
+          <p className="mb-3 mt-1 text-xs text-muted">
+            Brinquedo não tem tamanho nem cor — é só o preço, o estoque e o peso.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Preço R$">
+              <Input
+                inputMode="decimal"
+                value={rows[0].price}
+                onChange={(e) => updateRow(0, { price: e.target.value })}
+                placeholder="59.90"
+              />
+            </Field>
+            <Field label="Estoque">
+              <Input
+                inputMode="numeric"
+                value={rows[0].stock}
+                onChange={(e) => updateRow(0, { stock: e.target.value })}
+              />
+            </Field>
+            <Field label="Peso com caixa (g)" hint="para o frete">
+              <Input
+                inputMode="numeric"
+                value={rows[0].weightGrams}
+                onChange={(e) => updateRow(0, { weightGrams: e.target.value })}
+              />
+            </Field>
+          </div>
+        </div>
+      ) : (
       <div className="rounded-2xl border border-border bg-surface p-5">
         <div className="mb-1 flex items-center justify-between">
           <Label className="mb-0">Variações</Label>
@@ -364,6 +400,7 @@ export function ProductForm({
           ))}
         </div>
       </div>
+      )}
 
       <Button type="submit" size="lg" disabled={pending}>
         {pending ? <Spinner /> : product ? "Salvar alterações" : "Criar produto"}

@@ -36,8 +36,9 @@ export default async function AdminProductEditPage(
         </h1>
         {isNew && (
           <p className="mt-1 text-sm text-muted">
-            Preencha os dados e salve. O preço é definido em cada variação, lá embaixo.
-            As fotos você adiciona na etapa seguinte.
+            Preencha os dados e salve. O preço e o estoque ficam mais abaixo (o
+            formulário se ajusta se for roupa ou brinquedo). As fotos você adiciona
+            na etapa seguinte.
           </p>
         )}
       </div>
