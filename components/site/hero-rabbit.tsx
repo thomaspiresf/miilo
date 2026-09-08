@@ -6,17 +6,13 @@ import { Logo } from "@/components/site/logo";
 /**
  * Hero "animação padrão": o logo completo da miilo (coelho + palavra "miilo").
  * O coelho se esconde na toca conforme a página rola pra baixo.
- * Medidas do coelho vêm do bbox real de public/logo/icone-miilo.svg:
+ * Geometria = a mesma do public/logo/icone-miilo.svg (viewBox 1080²):
  *   coelho  x 255–859 · y 152–896
- *   olhos   y 809–868
+ *   toca    ellipse cx 539.9 cy 850.6 rx 475 ry 78.5  (x 65–1015 · y 772–929)
  */
 const HOLE = "#0b0b0b"; // toca preta
-const HOLE_CX = 557;
-const HOLE_CY = 850.6;
-const HOLE_RX = 210;
-const HOLE_RY = 48;
-const CLIP_Y = 888; // linha onde o coelho some
-const SINK_MAX = 790; // quanto o coelho desce (unidades do viewBox) até sumir
+const CLIP_Y = 924; // o coelho some ao passar por aqui (fundo da toca)
+const SINK_MAX = 800; // quanto o coelho desce (unidades do viewBox) até sumir
 const SCROLL_RANGE = 200; // px de scroll pra completar a animação
 
 export function HeroRabbit() {
@@ -44,12 +40,12 @@ export function HeroRabbit() {
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-sky px-6">
-      <div className="flex items-end gap-1.5 sm:gap-2.5">
+      <div className="flex items-end gap-2 sm:gap-3">
         {/* coelho + toca */}
         <svg
-          viewBox="245 142 625 760"
+          viewBox="65 150 950 800"
           preserveAspectRatio="xMidYMax meet"
-          className="h-12 w-auto sm:h-20"
+          className="mb-0.5 h-8 w-auto sm:mb-1 sm:h-12"
           role="img"
           aria-label="miilo"
         >
@@ -59,7 +55,7 @@ export function HeroRabbit() {
             </clipPath>
           </defs>
 
-          <ellipse cx={HOLE_CX} cy={HOLE_CY} rx={HOLE_RX} ry={HOLE_RY} fill={HOLE} />
+          <ellipse cx="539.9" cy="850.6" rx="475" ry="78.5" fill={HOLE} />
 
           <g clipPath="url(#miilo-hole)">
             <g
@@ -82,19 +78,13 @@ export function HeroRabbit() {
               />
             </g>
           </g>
-
-          {/* borda da frente da toca */}
-          <path
-            d={`M${HOLE_CX - HOLE_RX},${HOLE_CY}a${HOLE_RX},${HOLE_RY} 0 0 0 ${HOLE_RX * 2},0Z`}
-            fill={HOLE}
-          />
         </svg>
 
-        {/* palavra "miilo" */}
+        {/* palavra "miilo" — elemento dominante do logo */}
         <Logo
           variant="wordmark"
           tone="negativo"
-          className="mb-px h-8 w-auto sm:mb-1 sm:h-14"
+          className="h-10 w-auto sm:h-[3.75rem]"
           priority
         />
       </div>
