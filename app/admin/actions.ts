@@ -81,11 +81,12 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const { variants, ...product } = parsed.data;
 
+  let newId: string | null = null;
   try {
     if (id && id !== "novo") {
       await adminUpdateProduct(id, product, variants);
     } else {
-      await adminCreateProduct(product, variants);
+      newId = await adminCreateProduct(product, variants);
     }
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Falha ao salvar" };
@@ -93,7 +94,8 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
 
   revalidatePath("/admin/produtos");
   revalidatePath("/");
-  redirect("/admin/produtos");
+  // ao criar, vai direto pra tela do produto (onde ficam as fotos)
+  redirect(newId ? `/admin/produtos/${newId}?criado=1` : "/admin/produtos");
 }
 
 export async function toggleProductActiveAction(formData: FormData) {

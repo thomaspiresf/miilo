@@ -10,7 +10,9 @@ export default async function AdminProductEditPage(
   props: PageProps<"/admin/produtos/[id]">,
 ) {
   const { id } = await props.params;
+  const sp = await props.searchParams;
   const isNew = id === "novo";
+  const justCreated = sp?.criado === "1";
 
   const [product, categories] = await Promise.all([
     isNew ? Promise.resolve(null) : adminGetProduct(id),
@@ -34,10 +36,17 @@ export default async function AdminProductEditPage(
         </h1>
         {isNew && (
           <p className="mt-1 text-sm text-muted">
-            Preencha os dados e salve. Depois de criado, você adiciona as fotos.
+            Preencha os dados e salve. O preço é definido em cada variação, lá embaixo.
+            As fotos você adiciona na etapa seguinte.
           </p>
         )}
       </div>
+
+      {justCreated && (
+        <p className="rounded-xl bg-success/10 px-4 py-3 text-sm font-medium text-success">
+          Produto criado! Agora adicione as fotos na seção abaixo. ↓
+        </p>
+      )}
 
       <ProductForm product={product} categories={categories} />
 

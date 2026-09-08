@@ -169,7 +169,10 @@ export function ProductForm({
               <option value="unissex">unissex</option>
             </select>
           </Field>
-          <Field label="Preço “de” (riscado)" hint="Deixe vazio se não há promoção.">
+          <Field
+            label="Preço antigo (riscado)"
+            hint="Opcional — só se estiver em promoção. O preço de venda vai em cada variação."
+          >
             <Input
               name="compareAtPrice"
               inputMode="decimal"
@@ -279,7 +282,7 @@ export function ProductForm({
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-5">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <Label className="mb-0">Variações</Label>
           <Button
             type="button"
@@ -290,6 +293,10 @@ export function ProductForm({
             <Plus className="h-4 w-4" /> Adicionar
           </Button>
         </div>
+        <p className="mb-3 text-xs text-muted">
+          <strong className="font-semibold text-foreground">O preço e o estoque de venda ficam aqui</strong>, um para
+          cada tamanho/cor. Só tem um preço? Deixe uma variação só (ex.: tamanho “Único”).
+        </p>
         <div className="space-y-3">
           {rows.map((row, i) => (
             <div key={i} className="grid grid-cols-2 gap-2 rounded-xl border border-border p-3 sm:grid-cols-6">
@@ -321,7 +328,7 @@ export function ProductForm({
                 />
               </div>
               <input
-                placeholder="Preço"
+                placeholder="Preço R$"
                 inputMode="decimal"
                 value={row.price}
                 onChange={(e) => updateRow(i, { price: e.target.value })}
