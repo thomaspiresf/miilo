@@ -103,16 +103,17 @@ export async function quoteShipping(req: QuoteRequest): Promise<ShippingOption[]
 
     if (!all.length) return mockQuote(req);
 
-    // Seleção: 3 mais baratas + a mais rápida + garante 1 opção dos Correios.
+    // Mostra no máximo 3: a mais barata, a mais rápida e uma dos Correios.
+    // (se coincidirem, sai menos opção — sem repetir)
     const isCorreios = (o: ShippingOption) => /correios/i.test(o.company);
     const picked = new Map<string, ShippingOption>();
     const add = (o?: ShippingOption) => {
       if (o && !picked.has(o.id)) picked.set(o.id, o);
     };
 
-    all.slice(0, 3).forEach(add); // 3 mais baratas
+    add(all[0]); // mais barata (a lista já vem ordenada por preço)
     add([...all].sort((a, b) => a.delivery_days - b.delivery_days)[0]); // mais rápida
-    add(all.find(isCorreios)); // Correios mais barato (PAC normalmente)
+    add(all.find(isCorreios)); // Correios mais barato disponível
 
     return [...picked.values()].sort((a, b) => a.price - b.price);
   } catch (err) {
