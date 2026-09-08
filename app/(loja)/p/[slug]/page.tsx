@@ -105,10 +105,14 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
         {product.description && <ExpandableText text={product.description} />}
 
         <div className="mt-4">
-          {product.fit_notes && <Accordion title="Modelagem">{product.fit_notes}</Accordion>}
+          {product.fit_notes && (
+            <Accordion title="Modelagem">
+              <p className="whitespace-pre-line">{product.fit_notes}</p>
+            </Accordion>
+          )}
           {product.care_notes && (
             <Accordion title={product.category.kind === "brinquedos" ? "Cuidados e segurança" : "Cuidados"}>
-              {product.care_notes}
+              <p className="whitespace-pre-line">{product.care_notes}</p>
             </Accordion>
           )}
           <Accordion title="Trocas e devoluções">
