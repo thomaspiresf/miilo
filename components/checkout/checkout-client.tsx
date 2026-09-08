@@ -502,10 +502,14 @@ export function CheckoutClient({
           </>
         ) : (
           <section className="rounded-2xl border border-border bg-surface p-5">
-            <h2 className="mb-2 font-black">3. Retirada na loja</h2>
-            <p className="rounded-xl bg-accent/10 px-4 py-3 text-sm text-foreground">
-              {site.pickupNote}
-            </p>
+            <h2 className="mb-3 font-black">3. Retirada na loja</h2>
+            <div className="flex items-start gap-3 rounded-xl bg-accent/10 px-4 py-3">
+              <Store className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+              <div className="text-sm">
+                <p className="font-bold">{site.storeAddress}</p>
+                <p className="mt-1 text-muted">{site.pickupNote}</p>
+              </div>
+            </div>
           </section>
         )}
 

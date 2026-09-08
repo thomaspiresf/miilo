@@ -7,6 +7,7 @@ import { getOrderById } from "@/lib/data/orders";
 import { isDemoMode } from "@/lib/auth";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/order-status";
+import { site } from "@/lib/site";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { OrderStatusPoller } from "@/components/order/order-status-poller";
@@ -87,9 +88,10 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
         {order.customer_name && <p className="font-semibold">{order.customer_name}</p>}
         {order.phone && <p className="text-muted">{order.phone}</p>}
         {order.delivery_mode === "pickup" ? (
-          <p className="mt-2 text-muted">
-            Combinamos o local e o horário da retirada pelo WhatsApp.
-          </p>
+          <>
+            <p className="mt-1 font-semibold">{site.storeAddress}</p>
+            <p className="text-muted">{site.pickupNote}</p>
+          </>
         ) : order.address ? (
           <>
             <p className="mt-1 text-muted">

@@ -4,6 +4,7 @@ import { getOrderById } from "@/lib/data/orders";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/order-status";
 import { updateOrderStatusAction } from "@/app/admin/actions";
+import { site } from "@/lib/site";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 
@@ -86,7 +87,9 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
             </p>
           </>
         ) : order.delivery_mode === "pickup" ? (
-          <p className="mt-1 text-muted">Cliente retira na loja (sem frete).</p>
+          <p className="mt-1 text-muted">
+            Cliente retira na loja — {site.storeAddress}
+          </p>
         ) : null}
       </section>
 
