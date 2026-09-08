@@ -327,7 +327,7 @@ export function CheckoutClient({
             {(
               [
                 { id: "delivery", label: "Receber em casa", icon: Home, sub: "Entrega pelos Correios" },
-                { id: "pickup", label: "Retirar na loja", icon: Store, sub: "Sem frete, combinamos no WhatsApp" },
+                { id: "pickup", label: "Retirar na loja", icon: Store, sub: "Sem frete · retirada em Laranjal Paulista/SP" },
               ] as const
             ).map((opt) => (
               <button
