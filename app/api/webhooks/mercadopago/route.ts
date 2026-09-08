@@ -41,7 +41,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  const payment = await getPayment(String(paymentId));
+  let payment;
+  try {
+    payment = await getPayment(String(paymentId));
+  } catch (err) {
+    // pagamento não encontrado (ex.: teste do painel do MP) — responde 200 mesmo assim
+    console.warn("webhook: pagamento não encontrado", paymentId, (err as Error).message);
+    return NextResponse.json({ ok: true, notFound: true });
+  }
   const orderId = payment.external_reference ?? null;
 
   const isNew = await recordPaymentEvent({
