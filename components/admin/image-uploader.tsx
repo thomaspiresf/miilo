@@ -4,11 +4,13 @@ import Image from "next/image";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, X } from "lucide-react";
-import { deleteImageAction, setImageColorAction } from "@/app/admin/actions";
+import { deleteImageAction, setImageColorAction, addImageUrlAction } from "@/app/admin/actions";
+import { uploadToStorage } from "@/lib/admin-upload";
 import { Spinner } from "@/components/ui/misc";
 import type { ProductImage } from "@/lib/types";
 
 const ALL = "__all__";
+const MAX_MB = 10;
 
 export function ImageUploader({
   productId,
@@ -32,14 +34,16 @@ export function ImageUploader({
     setError(null);
     setBusy((n) => n + files.length);
     for (const file of Array.from(files)) {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("productId", productId);
-      if (uploadColor !== ALL) fd.append("color", uploadColor);
       try {
-        const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Falha no upload");
+        if (file.size > MAX_MB * 1024 * 1024) {
+          throw new Error(`"${file.name}" passa de ${MAX_MB} MB. Reduza a imagem.`);
+        }
+        const path = await uploadToStorage(file, { productId, kind: "image" });
+        const fd = new FormData();
+        fd.append("productId", productId);
+        fd.append("url", path);
+        if (uploadColor !== ALL) fd.append("color", uploadColor);
+        await addImageUrlAction(fd);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Falha no upload");
       } finally {

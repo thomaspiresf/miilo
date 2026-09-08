@@ -17,6 +17,7 @@ import {
   adminSetProductVideo,
 } from "@/lib/data/admin";
 import { setOrderStatus } from "@/lib/data/orders";
+import { parseMoney } from "@/lib/format";
 import type { OrderStatus } from "@/lib/types";
 
 const variantSchema = z.object({
@@ -65,7 +66,7 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
     gender: (formData.get("gender") || null) as "menino" | "menina" | "unissex" | null,
     ageMinMonths: num(formData.get("ageMinMonths")),
     ageMaxMonths: num(formData.get("ageMaxMonths")),
-    compareAtPrice: num(formData.get("compareAtPrice")),
+    compareAtPrice: parseMoney(String(formData.get("compareAtPrice") ?? "")),
     composition: str("composition"),
     material: str("material"),
     dimensions: str("dimensions"),

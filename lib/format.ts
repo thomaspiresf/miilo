@@ -8,6 +8,20 @@ export function formatBRL(value: number | null | undefined) {
   return BRL.format(Number(value ?? 0));
 }
 
+/**
+ * Converte um preço digitado em número. Aceita vírgula OU ponto como decimal
+ * ("59,90", "59.90", "1.234,56"). Vazio ou inválido -> null.
+ */
+export function parseMoney(input: string | number | null | undefined): number | null {
+  if (typeof input === "number") return Number.isFinite(input) && input >= 0 ? input : null;
+  const s = String(input ?? "").trim();
+  if (!s) return null;
+  // se tem vírgula, ela é o decimal e os pontos são milhar
+  const normalized = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
+  const n = Number(normalized);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 const DATE = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",

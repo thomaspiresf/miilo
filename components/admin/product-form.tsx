@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { saveProductAction } from "@/app/admin/actions";
 import type { Category, Product } from "@/lib/types";
+import { parseMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
@@ -110,7 +111,7 @@ export function ProductForm({
       size: toySimple ? null : r.size.trim() || null,
       color: toySimple ? null : r.color.trim() || null,
       colorHex: toySimple ? null : r.colorHex.trim() || null,
-      price: Number(r.price) || 0,
+      price: parseMoney(r.price) ?? 0,
       stock: parseInt(r.stock || "0", 10),
       weightGrams: parseInt(r.weightGrams || "300", 10),
     })),

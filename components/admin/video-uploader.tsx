@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import { Film, X } from "lucide-react";
 import { setProductVideoAction } from "@/app/admin/actions";
 import { parseVideo } from "@/lib/video";
+import { uploadToStorage } from "@/lib/admin-upload";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
+
+const MAX_MB = 50;
 
 export function VideoUploader({
   productId,
@@ -25,16 +28,19 @@ export function VideoUploader({
 
   async function uploadFile(file: File | undefined) {
     if (!file) return;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setError(`Vídeo muito grande (máx. ${MAX_MB} MB). Deixe o clipe curto ou use um link do YouTube/Vimeo.`);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
+      const path = await uploadToStorage(file, { productId, kind: "video" });
       const fd = new FormData();
-      fd.append("file", file);
       fd.append("productId", productId);
-      fd.append("kind", "video");
-      const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha no upload");
+      fd.append("value", path);
+      await setProductVideoAction(fd);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha no upload");
     } finally {
