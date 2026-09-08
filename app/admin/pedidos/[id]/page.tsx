@@ -64,20 +64,31 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
         </div>
       </section>
 
-      {order.address && (
-        <section className="rounded-2xl border border-border bg-surface p-5 text-sm">
-          <h2 className="mb-2 font-bold">Entrega</h2>
-          <p className="font-semibold">{order.address.recipient}</p>
+      <section className="rounded-2xl border border-border bg-surface p-5 text-sm">
+        <h2 className="mb-2 font-bold">
+          {order.delivery_mode === "pickup" ? "Retirada na loja" : "Entrega"}
+        </h2>
+        <p className="font-semibold">{order.customer_name ?? "—"}</p>
+        {order.phone && (
           <p className="text-muted">
-            {order.address.street}, {order.address.number}
-            {order.address.complement ? ` — ${order.address.complement}` : ""} ·{" "}
-            {order.address.district}
+            Tel/WhatsApp: <span className="font-semibold text-foreground">{order.phone}</span>
           </p>
-          <p className="text-muted">
-            {order.address.city}/{order.address.state} · {order.address.cep}
-          </p>
-        </section>
-      )}
+        )}
+        {order.delivery_mode === "delivery" && order.address ? (
+          <>
+            <p className="mt-1 text-muted">
+              {order.address.street}, {order.address.number}
+              {order.address.complement ? ` — ${order.address.complement}` : ""} ·{" "}
+              {order.address.district}
+            </p>
+            <p className="text-muted">
+              {order.address.city}/{order.address.state} · {order.address.cep}
+            </p>
+          </>
+        ) : order.delivery_mode === "pickup" ? (
+          <p className="mt-1 text-muted">Cliente retira na loja (sem frete).</p>
+        ) : null}
+      </section>
 
       <form
         action={updateOrderStatusAction}

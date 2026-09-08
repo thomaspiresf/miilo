@@ -110,18 +110,22 @@ export type OrderItem = {
   image_url: string | null;
 };
 
+export type DeliveryMode = "delivery" | "pickup";
+
 export type Order = {
   id: string;
   number: string;
   user_id: string | null;
   email: string;
+  customer_name: string | null;
+  phone: string | null;
+  delivery_mode: DeliveryMode;
   status: OrderStatus;
   subtotal: number;
   shipping_cost: number;
   shipping_service: string | null;
   total: number;
   address: {
-    recipient: string;
     cep: string;
     street: string;
     number: string;

@@ -19,8 +19,11 @@ export async function POST(request: Request) {
   try {
     const order = await createOrder({
       email: parsed.data.email,
+      name: parsed.data.name,
+      phone: parsed.data.phone ?? null,
       userId: user?.id ?? null,
-      address: parsed.data.address,
+      deliveryMode: parsed.data.deliveryMode,
+      address: parsed.data.address ?? null,
       shipping: parsed.data.shipping,
       lines: parsed.data.lines,
     });

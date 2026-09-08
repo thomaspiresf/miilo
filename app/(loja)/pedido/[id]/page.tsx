@@ -80,25 +80,34 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
         </div>
       </section>
 
-      {order.address && (
-        <section className="rounded-2xl border border-border bg-surface p-5 text-sm">
-          <h2 className="mb-2 font-black">Entrega</h2>
-          <p className="font-semibold">{order.address.recipient}</p>
-          <p className="text-muted">
-            {order.address.street}, {order.address.number}
-            {order.address.complement ? ` — ${order.address.complement}` : ""}
+      <section className="rounded-2xl border border-border bg-surface p-5 text-sm">
+        <h2 className="mb-2 font-black">
+          {order.delivery_mode === "pickup" ? "Retirada na loja" : "Entrega"}
+        </h2>
+        {order.customer_name && <p className="font-semibold">{order.customer_name}</p>}
+        {order.phone && <p className="text-muted">{order.phone}</p>}
+        {order.delivery_mode === "pickup" ? (
+          <p className="mt-2 text-muted">
+            Combinamos o local e o horário da retirada pelo WhatsApp.
           </p>
-          <p className="text-muted">
-            {order.address.district} · {order.address.city}/{order.address.state} ·{" "}
-            {order.address.cep}
-          </p>
-          {order.tracking_code && (
-            <p className="mt-2">
-              Rastreio: <span className="font-semibold">{order.tracking_code}</span>
+        ) : order.address ? (
+          <>
+            <p className="mt-1 text-muted">
+              {order.address.street}, {order.address.number}
+              {order.address.complement ? ` — ${order.address.complement}` : ""}
             </p>
-          )}
-        </section>
-      )}
+            <p className="text-muted">
+              {order.address.district} · {order.address.city}/{order.address.state} ·{" "}
+              {order.address.cep}
+            </p>
+          </>
+        ) : null}
+        {order.tracking_code && (
+          <p className="mt-2">
+            Rastreio: <span className="font-semibold">{order.tracking_code}</span>
+          </p>
+        )}
+      </section>
 
       <div className="flex gap-3">
         <Button asChild variant="outline" className="flex-1">

@@ -4,14 +4,17 @@ import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseAdmin, hasSupabase } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
 import { imageUrl } from "@/lib/data/catalog";
-import type { Order, OrderStatus, ShippingOption } from "@/lib/types";
+import type { DeliveryMode, Order, OrderStatus, ShippingOption } from "@/lib/types";
 
 export type NewOrderLine = { variantId: string; qty: number };
 
 export type NewOrderInput = {
   email: string;
+  name: string;
+  phone: string | null;
   userId: string | null;
-  address: NonNullable<Order["address"]>;
+  deliveryMode: DeliveryMode;
+  address: Order["address"];
   shipping: Pick<ShippingOption, "company" | "service" | "price">;
   lines: NewOrderLine[];
 };
@@ -92,12 +95,16 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       throw new Error(`Estoque insuficiente para ${line.productName}`);
   }
 
+  const pickup = input.deliveryMode === "pickup";
   const subtotal = round2(
     resolved.reduce((sum, l) => sum + l.unitPrice * l.qty, 0),
   );
-  const shippingCost = round2(input.shipping.price);
+  const shippingCost = pickup ? 0 : round2(input.shipping.price);
   const total = round2(subtotal + shippingCost);
-  const shippingService = `${input.shipping.company} ${input.shipping.service}`.trim();
+  const shippingService = pickup
+    ? "Retirada na loja"
+    : `${input.shipping.company} ${input.shipping.service}`.trim();
+  const address = pickup ? null : input.address;
 
   // ---- modo demonstração ----
   if (!hasSupabaseAdmin()) {
@@ -108,12 +115,15 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       number: `MI-${String(seq).padStart(6, "0")}`,
       user_id: input.userId,
       email: input.email,
+      customer_name: input.name,
+      phone: input.phone,
+      delivery_mode: input.deliveryMode,
       status: "pending",
       subtotal,
       shipping_cost: shippingCost,
       shipping_service: shippingService,
       total,
-      address: input.address,
+      address,
       mp_payment_id: null,
       mp_status: null,
       payment_method: null,
@@ -136,21 +146,33 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
 
   // ---- Supabase ----
   const admin = createAdminClient();
-  const { data: orderRow, error } = await admin
+  const baseRow = {
+    user_id: input.userId,
+    email: input.email,
+    status: "pending",
+    subtotal,
+    shipping_cost: shippingCost,
+    shipping_service: shippingService,
+    total,
+    address,
+  };
+  let ins = await admin
     .from("orders")
     .insert({
-      user_id: input.userId,
-      email: input.email,
-      status: "pending",
-      subtotal,
-      shipping_cost: shippingCost,
-      shipping_service: shippingService,
-      total,
-      address: input.address,
+      ...baseRow,
+      customer_name: input.name,
+      phone: input.phone,
+      delivery_mode: input.deliveryMode,
     })
     .select("*")
     .single();
-  if (error) throw error;
+
+  // fallback se a migração migration-checkout.sql ainda não foi aplicada
+  if (ins.error && /column .* does not exist|schema cache/i.test(ins.error.message)) {
+    ins = await admin.from("orders").insert(baseRow).select("*").single();
+  }
+  if (ins.error) throw ins.error;
+  const orderRow = ins.data;
 
   const { error: itemsError } = await admin.from("order_items").insert(
     resolved.map((l) => ({
@@ -177,6 +199,9 @@ function mapOrder(row: any, items: any[]): Order {
     number: row.number,
     user_id: row.user_id ?? null,
     email: row.email,
+    customer_name: row.customer_name ?? null,
+    phone: row.phone ?? null,
+    delivery_mode: row.delivery_mode === "pickup" ? "pickup" : "delivery",
     status: row.status,
     subtotal: Number(row.subtotal),
     shipping_cost: Number(row.shipping_cost),

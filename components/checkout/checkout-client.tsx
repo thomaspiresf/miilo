@@ -4,12 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Home, Store } from "lucide-react";
 import { useCart } from "@/lib/cart-store";
 import { useHydrated } from "@/lib/use-hydrated";
 import { formatBRL, formatCep } from "@/lib/format";
 import { onlyDigits } from "@/lib/utils";
 import { site } from "@/lib/site";
-import type { Address, ShippingOption } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import type { Address, DeliveryMode, ShippingOption } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { Spinner, EmptyState } from "@/components/ui/misc";
@@ -18,7 +20,8 @@ import { PaymentBrick } from "@/components/checkout/payment-brick";
 
 type FormState = {
   email: string;
-  recipient: string;
+  name: string;
+  phone: string;
   cep: string;
   street: string;
   number: string;
@@ -30,7 +33,8 @@ type FormState = {
 
 const EMPTY: FormState = {
   email: "",
-  recipient: "",
+  name: "",
+  phone: "",
   cep: "",
   street: "",
   number: "",
@@ -39,6 +43,14 @@ const EMPTY: FormState = {
   city: "",
   state: "",
 };
+
+function formatPhone(v: string) {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
 
 export function CheckoutClient({
   initialEmail,
@@ -56,12 +68,13 @@ export function CheckoutClient({
   const clear = useCart((s) => s.clear);
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
 
+  const [mode, setMode] = useState<DeliveryMode>("delivery");
   const [form, setForm] = useState<FormState>({
     ...EMPTY,
     email: initialEmail,
     ...(savedAddress
       ? {
-          recipient: savedAddress.recipient,
+          name: savedAddress.recipient,
           cep: savedAddress.cep,
           street: savedAddress.street,
           number: savedAddress.number,
@@ -85,19 +98,27 @@ export function CheckoutClient({
   const [submitting, setSubmitting] = useState(false);
   const [pix, setPix] = useState<{ qr_code: string; qr_code_base64: string } | null>(null);
 
-  const total = subtotal + (selectedShipping?.price ?? 0);
-
+  const locked = phase === "payment";
   const cepDigits = onlyDigits(form.cep);
+  const phoneDigits = onlyDigits(form.phone);
   const canQuote = cepDigits.length === 8 && lines.length > 0;
-  const addressComplete =
-    form.email &&
-    form.recipient &&
+
+  const shippingCost = mode === "pickup" ? 0 : (selectedShipping?.price ?? 0);
+  const total = subtotal + shippingCost;
+
+  const contactOk = form.email && form.name.trim().length >= 3;
+  const addressOk =
     cepDigits.length === 8 &&
     form.street &&
     form.number &&
     form.district &&
     form.city &&
     form.state;
+  const readyForPayment =
+    contactOk &&
+    (mode === "pickup"
+      ? phoneDigits.length >= 10
+      : addressOk && !!selectedShipping);
 
   async function lookupCep(cep: string) {
     const d = onlyDigits(cep);
@@ -151,7 +172,7 @@ export function CheckoutClient({
   }
 
   async function goToPayment() {
-    if (!addressComplete || !selectedShipping) return;
+    if (!readyForPayment) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -160,21 +181,29 @@ export function CheckoutClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: form.email,
-          address: {
-            recipient: form.recipient,
-            cep: cepDigits,
-            street: form.street,
-            number: form.number,
-            complement: form.complement || null,
-            district: form.district,
-            city: form.city,
-            state: form.state.toUpperCase(),
-          },
-          shipping: {
-            company: selectedShipping.company,
-            service: selectedShipping.service,
-            price: selectedShipping.price,
-          },
+          name: form.name.trim(),
+          phone: phoneDigits || null,
+          deliveryMode: mode,
+          address:
+            mode === "delivery"
+              ? {
+                  cep: cepDigits,
+                  street: form.street,
+                  number: form.number,
+                  complement: form.complement || null,
+                  district: form.district,
+                  city: form.city,
+                  state: form.state.toUpperCase(),
+                }
+              : null,
+          shipping:
+            mode === "delivery" && selectedShipping
+              ? {
+                  company: selectedShipping.company,
+                  service: selectedShipping.service,
+                  price: selectedShipping.price,
+                }
+              : { company: "", service: "Retirada na loja", price: 0 },
           lines: lines.map((l) => ({ variantId: l.variantId, qty: l.qty })),
         }),
       });
@@ -202,11 +231,8 @@ export function CheckoutClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Pagamento recusado");
 
-      if (data.status === "approved") {
-        clear();
-        router.push(`/pedido/${order.orderId}`);
-      } else if (data.pix) {
-        setPix(data.pix);
+      if (data.status === "approved" || data.pix || data.status === "pending") {
+        if (data.pix) setPix(data.pix);
         clear();
         router.push(`/pedido/${order.orderId}`);
       } else if (data.status === "rejected") {
@@ -250,13 +276,15 @@ export function CheckoutClient({
             <span>{formatBRL(subtotal)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted">Frete</span>
+            <span className="text-muted">{mode === "pickup" ? "Retirada" : "Frete"}</span>
             <span>
-              {selectedShipping
-                ? selectedShipping.price === 0
-                  ? "Grátis"
-                  : formatBRL(selectedShipping.price)
-                : "—"}
+              {mode === "pickup"
+                ? "Grátis"
+                : selectedShipping
+                  ? selectedShipping.price === 0
+                    ? "Grátis"
+                    : formatBRL(selectedShipping.price)
+                  : "—"}
             </span>
           </div>
           <div className="flex justify-between pt-2 text-base font-black">
@@ -266,7 +294,7 @@ export function CheckoutClient({
         </div>
       </div>
     ),
-    [lines, subtotal, selectedShipping, total],
+    [lines, subtotal, selectedShipping, total, mode],
   );
 
   if (!mounted) return null;
@@ -292,163 +320,206 @@ export function CheckoutClient({
           <p className="rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>
         )}
 
-        {/* Contato + entrega */}
+        {/* Modo de entrega */}
         <section className="rounded-2xl border border-border bg-surface p-5">
-          <h2 className="mb-4 font-black">1. Contato e entrega</h2>
+          <h2 className="mb-3 font-black">1. Como você quer receber</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {(
+              [
+                { id: "delivery", label: "Receber em casa", icon: Home, sub: "Entrega pelos Correios" },
+                { id: "pickup", label: "Retirar na loja", icon: Store, sub: "Sem frete, combinamos no WhatsApp" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                disabled={locked}
+                onClick={() => setMode(opt.id)}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition disabled:opacity-60",
+                  mode === opt.id
+                    ? "border-foreground bg-foreground/[0.04]"
+                    : "border-border hover:border-foreground/30",
+                )}
+              >
+                <opt.icon className="h-5 w-5" />
+                <span className="text-sm font-bold">{opt.label}</span>
+                <span className="text-xs text-muted">{opt.sub}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Contato */}
+        <section className="rounded-2xl border border-border bg-surface p-5">
+          <h2 className="mb-4 font-black">2. Seus dados</h2>
           <div className="space-y-4">
+            <Field label="Nome completo">
+              <Input
+                value={form.name}
+                disabled={locked}
+                onChange={(e) => set("name")(e.target.value)}
+                placeholder="Como está no seu documento"
+              />
+            </Field>
             <Field label="E-mail" hint="Enviaremos a confirmação do pedido aqui.">
               <Input
                 type="email"
                 inputMode="email"
                 value={form.email}
-                disabled={phase === "payment"}
+                disabled={locked}
                 onChange={(e) => set("email")(e.target.value)}
                 placeholder="voce@email.com"
               />
             </Field>
-            <Field label="Quem vai receber">
+            <Field
+              label={mode === "pickup" ? "WhatsApp" : "Telefone (opcional)"}
+              hint={mode === "pickup" ? "Vamos combinar a retirada por aqui." : undefined}
+            >
               <Input
-                value={form.recipient}
-                disabled={phase === "payment"}
-                onChange={(e) => set("recipient")(e.target.value)}
-                placeholder="Nome completo"
+                inputMode="numeric"
+                value={formatPhone(form.phone)}
+                disabled={locked}
+                onChange={(e) => set("phone")(onlyDigits(e.target.value))}
+                placeholder="(11) 99999-9999"
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="CEP">
-                <div className="relative">
-                  <Input
-                    inputMode="numeric"
-                    value={formatCep(form.cep)}
-                    disabled={phase === "payment"}
-                    onChange={(e) => set("cep")(onlyDigits(e.target.value))}
-                    onBlur={(e) => lookupCep(e.target.value)}
-                    placeholder="00000-000"
-                  />
-                  {cepLoading && (
-                    <Spinner className="absolute right-3 top-3.5 text-muted" />
-                  )}
-                </div>
-              </Field>
-              <Field label="Número">
-                <Input
-                  value={form.number}
-                  disabled={phase === "payment"}
-                  onChange={(e) => set("number")(e.target.value)}
-                  placeholder="123"
-                />
-              </Field>
-            </div>
-            <Field label="Rua">
-              <Input
-                value={form.street}
-                disabled={phase === "payment"}
-                onChange={(e) => set("street")(e.target.value)}
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Bairro">
-                <Input
-                  value={form.district}
-                  disabled={phase === "payment"}
-                  onChange={(e) => set("district")(e.target.value)}
-                />
-              </Field>
-              <Field label="Complemento">
-                <Input
-                  value={form.complement}
-                  disabled={phase === "payment"}
-                  onChange={(e) => set("complement")(e.target.value)}
-                  placeholder="Apto, bloco…"
-                />
-              </Field>
-            </div>
-            <div className="grid grid-cols-[1fr_80px] gap-3">
-              <Field label="Cidade">
-                <Input
-                  value={form.city}
-                  disabled={phase === "payment"}
-                  onChange={(e) => set("city")(e.target.value)}
-                />
-              </Field>
-              <Field label="UF">
-                <Input
-                  value={form.state}
-                  maxLength={2}
-                  disabled={phase === "payment"}
-                  onChange={(e) => set("state")(e.target.value.toUpperCase())}
-                />
-              </Field>
-            </div>
           </div>
         </section>
 
-        {/* Frete */}
-        <section className="rounded-2xl border border-border bg-surface p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-black">2. Frete</h2>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={quote}
-              disabled={!canQuote || shippingLoading || phase === "payment"}
-            >
-              {shippingLoading ? <Spinner /> : "Calcular frete"}
-            </Button>
-          </div>
-          {shipping.length === 0 ? (
-            <p className="text-sm text-muted">
-              Informe o CEP e clique em “Calcular frete”.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {shipping.map((opt) => (
-                <label
-                  key={opt.id}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 ${
-                    selectedShipping?.id === opt.id
-                      ? "border-primary bg-primary/5"
-                      : "border-border"
-                  }`}
+        {mode === "delivery" ? (
+          <>
+            {/* Endereço */}
+            <section className="rounded-2xl border border-border bg-surface p-5">
+              <h2 className="mb-4 font-black">3. Endereço de entrega</h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="CEP">
+                    <div className="relative">
+                      <Input
+                        inputMode="numeric"
+                        value={formatCep(form.cep)}
+                        disabled={locked}
+                        onChange={(e) => set("cep")(onlyDigits(e.target.value))}
+                        onBlur={(e) => lookupCep(e.target.value)}
+                        placeholder="00000-000"
+                      />
+                      {cepLoading && (
+                        <Spinner className="absolute right-3 top-3.5 text-muted" />
+                      )}
+                    </div>
+                  </Field>
+                  <Field label="Número">
+                    <Input
+                      value={form.number}
+                      disabled={locked}
+                      onChange={(e) => set("number")(e.target.value)}
+                      placeholder="123"
+                    />
+                  </Field>
+                </div>
+                <Field label="Rua">
+                  <Input value={form.street} disabled={locked} onChange={(e) => set("street")(e.target.value)} />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Bairro">
+                    <Input value={form.district} disabled={locked} onChange={(e) => set("district")(e.target.value)} />
+                  </Field>
+                  <Field label="Complemento">
+                    <Input
+                      value={form.complement}
+                      disabled={locked}
+                      onChange={(e) => set("complement")(e.target.value)}
+                      placeholder="Apto, bloco…"
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-[1fr_80px] gap-3">
+                  <Field label="Cidade">
+                    <Input value={form.city} disabled={locked} onChange={(e) => set("city")(e.target.value)} />
+                  </Field>
+                  <Field label="UF">
+                    <Input
+                      value={form.state}
+                      maxLength={2}
+                      disabled={locked}
+                      onChange={(e) => set("state")(e.target.value.toUpperCase())}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </section>
+
+            {/* Frete */}
+            <section className="rounded-2xl border border-border bg-surface p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-black">4. Frete</h2>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={quote}
+                  disabled={!canQuote || shippingLoading || locked}
                 >
-                  <input
-                    type="radio"
-                    name="shipping"
-                    checked={selectedShipping?.id === opt.id}
-                    disabled={phase === "payment"}
-                    onChange={() => setSelectedShipping(opt)}
-                    className="accent-primary"
-                  />
-                  <span className="flex-1 text-sm">
-                    <span className="block font-semibold">
-                      {opt.company} {opt.service}
-                    </span>
-                    <span className="block text-xs text-muted">
-                      {opt.delivery_days > 0
-                        ? `até ${opt.delivery_days} dias úteis`
-                        : "prazo a confirmar"}
-                    </span>
-                  </span>
-                  <span className="text-sm font-bold">
-                    {opt.price === 0 ? "Grátis" : formatBRL(opt.price)}
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </section>
+                  {shippingLoading ? <Spinner /> : "Calcular frete"}
+                </Button>
+              </div>
+              {shipping.length === 0 ? (
+                <p className="text-sm text-muted">Informe o CEP e clique em “Calcular frete”.</p>
+              ) : (
+                <div className="space-y-2">
+                  {shipping.map((opt) => (
+                    <label
+                      key={opt.id}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-3 rounded-xl border p-3",
+                        selectedShipping?.id === opt.id ? "border-primary bg-primary/5" : "border-border",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="shipping"
+                        checked={selectedShipping?.id === opt.id}
+                        disabled={locked}
+                        onChange={() => setSelectedShipping(opt)}
+                        className="accent-primary"
+                      />
+                      <span className="flex-1 text-sm">
+                        <span className="block font-semibold">
+                          {opt.company} {opt.service}
+                        </span>
+                        <span className="block text-xs text-muted">
+                          {opt.delivery_days > 0 ? `até ${opt.delivery_days} dias úteis` : "prazo a confirmar"}
+                        </span>
+                      </span>
+                      <span className="text-sm font-bold">
+                        {opt.price === 0 ? "Grátis" : formatBRL(opt.price)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        ) : (
+          <section className="rounded-2xl border border-border bg-surface p-5">
+            <h2 className="mb-2 font-black">3. Retirada na loja</h2>
+            <p className="rounded-xl bg-accent/10 px-4 py-3 text-sm text-foreground">
+              {site.pickupNote}
+            </p>
+          </section>
+        )}
 
         {/* Pagamento */}
         <section className="rounded-2xl border border-border bg-surface p-5">
-          <h2 className="mb-4 font-black">3. Pagamento</h2>
+          <h2 className="mb-4 font-black">{mode === "delivery" ? "5" : "4"}. Pagamento</h2>
           {phase === "form" ? (
             <Button
               size="lg"
               className="w-full"
               onClick={goToPayment}
-              disabled={!addressComplete || !selectedShipping || submitting}
+              disabled={!readyForPayment || submitting}
             >
-              {submitting ? <Spinner /> : "Continuar para pagamento"}
+              {submitting ? <Spinner /> : `Continuar para pagamento · ${formatBRL(total)}`}
             </Button>
           ) : order ? (
             !paymentsMocked && site.mpPublicKey ? (

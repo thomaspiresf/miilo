@@ -166,6 +166,9 @@ create table if not exists public.orders (
   number           text not null unique default ('MI-' || lpad(nextval('public.order_number_seq')::text, 6, '0')),
   user_id          uuid references auth.users(id) on delete set null,
   email            text not null,
+  customer_name    text,
+  phone            text,
+  delivery_mode    text not null default 'delivery',  -- delivery | pickup
   status           text not null default 'pending',  -- pending|paid|failed|cancelled|shipped|delivered
   subtotal         numeric(12,2) not null default 0,
   shipping_cost    numeric(12,2) not null default 0,
@@ -182,6 +185,9 @@ create table if not exists public.orders (
 );
 
 alter table public.orders add column if not exists stock_restored boolean not null default false;
+alter table public.orders add column if not exists customer_name  text;
+alter table public.orders add column if not exists phone          text;
+alter table public.orders add column if not exists delivery_mode  text not null default 'delivery';
 
 create index if not exists idx_orders_user on public.orders(user_id);
 create index if not exists idx_orders_created on public.orders(created_at desc);
