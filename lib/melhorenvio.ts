@@ -89,7 +89,7 @@ export async function quoteShipping(req: QuoteRequest): Promise<ShippingOption[]
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const data: any[] = await res.json();
-    const options = data
+    const all = data
       .filter((s) => !s.error && (s.price || s.custom_price))
       .map((s) => ({
         id: String(s.id),
@@ -101,7 +101,15 @@ export async function quoteShipping(req: QuoteRequest): Promise<ShippingOption[]
       .sort((a, b) => a.price - b.price);
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
-    return options.length ? options : mockQuote(req);
+    if (!all.length) return mockQuote(req);
+
+    // mostra no máximo 4: as mais baratas + a mais rápida (se não estiver entre elas)
+    const cheapest = all.slice(0, 4);
+    const fastest = [...all].sort((a, b) => a.delivery_days - b.delivery_days)[0];
+    if (fastest && !cheapest.some((o) => o.id === fastest.id)) {
+      cheapest[cheapest.length - 1] = fastest;
+    }
+    return cheapest.sort((a, b) => a.price - b.price);
   } catch (err) {
     console.warn("[miilo] Melhor Envio indisponível — usando frete estimado.", err);
     return mockQuote(req);
