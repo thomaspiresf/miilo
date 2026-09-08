@@ -51,48 +51,60 @@ export async function quoteShipping(req: QuoteRequest): Promise<ShippingOption[]
   if (shippingMocked()) return mockQuote(req);
 
   const base = env.melhorEnvio.sandbox ? SANDBOX_BASE : PROD_BASE;
+  // peso e valor são POR UNIDADE; o Melhor Envio multiplica por "quantity"
   const products = req.items.map((i, idx) => ({
     id: String(idx),
-    width: 15,
-    height: 10,
-    length: 20,
-    weight: Math.max(0.1, (i.weightGrams * i.qty) / 1000),
-    insurance_value: i.unitPrice * i.qty,
+    width: 12,
+    height: 4,
+    length: 17,
+    weight: Math.max(0.05, i.weightGrams / 1000),
+    insurance_value: Math.max(0, i.unitPrice),
     quantity: i.qty,
   }));
 
-  const res = await fetch(`${base}/api/v2/me/shipping/calculate`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${env.melhorEnvio.token}`,
-      "User-Agent": `${env.site.storeName} (${env.site.url})`,
-    },
-    body: JSON.stringify({
-      from: { postal_code: env.melhorEnvio.originCep },
-      to: { postal_code: onlyDigits(req.toCep) },
-      products,
-    }),
-  });
+  try {
+    const res = await fetch(`${base}/api/v2/me/shipping/calculate`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.melhorEnvio.token}`,
+        "User-Agent": env.melhorEnvio.userAgent,
+      },
+      body: JSON.stringify({
+        from: { postal_code: env.melhorEnvio.originCep },
+        to: { postal_code: onlyDigits(req.toCep) },
+        products,
+      }),
+    });
 
-  if (!res.ok) {
-    // fallback seguro: não trava o checkout
+    if (!res.ok) {
+      console.warn(
+        `[miilo] Melhor Envio retornou ${res.status} — usando frete estimado.`,
+        await res.text().catch(() => ""),
+      );
+      return mockQuote(req);
+    }
+
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const data: any[] = await res.json();
+    const options = data
+      .filter((s) => !s.error && (s.price || s.custom_price))
+      .map((s) => ({
+        id: String(s.id),
+        company: s.company?.name ?? "Transportadora",
+        service: s.name as string,
+        price: round2(Number(s.custom_price ?? s.price)),
+        delivery_days: Number(s.custom_delivery_time ?? s.delivery_time ?? 0),
+      }))
+      .sort((a, b) => a.price - b.price);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    return options.length ? options : mockQuote(req);
+  } catch (err) {
+    console.warn("[miilo] Melhor Envio indisponível — usando frete estimado.", err);
     return mockQuote(req);
   }
-
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const data: any[] = await res.json();
-  return data
-    .filter((s) => !s.error && (s.price || s.custom_price))
-    .map((s) => ({
-      id: String(s.id),
-      company: s.company?.name ?? "Transportadora",
-      service: s.name,
-      price: round2(Number(s.custom_price ?? s.price)),
-      delivery_days: Number(s.custom_delivery_time ?? s.delivery_time ?? 0),
-    }));
-  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 function round2(n: number) {

@@ -28,6 +28,10 @@ export const env = {
     token: process.env.MELHOR_ENVIO_TOKEN || "",
     sandbox: bool(process.env.MELHOR_ENVIO_SANDBOX, true),
     originCep: (process.env.STORE_ORIGIN_CEP || "01001000").replace(/\D/g, ""),
+    // o Melhor Envio pede um User-Agent identificável (app + e-mail de contato)
+    userAgent:
+      process.env.MELHOR_ENVIO_USER_AGENT ||
+      `${process.env.NEXT_PUBLIC_STORE_NAME || "miilo"} (${process.env.MELHOR_ENVIO_CONTACT_EMAIL || "contato@miilo.com.br"})`,
     mock: bool(process.env.MOCK_SHIPPING, true),
   },
   /** Libera o /admin sem login — SÓ em desenvolvimento. */
