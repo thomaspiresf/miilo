@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Hero "animação padrão": o coelho da miilo se esconde na toca conforme
@@ -10,9 +10,9 @@ import { useEffect, useRef, useState } from "react";
 const HOLE_Y = 850.6; // centro da toca no viewBox
 const CLIP_Y = 884; // linha onde o coelho some (um pouco abaixo do centro)
 const SINK_MAX = 760; // quanto o coelho desce (unidades do viewBox) até sumir
+const SCROLL_RANGE = 200; // px de scroll pra completar a animação
 
 export function HeroRabbit() {
-  const ref = useRef<HTMLDivElement>(null);
   const [sink, setSink] = useState(0); // 0 = pra fora · 1 = escondido
 
   useEffect(() => {
@@ -21,11 +21,8 @@ export function HeroRabbit() {
     let raf = 0;
     const update = () => {
       raf = 0;
-      const el = ref.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      // progresso: coelho já sumiu quando o hero rolou ~55% da própria altura
-      const p = Math.min(1, Math.max(0, -r.top / (r.height * 0.55)));
+      // começa assim que a página rola; completa em SCROLL_RANGE px
+      const p = Math.min(1, Math.max(0, window.scrollY / SCROLL_RANGE));
       setSink(p);
     };
     const onScroll = () => {
@@ -43,14 +40,11 @@ export function HeroRabbit() {
   }, []);
 
   return (
-    <div
-      ref={ref}
-      className="absolute inset-0 flex items-end justify-center overflow-hidden bg-sky"
-    >
+    <div className="absolute inset-0 flex items-end justify-center overflow-hidden bg-sky">
       <svg
         viewBox="0 0 1080 1080"
         preserveAspectRatio="xMidYMax meet"
-        className="h-[112%] w-auto"
+        className="h-[128%] w-auto"
         role="img"
         aria-label="miilo — roupas e brinquedos infantis"
       >
