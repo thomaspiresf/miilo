@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bell, Check, ShoppingBag } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, Check, ShoppingBag, Zap } from "lucide-react";
 import type { Product, ProductVariant } from "@/lib/types";
 import { useCart } from "@/lib/cart-store";
 import { discountPercent, formatBRL, installmentText } from "@/lib/format";
@@ -15,6 +16,7 @@ function variantLabel(v: ProductVariant) {
 }
 
 export function ProductBuyBox({ product }: { product: Product }) {
+  const router = useRouter();
   const variants = product.variants;
   const sizes = useMemo(
     () => [...new Set(variants.map((v) => v.size).filter(Boolean))] as string[],
@@ -54,8 +56,8 @@ export function ProductBuyBox({ product }: { product: Product }) {
       .reduce((n, v) => n + v.stock, 0);
   }
 
-  function handleAdd() {
-    if (!selected || selected.stock < 1) return;
+  function addSelected() {
+    if (!selected || selected.stock < 1) return false;
     add({
       variantId: selected.id,
       productId: product.id,
@@ -67,8 +69,18 @@ export function ProductBuyBox({ product }: { product: Product }) {
       maxStock: selected.stock,
       weightGrams: selected.weight_grams,
     });
+    return true;
+  }
+
+  function handleAdd() {
+    if (!addSelected()) return;
     setAdded(true);
     setTimeout(() => setAdded(false), 1800);
+  }
+
+  function handleBuyNow() {
+    if (!addSelected()) return;
+    router.push("/checkout");
   }
 
   const price = selected?.price ?? product.price_from;
@@ -181,8 +193,17 @@ export function ProductBuyBox({ product }: { product: Product }) {
       </p>
 
       {/* CTA — barra fixa no mobile */}
-      <div className="sticky bottom-0 z-10 -mx-4 border-t border-border bg-background/95 p-4 pb-safe backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
-        <Button onClick={handleAdd} size="lg" className="w-full" disabled={outOfStock}>
+      <div className="sticky bottom-0 z-10 -mx-4 space-y-2 border-t border-border bg-background/95 p-4 pb-safe backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+        <Button onClick={handleBuyNow} size="lg" className="w-full" disabled={outOfStock}>
+          <Zap className="h-5 w-5" /> Comprar agora
+        </Button>
+        <Button
+          onClick={handleAdd}
+          size="lg"
+          variant="outline"
+          className="w-full"
+          disabled={outOfStock}
+        >
           {added ? (
             <>
               <Check className="h-5 w-5" /> Na sacola
