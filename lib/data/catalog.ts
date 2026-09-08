@@ -12,8 +12,7 @@ export function imageUrl(path: string) {
 }
 
 const PRODUCT_SELECT = `
-  id, slug, name, description, brand, gender, age_min_months, age_max_months, active, base_price,
-  compare_at_price, composition, fit_notes, care_notes, rating_avg, rating_count, max_installments,
+  *,
   category:categories!inner(id, slug, name, kind),
   images:product_images(id, storage_path, alt, sort),
   variants:product_variants(id, sku, size, color, color_hex, price, stock, weight_grams, active)
@@ -66,6 +65,8 @@ export function mapProduct(row: any): Product {
     base_price: Number(row.base_price),
     compare_at_price: compareAt,
     composition: row.composition ?? null,
+    material: row.material ?? null,
+    dimensions: row.dimensions ?? null,
     fit_notes: row.fit_notes ?? null,
     care_notes: row.care_notes ?? null,
     rating_avg: row.rating_avg != null ? Number(row.rating_avg) : null,

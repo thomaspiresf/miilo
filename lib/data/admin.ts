@@ -36,6 +36,8 @@ export type ProductInput = {
   ageMaxMonths: number | null;
   compareAtPrice: number | null;
   composition: string | null;
+  material: string | null;
+  dimensions: string | null;
   fitNotes: string | null;
   careNotes: string | null;
   active: boolean;
@@ -51,8 +53,7 @@ export type VariantInput = {
 };
 
 const ADMIN_PRODUCT_SELECT = `
-  id, slug, name, description, brand, gender, age_min_months, age_max_months, active, base_price,
-  compare_at_price, composition, fit_notes, care_notes, rating_avg, rating_count, max_installments,
+  *,
   category:categories(id, slug, name, kind),
   images:product_images(id, storage_path, alt, sort),
   variants:product_variants(id, sku, size, color, color_hex, price, stock, weight_grams, active)
@@ -113,10 +114,22 @@ function productRow(input: ProductInput, basePrice: number) {
     base_price: basePrice,
     compare_at_price: input.compareAtPrice,
     composition: input.composition,
+    material: input.material,
+    dimensions: input.dimensions,
     fit_notes: input.fitNotes,
     care_notes: input.careNotes,
     active: input.active,
   };
+}
+
+const MISSING_COLUMN = /column .* does not exist|schema cache|could not find/i;
+
+/** Remove colunas de migração ainda não aplicada (material/dimensions). */
+function stripNewColumns(row: Record<string, unknown>) {
+  const clone = { ...row };
+  delete clone.material;
+  delete clone.dimensions;
+  return clone;
 }
 
 function variantRow(v: VariantInput) {
@@ -154,6 +167,8 @@ function buildMockProduct(
     base_price: basePrice,
     compare_at_price: compareAt,
     composition: input.composition,
+    material: input.material,
+    dimensions: input.dimensions,
     fit_notes: input.fitNotes,
     care_notes: input.careNotes,
     rating_avg: null,
@@ -195,12 +210,13 @@ export async function adminCreateProduct(
   }
 
   const admin = createAdminClient();
-  const { data: product, error } = await admin
-    .from("products")
-    .insert({ slug, ...productRow(input, basePrice) })
-    .select("id")
-    .single();
-  if (error) throw error;
+  const newRow = { slug, ...productRow(input, basePrice) };
+  let ins = await admin.from("products").insert(newRow).select("id").single();
+  if (ins.error && MISSING_COLUMN.test(ins.error.message)) {
+    ins = await admin.from("products").insert(stripNewColumns(newRow)).select("id").single();
+  }
+  if (ins.error) throw ins.error;
+  const product = ins.data;
 
   await admin
     .from("product_variants")
@@ -229,7 +245,11 @@ export async function adminUpdateProduct(
   }
 
   const admin = createAdminClient();
-  await admin.from("products").update(productRow(input, basePrice)).eq("id", id);
+  const patch = productRow(input, basePrice);
+  const upd = await admin.from("products").update(patch).eq("id", id);
+  if (upd.error && MISSING_COLUMN.test(upd.error.message)) {
+    await admin.from("products").update(stripNewColumns(patch)).eq("id", id);
+  }
 
   const keepIds = variants.filter((v) => v.id).map((v) => v.id);
   await admin

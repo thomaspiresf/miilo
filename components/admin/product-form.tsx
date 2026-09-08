@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { saveProductAction } from "@/app/admin/actions";
 import type { Category, Product } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/misc";
@@ -27,6 +28,8 @@ const emptyRow: VariantRow = {
   weightGrams: "300",
 };
 
+type AgeUnit = "meses" | "anos";
+
 export function ProductForm({
   product,
   categories,
@@ -35,6 +38,49 @@ export function ProductForm({
   categories: Category[];
 }) {
   const [state, action, pending] = useActionState(saveProductAction, null);
+
+  const [categoryId, setCategoryId] = useState(product?.category.id ?? "");
+  const kind = useMemo(
+    () => categories.find((c) => c.id === categoryId)?.kind ?? null,
+    [categories, categoryId],
+  );
+  const isToy = kind === "brinquedos";
+
+  // faixa etária — guardada em meses no banco, editável em meses ou anos.
+  // só mostra em "anos" quando os valores são múltiplos exatos de 12 (sem perder precisão).
+  const yearish = (v: number | null | undefined) => v == null || (v >= 12 && v % 12 === 0);
+  const initialUnit: AgeUnit =
+    (product?.age_min_months || product?.age_max_months) &&
+    yearish(product?.age_min_months) &&
+    yearish(product?.age_max_months)
+      ? "anos"
+      : "meses";
+  const toDisplay = (m: number | null | undefined) => {
+    if (m == null) return "";
+    return initialUnit === "anos" ? String(Math.round(m / 12)) : String(m);
+  };
+  const [ageUnit, setAgeUnit] = useState<AgeUnit>(initialUnit);
+  const [ageMin, setAgeMin] = useState(toDisplay(product?.age_min_months));
+  const [ageMax, setAgeMax] = useState(toDisplay(product?.age_max_months));
+
+  function switchAgeUnit(next: AgeUnit) {
+    if (next === ageUnit) return;
+    const conv = (v: string) => {
+      if (v.trim() === "") return "";
+      const n = Number(v);
+      if (!Number.isFinite(n)) return "";
+      return next === "anos" ? String(Math.max(0, Math.round(n / 12))) : String(n * 12);
+    };
+    setAgeMin(conv(ageMin));
+    setAgeMax(conv(ageMax));
+    setAgeUnit(next);
+  }
+
+  const factor = ageUnit === "anos" ? 12 : 1;
+  const toMonths = (v: string) =>
+    v.trim() === "" || !Number.isFinite(Number(v))
+      ? ""
+      : String(Math.round(Number(v) * factor));
 
   const [rows, setRows] = useState<VariantRow[]>(
     product && product.variants.length
@@ -70,6 +116,8 @@ export function ProductForm({
     <form action={action} className="space-y-6">
       <input type="hidden" name="id" value={product?.id ?? "novo"} />
       <input type="hidden" name="variants" value={variantsJson} />
+      <input type="hidden" name="ageMinMonths" value={toMonths(ageMin)} />
+      <input type="hidden" name="ageMaxMonths" value={toMonths(ageMax)} />
 
       {state?.error && (
         <p className="rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">{state.error}</p>
@@ -92,7 +140,8 @@ export function ProductForm({
             <select
               name="categoryId"
               required
-              defaultValue={product?.category.id ?? ""}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
               className="h-11 w-full rounded-xl border border-border bg-surface px-3"
             >
               <option value="" disabled>
@@ -120,24 +169,6 @@ export function ProductForm({
               <option value="unissex">unissex</option>
             </select>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Idade mín. (meses)">
-              <Input
-                name="ageMinMonths"
-                type="number"
-                min={0}
-                defaultValue={product?.age_min_months ?? ""}
-              />
-            </Field>
-            <Field label="Idade máx. (meses)">
-              <Input
-                name="ageMaxMonths"
-                type="number"
-                min={0}
-                defaultValue={product?.age_max_months ?? ""}
-              />
-            </Field>
-          </div>
           <Field label="Preço “de” (riscado)" hint="Deixe vazio se não há promoção.">
             <Input
               name="compareAtPrice"
@@ -146,6 +177,65 @@ export function ProductForm({
               placeholder="119.90"
             />
           </Field>
+        </div>
+
+        {/* Faixa etária */}
+        <Field label="Faixa etária" hint="Deixe vazio se serve para qualquer idade.">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              inputMode="numeric"
+              value={ageMin}
+              onChange={(e) => setAgeMin(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="mín."
+              className="h-11 w-20 rounded-xl border border-border bg-surface px-3 text-sm"
+            />
+            <span className="text-muted">a</span>
+            <input
+              inputMode="numeric"
+              value={ageMax}
+              onChange={(e) => setAgeMax(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="máx."
+              className="h-11 w-20 rounded-xl border border-border bg-surface px-3 text-sm"
+            />
+            <div className="flex gap-1">
+              {(["meses", "anos"] as AgeUnit[]).map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => switchAgeUnit(u)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                    ageUnit === u
+                      ? "bg-foreground text-background"
+                      : "border border-border bg-surface hover:bg-black/5",
+                  )}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Field>
+
+        {/* Detalhes — variam por tipo de produto */}
+        {isToy ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Material" hint="Ex.: Plástico ABS, madeira, pelúcia">
+              <Input
+                name="material"
+                defaultValue={product?.material ?? ""}
+                placeholder="Plástico ABS atóxico"
+              />
+            </Field>
+            <Field label="Medidas" hint="Ex.: 30 cm de altura, 20×15×10 cm">
+              <Input
+                name="dimensions"
+                defaultValue={product?.dimensions ?? ""}
+                placeholder="30 cm de altura"
+              />
+            </Field>
+          </div>
+        ) : (
           <Field label="Composição">
             <Input
               name="composition"
@@ -153,23 +243,30 @@ export function ProductForm({
               placeholder="100% algodão"
             />
           </Field>
-        </div>
-        <Field label="Modelagem (acordeão)">
-          <textarea
-            name="fitNotes"
-            rows={2}
-            defaultValue={product?.fit_notes ?? ""}
-            className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-primary"
-          />
-        </Field>
-        <Field label="Cuidados (acordeão)">
+        )}
+
+        {!isToy && (
+          <Field label="Modelagem (acordeão)">
+            <textarea
+              name="fitNotes"
+              rows={2}
+              defaultValue={product?.fit_notes ?? ""}
+              className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-primary"
+            />
+          </Field>
+        )}
+        <Field label={isToy ? "Cuidados / segurança (acordeão)" : "Cuidados (acordeão)"}>
           <textarea
             name="careNotes"
             rows={2}
             defaultValue={product?.care_notes ?? ""}
+            placeholder={
+              isToy ? "Limpar com pano úmido. Não imergir em água." : undefined
+            }
             className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-primary"
           />
         </Field>
+
         <label className="flex items-center gap-2 text-sm font-semibold">
           <input
             type="checkbox"

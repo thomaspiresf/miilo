@@ -40,6 +40,10 @@ export type Product = {
   base_price: number;
   compare_at_price: number | null;
   composition: string | null;
+  /** brinquedos: material (ex.: "Plástico ABS", "Madeira") */
+  material: string | null;
+  /** brinquedos: medidas (ex.: "30 cm de altura") */
+  dimensions: string | null;
   fit_notes: string | null;
   care_notes: string | null;
   rating_avg: number | null;

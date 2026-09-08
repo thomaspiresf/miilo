@@ -69,6 +69,8 @@ export async function POST(request: Request) {
         base_price: p.base_price,
         compare_at_price: p.compare_at_price,
         composition: p.composition,
+        material: p.material,
+        dimensions: p.dimensions,
         fit_notes: p.fit_notes,
         care_notes: p.care_notes,
         rating_avg: p.rating_avg,

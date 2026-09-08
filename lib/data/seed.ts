@@ -47,6 +47,8 @@ type SeedInput = {
   ageMax: number | null;
   images: number;
   composition: string;
+  material?: string;
+  dimensions?: string;
   fit: string;
   care: string;
   rating?: [number, number];
@@ -261,6 +263,8 @@ const rawProducts: SeedInput[] = [
     ageMax: null,
     images: 3,
     composition: "Tecido 100% poliéster; enchimento 100% fibra siliconada",
+    material: "Pelúcia antialérgica (100% poliéster), enchimento em fibra siliconada",
+    dimensions: "Aprox. 30 cm de altura sentado",
     fit: "Tamanho único, cerca de 30 cm.",
     care: "Lavável na máquina em saco de proteção, ciclo delicado. Seque à sombra.",
     rating: [5, 24],
@@ -310,6 +314,8 @@ function buildProduct(input: SeedInput): Product {
     base_price: priceFrom,
     compare_at_price: compareAtFrom,
     composition: input.composition,
+    material: input.material ?? null,
+    dimensions: input.dimensions ?? null,
     fit_notes: input.fit,
     care_notes: input.care,
     rating_avg: input.rating?.[0] ?? null,

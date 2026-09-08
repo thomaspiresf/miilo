@@ -83,20 +83,38 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
         </div>
       </div>
 
-      {/* Sobre a peça */}
+      {/* Sobre o produto */}
       <section className="max-w-2xl">
-        <h2 className="mb-3 text-lg font-black">Sobre a peça</h2>
+        <h2 className="mb-3 text-lg font-black">
+          {product.category.kind === "brinquedos" ? "Sobre o brinquedo" : "Sobre a peça"}
+        </h2>
         {product.composition && (
           <p className="mb-2 text-sm">
             <span className="font-bold">Composição:</span>{" "}
             <span className="text-muted">{product.composition}</span>
           </p>
         )}
+        {product.material && (
+          <p className="mb-2 text-sm">
+            <span className="font-bold">Material:</span>{" "}
+            <span className="text-muted">{product.material}</span>
+          </p>
+        )}
+        {product.dimensions && (
+          <p className="mb-2 text-sm">
+            <span className="font-bold">Medidas:</span>{" "}
+            <span className="text-muted">{product.dimensions}</span>
+          </p>
+        )}
         {product.description && <ExpandableText text={product.description} />}
 
         <div className="mt-4">
           {product.fit_notes && <Accordion title="Modelagem">{product.fit_notes}</Accordion>}
-          {product.care_notes && <Accordion title="Cuidados">{product.care_notes}</Accordion>}
+          {product.care_notes && (
+            <Accordion title={product.category.kind === "brinquedos" ? "Cuidados e segurança" : "Cuidados"}>
+              {product.care_notes}
+            </Accordion>
+          )}
           <Accordion title="Trocas e devoluções">
             Você tem 7 dias corridos após o recebimento para solicitar troca ou
             devolução, com a peça sem uso e com etiqueta. É só falar com a gente.
