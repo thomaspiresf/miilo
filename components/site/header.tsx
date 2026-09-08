@@ -100,27 +100,6 @@ export function SiteHeader({
           </CartSheet>
         </div>
       </div>
-
-      {/* nav categorias desktop */}
-      <nav className="mx-auto hidden w-full max-w-6xl gap-6 px-6 pb-2 text-sm font-semibold md:flex">
-        <Link href="/c/roupas" className="hover:text-primary">
-          Roupas
-        </Link>
-        {roupas.slice(0, 4).map((c) => (
-          <Link key={c.id} href={`/c/${c.slug}`} className="text-muted hover:text-primary">
-            {c.name}
-          </Link>
-        ))}
-        <span className="text-border">|</span>
-        <Link href="/c/brinquedos" className="hover:text-primary">
-          Brinquedos
-        </Link>
-        {brinquedos.slice(0, 3).map((c) => (
-          <Link key={c.id} href={`/c/${c.slug}`} className="text-muted hover:text-primary">
-            {c.name}
-          </Link>
-        ))}
-      </nav>
     </header>
   );
 }
