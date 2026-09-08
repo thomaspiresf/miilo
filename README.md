@@ -104,12 +104,37 @@ O MVP só **cota** o frete. A compra da etiqueta é um próximo passo.
 | `lib/mercadopago.ts` / `lib/melhorenvio.ts` | Clientes das integrações + fallback |
 | `supabase/schema.sql` | Tabelas, RLS, função `approve_order`, bucket de imagens |
 
-## Deploy (Vercel)
+## Deploy (Vercel + domínio na Hostinger)
 
-1. Importe o repositório na Vercel.
-2. Adicione todas as variáveis do `.env.local` no projeto.
-3. Ajuste `NEXT_PUBLIC_SITE_URL` para o domínio de produção e atualize a URL do
-   webhook no Mercado Pago e os Redirect URLs no Supabase.
+1. **GitHub** — suba o repositório (`git remote add origin … && git push -u origin main`).
+2. **Vercel** — [vercel.com](https://vercel.com) → *Add New → Project* → importe o repo.
+   Framework: Next.js (detectado). Em *Environment Variables*, cole as do
+   `.env.local` **com estes ajustes de produção**:
+
+   | Variável | Produção |
+   |---|---|
+   | `NEXT_PUBLIC_SITE_URL` | `https://miilo.com.br` |
+   | `MOCK_PAYMENTS` | `false` |
+   | `MOCK_SHIPPING` | `false` (quando tiver o token do Melhor Envio) |
+   | `MP_WEBHOOK_SECRET` | (preencher após o passo 5) |
+   | `ADMIN_DEV_BYPASS` | não precisa — produção sempre exige login |
+
+   Deploy.
+3. **Domínio na Vercel** — *Project → Settings → Domains* → adicione
+   `miilo.com.br` e `www.miilo.com.br`. A Vercel mostra os registros DNS.
+4. **DNS na Hostinger** — hPanel → *Domínios → miilo.com.br → DNS / Nameservers →
+   Zona DNS*:
+   - `A` · nome `@` · valor `76.76.21.21` (use o que a Vercel mostrar)
+   - `CNAME` · nome `www` · valor `cname.vercel-dns.com`
+   - remova registros `A`/`CNAME` antigos de `@` e `www` que apontem pra Hostinger
+   - propaga em minutos a algumas horas; a Vercel emite o HTTPS sozinha.
+5. **Reconectar os serviços** (com o domínio no ar):
+   - Supabase → *Authentication → URL Configuration* → Site URL `https://miilo.com.br`
+     e Redirect URLs `https://miilo.com.br/**`
+   - Mercado Pago → app → *Webhooks* → URL
+     `https://miilo.com.br/api/webhooks/mercadopago` → copie a assinatura secreta
+     → cole em `MP_WEBHOOK_SECRET` na Vercel → *Redeploy*
+6. Cada `git push` na branch `main` publica automaticamente.
 
 ## Scripts
 
