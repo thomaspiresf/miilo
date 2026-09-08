@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Banknote,
   Check,
@@ -29,8 +30,17 @@ export type PosProduct = {
   id: string;
   name: string;
   image: string | null;
+  kind: "roupas" | "brinquedos";
   variants: { id: string; label: string; price: number; stock: number }[];
 };
+
+type KindFilter = "all" | "roupas" | "brinquedos";
+
+const KIND_TABS: { id: KindFilter; label: string }[] = [
+  { id: "all", label: "Tudo" },
+  { id: "roupas", label: "Roupas" },
+  { id: "brinquedos", label: "Brinquedos" },
+];
 
 type RecentSale = {
   id: string;
@@ -45,6 +55,7 @@ type CartLine = {
   variantId: string;
   name: string;
   label: string;
+  image: string | null;
   price: number;
   stock: number;
   qty: number;
@@ -80,6 +91,7 @@ export function PosClient({
   recent: RecentSale[];
 }) {
   const [query, setQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
@@ -95,9 +107,12 @@ export function PosClient({
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return catalog.slice(0, 6);
-    return catalog.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 8);
-  }, [catalog, query]);
+    const base = catalog.filter(
+      (p) => kindFilter === "all" || p.kind === kindFilter,
+    );
+    const matched = q ? base.filter((p) => p.name.toLowerCase().includes(q)) : base;
+    return matched.slice(0, q ? 12 : 8);
+  }, [catalog, query, kindFilter]);
 
   function addVariant(p: PosProduct, v: PosProduct["variants"][number]) {
     setError(null);
@@ -110,7 +125,15 @@ export function PosClient({
       if (v.stock < 1) return cur;
       return [
         ...cur,
-        { variantId: v.id, name: p.name, label: v.label, price: v.price, stock: v.stock, qty: 1 },
+        {
+          variantId: v.id,
+          name: p.name,
+          label: v.label,
+          image: p.image,
+          price: v.price,
+          stock: v.stock,
+          qty: 1,
+        },
       ];
     });
   }
@@ -192,6 +215,25 @@ export function PosClient({
           {/* Buscar produto */}
           <section className="rounded-2xl border border-border bg-surface p-5">
             <h2 className="mb-3 font-black">1. Produtos</h2>
+
+            <div className="mb-3 flex gap-1.5">
+              {KIND_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setKindFilter(t.id)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+                    kindFilter === t.id
+                      ? "bg-foreground text-background"
+                      : "border border-border bg-surface hover:bg-black/5",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
             <div className="flex items-center rounded-xl border border-border bg-background px-3">
               <Search className="h-4 w-4 text-muted" />
               <input
@@ -208,7 +250,20 @@ export function PosClient({
               )}
               {results.map((p) => (
                 <div key={p.id} className="rounded-xl border border-border p-3">
-                  <p className="text-sm font-semibold">{p.name}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-black/5">
+                      {p.image && (
+                        <Image
+                          src={p.image}
+                          alt={p.name}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                        />
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold">{p.name}</p>
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {p.variants.map((v) => {
                       const inCart = cart.find((l) => l.variantId === v.id)?.qty ?? 0;
@@ -247,6 +302,17 @@ export function PosClient({
               <ul className="space-y-3">
                 {cart.map((l) => (
                   <li key={l.variantId} className="flex items-center gap-3">
+                    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-black/5">
+                      {l.image && (
+                        <Image
+                          src={l.image}
+                          alt={l.name}
+                          fill
+                          sizes="44px"
+                          className="object-cover"
+                        />
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{l.name}</p>
                       <p className="text-xs text-muted">

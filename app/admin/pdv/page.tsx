@@ -16,6 +16,7 @@ export default async function AdminPosPage() {
       id: p.id,
       name: p.name,
       image: p.images[0]?.url ?? null,
+      kind: p.category.kind,
       variants: p.variants
         .filter((v) => v.active)
         .map((v) => ({
