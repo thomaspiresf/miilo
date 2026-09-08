@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { adminGetProduct, adminListCategories } from "@/lib/data/admin";
 import { ProductForm } from "@/components/admin/product-form";
 import { ImageUploader } from "@/components/admin/image-uploader";
+import { VideoUploader } from "@/components/admin/video-uploader";
 import { addImageUrlAction } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
 
@@ -86,6 +87,16 @@ export default async function AdminProductEditPage(
               </Button>
             </form>
           </details>
+        </section>
+      )}
+
+      {product && (
+        <section className="rounded-2xl border border-border bg-surface p-5">
+          <h2 className="mb-1 font-bold">Vídeo (opcional)</h2>
+          <p className="mb-3 text-xs text-muted">
+            Aparece como o primeiro item da galeria na página do produto.
+          </p>
+          <VideoUploader productId={product.id} video={product.video_url} />
         </section>
       )}
     </div>

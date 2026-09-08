@@ -51,6 +51,8 @@ export type Product = {
   rating_avg: number | null;
   rating_count: number;
   max_installments: number;
+  /** vídeo do produto: URL pública de um MP4 hospedado OU link YouTube/Vimeo */
+  video_url: string | null;
   category: Pick<Category, "id" | "slug" | "name" | "kind">;
   images: ProductImage[];
   variants: ProductVariant[];

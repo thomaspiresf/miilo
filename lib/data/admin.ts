@@ -174,6 +174,7 @@ function buildMockProduct(
     rating_avg: null,
     rating_count: 0,
     max_installments: 3,
+    video_url: null,
     category: { id: category.id, slug: category.slug, name: category.name, kind: category.kind },
     images: [],
     variants: variants.map((v, i) => ({
@@ -240,6 +241,7 @@ export async function adminUpdateProduct(
     rebuilt.images = p.images;
     rebuilt.rating_avg = p.rating_avg;
     rebuilt.rating_count = p.rating_count;
+    rebuilt.video_url = p.video_url;
     Object.assign(p, rebuilt);
     return;
   }
@@ -386,6 +388,62 @@ export async function adminUploadImage(
   if (error) throw new Error(`Falha no upload: ${error.message}`);
 
   await adminAddImageUrl(productId, path, color);
+  return {
+    url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`,
+  };
+}
+
+const VIDEO_MAX_BYTES = 60 * 1024 * 1024;
+const VIDEO_OK_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
+
+/** Grava o vídeo do produto (path do bucket, link YouTube/Vimeo, ou null pra remover). */
+export async function adminSetProductVideo(
+  productId: string,
+  value: string | null,
+): Promise<void> {
+  assertPersistable();
+  const v = value?.trim() || null;
+
+  if (!hasSupabaseAdmin()) {
+    const p = mockDB().products.find((x) => x.id === productId);
+    if (p) p.video_url = v;
+    return;
+  }
+  const admin = createAdminClient();
+  const { error } = await admin.from("products").update({ video_url: v }).eq("id", productId);
+  if (error && !MISSING_COLUMN.test(error.message)) throw error;
+}
+
+/** Sobe um arquivo de vídeo pro Storage e liga ao produto. */
+export async function adminUploadVideo(
+  productId: string,
+  file: File,
+): Promise<{ url: string }> {
+  assertPersistable();
+  if (!VIDEO_OK_TYPES.includes(file.type)) {
+    throw new Error("Formato não suportado. Use MP4, WebM ou MOV.");
+  }
+  if (file.size > VIDEO_MAX_BYTES) {
+    throw new Error("Vídeo muito grande (máx. 60 MB). Deixe o clipe curto ou use um link do YouTube/Vimeo.");
+  }
+
+  const ext = file.type === "video/quicktime" ? "mov" : file.type.split("/")[1];
+  const path = `${productId}/video-${crypto.randomUUID()}.${ext}`;
+
+  if (!hasSupabaseAdmin()) {
+    const buf = Buffer.from(await file.arrayBuffer());
+    const dataUrl = `data:${file.type};base64,${buf.toString("base64")}`;
+    await adminSetProductVideo(productId, dataUrl);
+    return { url: dataUrl };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.storage
+    .from(BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw new Error(`Falha no upload: ${error.message}`);
+
+  await adminSetProductVideo(productId, path);
   return {
     url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`,
   };

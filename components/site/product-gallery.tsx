@@ -2,44 +2,84 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { Play } from "lucide-react";
 import type { ProductImage } from "@/lib/types";
+import { parseVideo } from "@/lib/video";
 import { cn } from "@/lib/utils";
 
 export function ProductGallery({
   images,
   name,
+  video,
 }: {
   images: ProductImage[];
   name: string;
+  video?: string | null;
 }) {
+  const parsedVideo = parseVideo(video);
+  // slides: vídeo primeiro (se houver), depois as imagens
+  const slides = [
+    ...(parsedVideo ? [{ type: "video" as const, key: "video" }] : []),
+    ...images.map((im) => ({ type: "image" as const, key: im.id, im })),
+  ];
+
   const [active, setActive] = useState(0);
-  if (images.length === 0) {
+
+  if (slides.length === 0) {
     return <div className="aspect-square w-full rounded-2xl bg-black/5" />;
   }
+
+  const current = slides[Math.min(active, slides.length - 1)];
+
   return (
     <div>
       <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-black/5">
-        <Image
-          src={images[active].url}
-          alt={images[active].alt ?? name}
-          fill
-          priority
-          sizes="(max-width: 1024px) 100vw, 520px"
-          className="object-cover"
-        />
+        {current.type === "video" && parsedVideo ? (
+          parsedVideo.kind === "file" ? (
+            <video
+              src={parsedVideo.src}
+              controls
+              playsInline
+              className="h-full w-full bg-black object-contain"
+            />
+          ) : (
+            <iframe
+              src={parsedVideo.src}
+              className="h-full w-full"
+              allow="autoplay; fullscreen; picture-in-picture"
+              title={`Vídeo — ${name}`}
+            />
+          )
+        ) : current.type === "image" ? (
+          <Image
+            src={current.im.url}
+            alt={current.im.alt ?? name}
+            fill
+            priority
+            sizes="(max-width: 1024px) 100vw, 520px"
+            className="object-cover"
+          />
+        ) : null}
       </div>
-      {images.length > 1 && (
+
+      {slides.length > 1 && (
         <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
-          {images.map((im, i) => (
+          {slides.map((s, i) => (
             <button
-              key={im.id}
+              key={s.key}
               onClick={() => setActive(i)}
               className={cn(
                 "relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2",
                 i === active ? "border-primary" : "border-transparent",
               )}
             >
-              <Image src={im.url} alt="" fill sizes="64px" className="object-cover" />
+              {s.type === "video" ? (
+                <span className="flex h-full w-full items-center justify-center bg-foreground/90 text-background">
+                  <Play className="h-5 w-5 fill-current" />
+                </span>
+              ) : (
+                <Image src={s.im.url} alt="" fill sizes="64px" className="object-cover" />
+              )}
             </button>
           ))}
         </div>

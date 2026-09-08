@@ -13,6 +13,7 @@ import {
   adminDeleteImage,
   adminCreateCategory,
   adminDeleteCategory,
+  adminSetProductVideo,
 } from "@/lib/data/admin";
 import { setOrderStatus } from "@/lib/data/orders";
 import type { OrderStatus } from "@/lib/types";
@@ -122,6 +123,19 @@ export async function addImageUrlAction(formData: FormData) {
     console.error("addImageUrl:", (err as Error).message);
   }
   revalidatePath(`/admin/produtos/${formData.get("productId")}`);
+}
+
+export async function setProductVideoAction(formData: FormData) {
+  await requireAdmin();
+  const productId = String(formData.get("productId"));
+  const value = String(formData.get("value") ?? "").trim() || null;
+  try {
+    await adminSetProductVideo(productId, value);
+  } catch (err) {
+    console.error("setProductVideo:", (err as Error).message);
+  }
+  revalidatePath(`/admin/produtos/${productId}`);
+  revalidatePath("/");
 }
 
 export async function setImageColorAction(formData: FormData) {

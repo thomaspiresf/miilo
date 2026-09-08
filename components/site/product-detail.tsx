@@ -33,7 +33,12 @@ export function ProductDetail({
 
   return (
     <div className="grid gap-8 lg:grid-cols-2">
-      <ProductGallery key={galleryKey} images={gallery} name={product.name} />
+      <ProductGallery
+        key={galleryKey}
+        images={gallery}
+        name={product.name}
+        video={product.video_url}
+      />
       <div>
         {info}
         <div className="mt-6">

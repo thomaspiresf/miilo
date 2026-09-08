@@ -73,6 +73,7 @@ export function mapProduct(row: any): Product {
     rating_avg: row.rating_avg != null ? Number(row.rating_avg) : null,
     rating_count: Number(row.rating_count ?? 0),
     max_installments: Number(row.max_installments ?? 3),
+    video_url: row.video_url ? imageUrl(row.video_url) : null,
     category: row.category,
     images,
     variants,
