@@ -103,13 +103,18 @@ export async function quoteShipping(req: QuoteRequest): Promise<ShippingOption[]
 
     if (!all.length) return mockQuote(req);
 
-    // mostra no máximo 4: as mais baratas + a mais rápida (se não estiver entre elas)
-    const cheapest = all.slice(0, 4);
-    const fastest = [...all].sort((a, b) => a.delivery_days - b.delivery_days)[0];
-    if (fastest && !cheapest.some((o) => o.id === fastest.id)) {
-      cheapest[cheapest.length - 1] = fastest;
-    }
-    return cheapest.sort((a, b) => a.price - b.price);
+    // Seleção: 3 mais baratas + a mais rápida + garante 1 opção dos Correios.
+    const isCorreios = (o: ShippingOption) => /correios/i.test(o.company);
+    const picked = new Map<string, ShippingOption>();
+    const add = (o?: ShippingOption) => {
+      if (o && !picked.has(o.id)) picked.set(o.id, o);
+    };
+
+    all.slice(0, 3).forEach(add); // 3 mais baratas
+    add([...all].sort((a, b) => a.delivery_days - b.delivery_days)[0]); // mais rápida
+    add(all.find(isCorreios)); // Correios mais barato (PAC normalmente)
+
+    return [...picked.values()].sort((a, b) => a.price - b.price);
   } catch (err) {
     console.warn("[miilo] Melhor Envio indisponível — usando frete estimado.", err);
     return mockQuote(req);
