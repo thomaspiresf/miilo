@@ -394,16 +394,55 @@ export async function adminUploadImage(
 // --------------------------------------------------------------------------
 //  Categorias
 // --------------------------------------------------------------------------
+// slugs reservados para as rotas de nível 1 (kind) e "todos"
+const RESERVED_SLUGS = ["tudo", "roupas", "brinquedos"];
+
+/** Gera um slug único que não colide com os reservados nem com categorias existentes. */
+function uniqueCategorySlug(name: string, taken: Set<string>) {
+  const base = slugify(name) || "categoria";
+  let slug = RESERVED_SLUGS.includes(base) ? `${base}-geral` : base;
+  let n = 2;
+  while (taken.has(slug)) slug = `${base}-${n++}`;
+  return slug;
+}
+
 export async function adminCreateCategory(name: string, kind: "roupas" | "brinquedos"): Promise<void> {
   assertPersistable();
-  const slug = slugify(name);
+
   if (!hasSupabaseAdmin()) {
     const db = mockDB();
+    const slug = uniqueCategorySlug(name, new Set(db.categories.map((c) => c.slug)));
     db.categories.push({ id: `cat-${Date.now()}`, slug, name, kind, sort: db.categories.length + 1 });
     return;
   }
   const admin = createAdminClient();
-  await admin.from("categories").insert({ slug, name, kind, sort: 99 });
+  const { data: existing } = await admin.from("categories").select("slug");
+  const slug = uniqueCategorySlug(name, new Set((existing ?? []).map((c) => c.slug)));
+  const { error } = await admin.from("categories").insert({ slug, name, kind, sort: 99 });
+  if (error) throw error;
+}
+
+export async function adminDeleteCategory(id: string): Promise<void> {
+  assertPersistable();
+
+  if (!hasSupabaseAdmin()) {
+    const db = mockDB();
+    if (db.products.some((p) => p.category.id === id)) {
+      throw new Error("Mova os produtos para outra categoria antes de excluir.");
+    }
+    db.categories = db.categories.filter((c) => c.id !== id);
+    return;
+  }
+  const admin = createAdminClient();
+  const { count } = await admin
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("category_id", id);
+  if ((count ?? 0) > 0) {
+    throw new Error("Mova os produtos para outra categoria antes de excluir.");
+  }
+  const { error } = await admin.from("categories").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // --------------------------------------------------------------------------

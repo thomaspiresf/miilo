@@ -1,4 +1,5 @@
 import { adminListCategories, adminListProducts } from "@/lib/data/admin";
+import { deleteCategoryAction } from "@/app/admin/actions";
 import { CategoryForm } from "@/components/admin/category-form";
 
 export default async function AdminCategoriesPage() {
@@ -14,17 +15,30 @@ export default async function AdminCategoriesPage() {
       <h1 className="text-2xl font-black">Categorias</h1>
 
       <div className="divide-y divide-border rounded-2xl border border-border bg-surface">
-        {categories.map((c) => (
-          <div key={c.id} className="flex items-center justify-between px-4 py-3 text-sm">
-            <div>
-              <p className="font-semibold">{c.name}</p>
-              <p className="text-xs text-muted">
-                /{c.slug} · {c.kind}
-              </p>
+        {categories.map((c) => {
+          const n = count(c.id);
+          return (
+            <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+              <div>
+                <p className="font-semibold">{c.name}</p>
+                <p className="text-xs text-muted">
+                  /{c.slug} · {c.kind}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-muted">{n} produtos</span>
+                {n === 0 && (
+                  <form action={deleteCategoryAction}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <button className="text-xs font-semibold text-danger hover:underline">
+                      excluir
+                    </button>
+                  </form>
+                )}
+              </div>
             </div>
-            <span className="text-muted">{count(c.id)} produtos</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <CategoryForm />

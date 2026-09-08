@@ -12,6 +12,7 @@ import {
   adminSetImageColor,
   adminDeleteImage,
   adminCreateCategory,
+  adminDeleteCategory,
 } from "@/lib/data/admin";
 import { setOrderStatus } from "@/lib/data/orders";
 import type { OrderStatus } from "@/lib/types";
@@ -147,10 +148,25 @@ export async function createCategoryAction(_prev: unknown, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const kind = formData.get("kind") === "brinquedos" ? "brinquedos" : "roupas";
   if (name.length < 2) return { error: "Nome muito curto" };
-  await adminCreateCategory(name, kind);
+  try {
+    await adminCreateCategory(name, kind);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Falha ao criar" };
+  }
   revalidatePath("/admin/categorias");
   revalidatePath("/");
   return { ok: true };
+}
+
+export async function deleteCategoryAction(formData: FormData) {
+  await requireAdmin();
+  try {
+    await adminDeleteCategory(String(formData.get("id")));
+  } catch (err) {
+    console.error("deleteCategory:", (err as Error).message);
+  }
+  revalidatePath("/admin/categorias");
+  revalidatePath("/");
 }
 
 export async function updateOrderStatusAction(formData: FormData) {
