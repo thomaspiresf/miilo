@@ -53,7 +53,7 @@ export function SiteHeader({
         </Sheet>
 
         <Link href="/" aria-label="miilo — início">
-          <Logo variant="horizontal" className="h-7 w-auto" priority />
+          <Logo variant="icon" className="h-10 w-auto" priority />
         </Link>
 
         <form onSubmit={submitSearch} className="ml-auto hidden flex-1 max-w-md md:flex">
