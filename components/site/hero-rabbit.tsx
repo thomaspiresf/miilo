@@ -45,7 +45,7 @@ export function HeroRabbit() {
         <svg
           viewBox="65 150 950 800"
           preserveAspectRatio="xMidYMax meet"
-          className="mb-0.5 h-8 w-auto sm:mb-1 sm:h-12"
+          className="mb-1 h-11 w-auto sm:mb-1.5 sm:h-16"
           role="img"
           aria-label="miilo"
         >
@@ -84,7 +84,7 @@ export function HeroRabbit() {
         <Logo
           variant="wordmark"
           tone="negativo"
-          className="h-10 w-auto sm:h-[3.75rem]"
+          className="h-14 w-auto sm:h-20"
           priority
         />
       </div>
