@@ -1,17 +1,15 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ChevronRight } from "lucide-react";
 import type { Order } from "@/lib/types";
 import { formatBRL, formatDate } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/order-status";
 import { Badge } from "@/components/ui/misc";
 
-export function OrderCard({ order, href }: { order: Order; href: string }) {
+function Body({ order }: { order: Order }) {
   const status = ORDER_STATUS[order.status];
   return (
-    <Link
-      href={href}
-      className="block rounded-2xl border border-border bg-surface p-4 transition hover:border-primary"
-    >
+    <>
       <div className="flex items-center justify-between">
         <div>
           <p className="font-bold">{order.number}</p>
@@ -35,6 +33,39 @@ export function OrderCard({ order, href }: { order: Order; href: string }) {
         )}
         <span className="ml-auto font-bold">{formatBRL(order.total)}</span>
       </div>
+    </>
+  );
+}
+
+export function OrderCard({
+  order,
+  href,
+  bare = false,
+}: {
+  order: Order;
+  href: string;
+  /** true = sem borda/link no card todo (a página cuida do container). */
+  bare?: boolean;
+}) {
+  if (bare) {
+    return (
+      <div>
+        <Body order={order} />
+        <Link
+          href={href}
+          className="mt-2 inline-flex items-center gap-0.5 text-xs font-semibold text-primary"
+        >
+          Ver detalhes <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    );
+  }
+  return (
+    <Link
+      href={href}
+      className="block rounded-2xl border border-border bg-surface p-4 transition hover:border-primary"
+    >
+      <Body order={order} />
     </Link>
   );
 }

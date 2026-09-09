@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAllProductSlugs, getProductBySlug, listProducts } from "@/lib/data/catalog";
+import { listReviewsForProduct } from "@/lib/data/reviews";
 import { formatAgeRange } from "@/lib/format";
 import { ProductDetail } from "@/components/site/product-detail";
+import { ProductReviews } from "@/components/site/product-reviews";
 import { getInstallmentsForPrices } from "@/lib/mp-installments";
 import { toCardItem } from "@/lib/product-cards";
 import { ProductGrid } from "@/components/site/product-card";
@@ -61,6 +63,7 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
     product.price_from,
     ...product.variants.map((v) => v.price),
   ]);
+  const reviews = await listReviewsForProduct(product.id);
 
   return (
     <div className="space-y-12">
@@ -143,6 +146,8 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
           </Accordion>
         </div>
       </section>
+
+      <ProductReviews reviews={reviews} />
 
       {related.length > 0 && (
         <section>

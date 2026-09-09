@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronRight } from "lucide-react";
+import { Star } from "lucide-react";
 import { getUser, isDemoMode } from "@/lib/auth";
 import { listOrdersForUser } from "@/lib/data/orders";
+import { hasPendingReviews } from "@/lib/data/reviews";
 import { OrderCard } from "@/components/order/order-card";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { EmptyState } from "@/components/ui/misc";
@@ -17,6 +19,7 @@ export default async function AccountPage() {
   if (!demo && !user) redirect("/conta/login");
 
   const orders = user ? await listOrdersForUser(user.id) : demo ? await listOrdersForUser("demo") : [];
+  const pendingReviews = user ? await hasPendingReviews(user.id) : false;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -43,6 +46,19 @@ export default async function AccountPage() {
           className="flex items-center justify-between rounded-2xl border border-accent/30 bg-accent/5 px-4 py-3.5 font-bold text-accent hover:bg-accent/10"
         >
           Painel administrativo
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      )}
+
+      {pendingReviews && (
+        <Link
+          href="/conta/pedidos"
+          className="flex items-center justify-between rounded-2xl border border-yellow/40 bg-yellow/10 px-4 py-3.5 font-bold hover:bg-yellow/15"
+        >
+          <span className="flex items-center gap-2">
+            <Star className="h-4 w-4 fill-yellow text-yellow" />
+            Você tem compras para avaliar
+          </span>
           <ChevronRight className="h-4 w-4" />
         </Link>
       )}

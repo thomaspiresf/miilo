@@ -188,6 +188,16 @@ export type Order = {
   items: OrderItem[];
 };
 
+export type Review = {
+  id: string;
+  product_id: string;
+  author_name: string | null;
+  rating: number;
+  comment: string | null;
+  photos: string[]; // URLs resolvidas
+  created_at: string;
+};
+
 export type StockReason =
   | "sale"
   | "restock"
