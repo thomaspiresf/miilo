@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Check, ShoppingBag, Zap } from "lucide-react";
 import type { Product, ProductVariant } from "@/lib/types";
+import type { Installment } from "@/lib/mp-installments";
 import { useCart } from "@/lib/cart-store";
-import { discountPercent, formatBRL, installmentText } from "@/lib/format";
+import { discountPercent, formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SizeGuide } from "@/components/site/size-guide";
@@ -19,10 +20,12 @@ export function ProductBuyBox({
   product,
   color,
   onColorChange,
+  installments,
 }: {
   product: Product;
   color: string | null;
   onColorChange: (c: string | null) => void;
+  installments: Record<string, Installment>;
 }) {
   const router = useRouter();
   const variants = product.variants;
@@ -96,7 +99,7 @@ export function ProductBuyBox({
       ? product.compare_at_price
       : product.compare_at_from;
   const off = discountPercent(price, compareAt);
-  const installments = installmentText(price, product.max_installments);
+  const inst = installments[String(price)];
   const outOfStock = !selected || selected.stock < 1;
 
   return (
@@ -114,7 +117,11 @@ export function ProductBuyBox({
             </>
           )}
         </div>
-        {installments && <p className="text-sm text-muted">{installments}</p>}
+        {inst && inst.count > 1 && (
+          <p className="text-sm text-muted">
+            em até {inst.count}x de {formatBRL(inst.amount)}
+          </p>
+        )}
       </div>
 
       {/* cor */}

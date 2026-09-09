@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getAllProductSlugs, getProductBySlug, listProducts } from "@/lib/data/catalog";
 import { formatAgeRange } from "@/lib/format";
 import { ProductDetail } from "@/components/site/product-detail";
+import { getInstallmentsForPrices } from "@/lib/mp-installments";
 import { ProductGrid } from "@/components/site/product-card";
 import { Rating } from "@/components/site/rating";
 import { ExpandableText } from "@/components/site/expandable-text";
@@ -45,6 +46,10 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
     .slice(0, 4);
 
   const age = formatAgeRange(product.age_min_months, product.age_max_months);
+  const installments = await getInstallmentsForPrices([
+    product.price_from,
+    ...product.variants.map((v) => v.price),
+  ]);
 
   return (
     <div className="space-y-12">
@@ -56,6 +61,7 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
 
       <ProductDetail
         product={product}
+        installments={installments}
         info={
           <>
             {product.brand && (

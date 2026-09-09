@@ -46,22 +46,6 @@ export function formatDateTime(value: string | Date | null | undefined) {
   return DATETIME.format(new Date(value));
 }
 
-/**
- * Parcelamento sem juros. Ex.: installment(199.99, 3) -> "3x de R$ 66,66 sem juros".
- * Só mostra parcela se o valor da parcela ficar >= R$ 15 (evita "10x de R$ 3").
- */
-export function installmentText(
-  price: number,
-  maxInstallments = 3,
-  minPerInstallment = 15,
-) {
-  if (!price || maxInstallments <= 1) return null;
-  let n = maxInstallments;
-  while (n > 1 && price / n < minPerInstallment) n--;
-  if (n <= 1) return null;
-  return `${n}x de ${formatBRL(price / n)} sem juros`;
-}
-
 export function discountPercent(price: number, compareAt: number | null | undefined) {
   if (!compareAt || compareAt <= price) return null;
   return Math.round((1 - price / compareAt) * 100);
