@@ -182,11 +182,19 @@ export type Order = {
   payment_method: string | null;
   tracking_code: string | null;
   stock_restored: boolean;
+  /** Estoque baixado na criação do pedido (reserva). */
+  stock_reserved: boolean;
   created_at: string;
   items: OrderItem[];
 };
 
-export type StockReason = "sale" | "restock" | "adjustment" | "cancellation";
+export type StockReason =
+  | "sale"
+  | "restock"
+  | "adjustment"
+  | "cancellation"
+  | "reservation"
+  | "reservation_release";
 
 export type StockMovement = {
   id: string;

@@ -186,6 +186,7 @@ create table if not exists public.orders (
 );
 
 alter table public.orders add column if not exists stock_restored boolean not null default false;
+alter table public.orders add column if not exists stock_reserved boolean not null default false;
 alter table public.orders add column if not exists customer_name  text;
 alter table public.orders add column if not exists phone          text;
 alter table public.orders add column if not exists delivery_mode  text not null default 'delivery';
@@ -268,16 +269,111 @@ begin
          payment_method = coalesce(p_method, payment_method)
    where id = p_order_id;
 
+  if exists (
+    select 1 from public.orders
+     where id = p_order_id and stock_reserved = true and stock_restored = false
+  ) then
+    -- estoque já reservado na criação do pedido: só relabela o movimento
+    update public.stock_movements
+       set reason = 'sale'
+     where order_id = p_order_id and reason = 'reservation';
+  else
+    for it in select variant_id, qty from public.order_items where order_id = p_order_id loop
+      if it.variant_id is not null then
+        update public.product_variants
+           set stock = greatest(0, stock - it.qty)
+         where id = it.variant_id
+         returning stock into bal;
+        insert into public.stock_movements (variant_id, delta, reason, order_id, balance_after)
+        values (it.variant_id, -it.qty, 'sale', p_order_id, bal);
+      end if;
+    end loop;
+    update public.orders
+       set stock_restored = false
+     where id = p_order_id and stock_reserved = true;
+  end if;
+end;
+$$;
+
+-- reserva o estoque na criação do pedido (atômico; ver migration-stock-reservation.sql)
+create or replace function public.reserve_order_stock(p_order_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  it  record;
+  bal int;
+begin
+  if exists (select 1 from public.orders where id = p_order_id and stock_reserved = true) then
+    return;
+  end if;
+  for it in
+    select variant_id, qty, product_name from public.order_items where order_id = p_order_id
+  loop
+    if it.variant_id is not null then
+      update public.product_variants
+         set stock = stock - it.qty
+       where id = it.variant_id and stock >= it.qty
+       returning stock into bal;
+      if not found then
+        raise exception 'OUT_OF_STOCK:%', coalesce(it.product_name, 'produto');
+      end if;
+      insert into public.stock_movements (variant_id, delta, reason, order_id, balance_after)
+      values (it.variant_id, -it.qty, 'reservation', p_order_id, bal);
+    end if;
+  end loop;
+  update public.orders set stock_reserved = true where id = p_order_id;
+end;
+$$;
+
+-- devolve o estoque de uma reserva que não virou venda (pending cancelado/expirado)
+create or replace function public.release_order_stock(p_order_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  it  record;
+  bal int;
+begin
+  if not exists (
+    select 1 from public.orders
+     where id = p_order_id and stock_reserved = true and stock_restored = false
+       and status not in ('paid', 'shipped', 'delivered')
+  ) then
+    return;
+  end if;
+  update public.orders set stock_restored = true where id = p_order_id;
   for it in select variant_id, qty from public.order_items where order_id = p_order_id loop
     if it.variant_id is not null then
       update public.product_variants
-         set stock = greatest(0, stock - it.qty)
+         set stock = stock + it.qty
        where id = it.variant_id
        returning stock into bal;
       insert into public.stock_movements (variant_id, delta, reason, order_id, balance_after)
-      values (it.variant_id, -it.qty, 'sale', p_order_id, bal);
+      values (it.variant_id, it.qty, 'reservation_release', p_order_id, bal);
     end if;
   end loop;
+end;
+$$;
+
+-- expira reservas de pedidos ONLINE pendentes há mais de p_minutes
+create or replace function public.expire_stale_reservations(p_minutes int default 65)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  r record;
+  n int := 0;
+begin
+  for r in
+    select id from public.orders
+     where status = 'pending'
+       and coalesce(channel, 'online') = 'online'
+       and stock_reserved = true
+       and stock_restored = false
+       and created_at < now() - make_interval(mins => p_minutes)
+  loop
+    perform public.release_order_stock(r.id);
+    update public.orders
+       set status = 'cancelled', mp_status = coalesce(mp_status, 'expired')
+     where id = r.id;
+    n := n + 1;
+  end loop;
+  return n;
 end;
 $$;
 

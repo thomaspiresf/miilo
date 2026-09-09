@@ -39,20 +39,27 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
   const confirmed = ["paid", "shipped", "delivered"].includes(order.status);
   const pickup = order.delivery_mode === "pickup";
   const realEmail = order.email && !order.email.endsWith("@miilo.com.br");
+  const expired =
+    (order.status === "cancelled" || order.status === "failed") &&
+    order.mp_status === "expired";
 
   const headline = confirmed
     ? "Obrigado pela compra! 🎉"
-    : order.status === "failed" || order.status === "cancelled"
-      ? `Pedido ${status.label.toLowerCase()}`
-      : "Pedido recebido";
+    : expired
+      ? "O prazo de pagamento venceu"
+      : order.status === "failed" || order.status === "cancelled"
+        ? `Pedido ${status.label.toLowerCase()}`
+        : "Pedido recebido";
 
   const subline = confirmed
     ? pickup
       ? "Pagamento confirmado. Vamos separar tudo e te avisar quando estiver pronto pra retirar."
       : "Pagamento confirmado. Já estamos preparando seu pedido — quando enviarmos, você recebe o código de rastreio."
-    : order.status === "pending"
-      ? "Assim que o pagamento cair, o pedido é confirmado automaticamente."
-      : "";
+    : expired
+      ? "O pedido não foi pago no prazo e os itens voltaram pro estoque. Você pode fazer um novo pedido quando quiser."
+      : order.status === "pending"
+        ? "Assim que o pagamento cair, o pedido é confirmado automaticamente."
+        : "";
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

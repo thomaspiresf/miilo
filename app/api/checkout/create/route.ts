@@ -7,6 +7,7 @@ import { quoteShipping } from "@/lib/melhorenvio";
 import { onlyDigits } from "@/lib/utils";
 import { rateLimit, clientIp, tooMany } from "@/lib/rate-limit";
 import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
+import { sweepExpiredReservations } from "@/lib/data/stock-reservations";
 import { site } from "@/lib/site";
 
 export async function POST(request: Request) {
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  // devolve reservas de checkout abandonado antes de conferir o estoque
+  await sweepExpiredReservations();
 
   const user = await getUser();
 

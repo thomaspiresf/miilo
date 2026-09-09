@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { env, hasSupabase } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
+import { maybeSweepReservations } from "@/lib/data/stock-reservations";
 import type { Category, CatalogFilters, Product } from "@/lib/types";
 
 /** Converte um storage_path (path no bucket OU URL absoluta) em URL pública. */
@@ -182,6 +183,7 @@ function applyClientFilters(list: Product[], f: CatalogFilters): Product[] {
 }
 
 export async function listProducts(f: CatalogFilters = {}): Promise<Product[]> {
+  maybeSweepReservations(); // devolve reservas de checkout abandonado (throttled)
   return withFallback(
     async () => {
       const supabase = await createClient();
@@ -217,6 +219,7 @@ export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
 //  Produto único
 // --------------------------------------------------------------------------
 export async function getProductBySlug(slug: string): Promise<Product | null> {
+  maybeSweepReservations();
   return withFallback(
     async () => {
       const supabase = await createClient();

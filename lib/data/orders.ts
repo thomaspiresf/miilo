@@ -167,6 +167,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       payment_method: null,
       tracking_code: null,
       stock_restored: false,
+      stock_reserved: true,
       created_at: new Date().toISOString(),
       items: resolved.map((l) => ({
         id: crypto.randomUUID(),
@@ -179,6 +180,10 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       })),
     };
     db.orders.unshift(order);
+    // reserva: baixa o estoque já na criação
+    for (const item of order.items) {
+      mockMoveStock(item.variant_id, -item.qty, "reservation", order.id);
+    }
     return order;
   }
 
@@ -234,7 +239,33 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       image_url: l.imageUrl,
     })),
   );
-  if (itemsError) throw itemsError;
+  if (itemsError) {
+    await admin.from("orders").delete().eq("id", orderRow.id);
+    throw itemsError;
+  }
+
+  // Reserva o estoque de forma atômica. Se faltar, a função levanta
+  // OUT_OF_STOCK:<produto> — desfazemos o pedido e devolvemos um erro claro.
+  const { error: reserveError } = await admin.rpc("reserve_order_stock", {
+    p_order_id: orderRow.id,
+  });
+  if (reserveError) {
+    const oos = /OUT_OF_STOCK:(.+)$/.exec(reserveError.message);
+    if (oos) {
+      await admin.from("orders").delete().eq("id", orderRow.id);
+      throw new Error(`Estoque insuficiente para ${oos[1].trim()}`);
+    }
+    // Migração ainda não rodou: segue sem reserva (estoque baixa na aprovação,
+    // comportamento antigo). Qualquer outro erro é propagado.
+    const notMigrated =
+      /reserve_order_stock.*does not exist|could not find the function|schema cache/i.test(
+        reserveError.message,
+      );
+    if (!notMigrated) {
+      await admin.from("orders").delete().eq("id", orderRow.id);
+      throw reserveError;
+    }
+  }
 
   return getOrderById(orderRow.id) as Promise<Order>;
 }
@@ -265,6 +296,7 @@ function mapOrder(row: any, items: any[]): Order {
     payment_method: row.payment_method ?? null,
     tracking_code: row.tracking_code ?? null,
     stock_restored: row.stock_restored ?? false,
+    stock_reserved: row.stock_reserved ?? false,
     created_at: row.created_at,
     items: (items ?? []).map((it: any) => ({
       id: it.id,
@@ -338,7 +370,13 @@ export async function listAllOrders(status?: OrderStatus): Promise<Order[]> {
 function mockMoveStock(
   variantId: string | null,
   delta: number,
-  reason: "sale" | "cancellation" | "adjustment" | "restock",
+  reason:
+    | "sale"
+    | "cancellation"
+    | "adjustment"
+    | "restock"
+    | "reservation"
+    | "reservation_release",
   orderId: string | null,
 ) {
   if (!variantId) return;
@@ -373,8 +411,15 @@ export async function approveOrder(
     order.mp_payment_id = opts.mpPaymentId ?? order.mp_payment_id;
     order.mp_status = opts.mpStatus ?? "approved";
     order.payment_method = opts.method ?? order.payment_method;
-    for (const item of order.items) {
-      mockMoveStock(item.variant_id, -item.qty, "sale", order.id);
+    if (order.stock_reserved && !order.stock_restored) {
+      // estoque já baixado na reserva — só converte o histórico
+      for (const mv of mockDB().movements) {
+        if (mv.order_id === order.id && mv.reason === "reservation") mv.reason = "sale";
+      }
+    } else {
+      for (const item of order.items) {
+        mockMoveStock(item.variant_id, -item.qty, "sale", order.id);
+      }
     }
     await incrementCouponUse(order.coupon_code);
     await sendOrderConfirmationEmail(order);
@@ -413,19 +458,26 @@ export async function setOrderStatus(
   // status onde o estoque já foi baixado — cancelar deve devolver
   const STOCK_TAKEN = ["paid", "shipped", "delivered"];
 
+  const RELEASES_STOCK = ["cancelled", "failed"];
+
   if (!hasSupabaseAdmin()) {
     const db = mockDB();
     const order = db.orders.find((o) => o.id === id);
     if (!order) return;
 
-    if (
-      status === "cancelled" &&
-      STOCK_TAKEN.includes(order.status) &&
-      !order.stock_restored
-    ) {
-      order.stock_restored = true;
-      for (const item of order.items) {
-        mockMoveStock(item.variant_id, item.qty, "cancellation", order.id);
+    if (RELEASES_STOCK.includes(status) && !order.stock_restored) {
+      if (STOCK_TAKEN.includes(order.status)) {
+        // pedido pago cancelado — devolve a venda
+        order.stock_restored = true;
+        for (const item of order.items) {
+          mockMoveStock(item.variant_id, item.qty, "cancellation", order.id);
+        }
+      } else if (order.stock_reserved) {
+        // reserva que não virou venda — devolve
+        order.stock_restored = true;
+        for (const item of order.items) {
+          mockMoveStock(item.variant_id, item.qty, "reservation_release", order.id);
+        }
       }
     }
 
@@ -438,7 +490,13 @@ export async function setOrderStatus(
 
   const admin = createAdminClient();
 
-  if (status === "cancelled") {
+  if (RELEASES_STOCK.includes(status)) {
+    // devolve a reserva de um pedido pendente que não foi pago (no-op se não houver)
+    await admin.rpc("release_order_stock", { p_order_id: id }).then(
+      () => {},
+      () => {},
+    );
+
     // lê o estado atual (com fallback se a coluna stock_restored não existir)
     let curStatus: string | null = null;
     let restored = false;
@@ -502,11 +560,8 @@ export async function adminDeleteOrder(id: string): Promise<void> {
     const db = mockDB();
     const order = db.orders.find((o) => o.id === id);
     if (!order) return;
-    if (["paid", "shipped", "delivered"].includes(order.status) && !order.stock_restored) {
-      for (const item of order.items) {
-        mockMoveStock(item.variant_id, item.qty, "cancellation", order.id);
-      }
-    }
+    // devolve venda ou reserva (idempotente), depois apaga
+    await setOrderStatus(id, "cancelled");
     db.orders = db.orders.filter((o) => o.id !== id);
     return;
   }

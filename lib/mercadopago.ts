@@ -50,6 +50,13 @@ export async function createPayment(params: {
   const isPix = form.payment_method_id === "pix";
   const idempotencyKey = `order-${orderId}`;
 
+  // O Pix expira em 1h — o mesmo tempo que o estoque fica reservado. Assim o
+  // cliente não consegue pagar depois que a reserva já foi devolvida.
+  // O MP exige offset de fuso explícito (não aceita o "Z" do toISOString()).
+  const pixExpiresAt = new Date(Date.now() + 60 * 60_000)
+    .toISOString()
+    .replace("Z", "+00:00");
+
   // O MP só aceita notification_url pública e https (não funciona em localhost).
   const notificationUrl =
     env.site.url.startsWith("https://") && !env.site.url.includes("localhost")
@@ -65,7 +72,7 @@ export async function createPayment(params: {
       metadata: { order_id: orderId },
       payment_method_id: form.payment_method_id,
       ...(isPix
-        ? {}
+        ? { date_of_expiration: pixExpiresAt }
         : {
             token: form.token,
             installments: form.installments ?? 1,

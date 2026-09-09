@@ -7,6 +7,8 @@ const REASON_LABEL: Record<string, string> = {
   cancellation: "Cancelamento",
   adjustment: "Ajuste manual",
   restock: "Reposição",
+  reservation: "Reserva (checkout)",
+  reservation_release: "Reserva devolvida",
 };
 
 export default async function AdminStockPage(props: PageProps<"/admin/estoque">) {
