@@ -25,7 +25,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ff514f",
+  // combina com o fundo do cabeçalho (a barra de status do iOS/Android usa isso)
+  themeColor: "#fbfbfd",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
