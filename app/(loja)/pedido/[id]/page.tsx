@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { getOrderById } from "@/lib/data/orders";
+import { reconcileOrderPayment, pixQrForPayment } from "@/lib/mp-reconcile";
 import { isDemoMode } from "@/lib/auth";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/order-status";
@@ -11,13 +12,26 @@ import { site } from "@/lib/site";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { OrderStatusPoller } from "@/components/order/order-status-poller";
+import { PixQr } from "@/components/checkout/pix-qr";
 
 export const metadata: Metadata = { title: "Pedido", robots: { index: false } };
 
 export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
   const { id } = await props.params;
-  const order = await getOrderById(id);
+  let order = await getOrderById(id);
   if (!order) notFound();
+
+  // re-checa o pagamento no MP (rede de segurança do webhook)
+  if (order.status === "pending" && order.mp_payment_id) {
+    await reconcileOrderPayment(id, order.mp_payment_id);
+    order = (await getOrderById(id)) ?? order;
+  }
+
+  // Pix ainda não pago → mostra o QR / copia-e-cola de novo
+  const pixQr =
+    order.status === "pending" && order.mp_payment_id
+      ? await pixQrForPayment(order.mp_payment_id)
+      : null;
 
   const demo = await isDemoMode();
   const status = ORDER_STATUS[order.status];
@@ -36,6 +50,14 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
           <Badge tone={status.tone}>{status.label}</Badge>
         </div>
       </div>
+
+      {pixQr && (
+        <PixQr
+          qrCode={pixQr.qr_code}
+          qrCodeBase64={pixQr.qr_code_base64}
+          amount={order.total}
+        />
+      )}
 
       {order.status === "pending" && (
         <OrderStatusPoller orderId={order.id} initialStatus={order.status} demo={demo} />

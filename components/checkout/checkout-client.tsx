@@ -17,6 +17,8 @@ import { Field, Input } from "@/components/ui/input";
 import { Spinner, EmptyState } from "@/components/ui/misc";
 import { MockPayment } from "@/components/checkout/mock-payment";
 import { PaymentBrick } from "@/components/checkout/payment-brick";
+import { PixQr } from "@/components/checkout/pix-qr";
+import { OrderStatusPoller } from "@/components/order/order-status-poller";
 
 type FormState = {
   email: string;
@@ -282,13 +284,14 @@ export function CheckoutClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Pagamento recusado");
 
-      if (data.status === "approved" || data.pix || data.status === "pending") {
-        if (data.pix) setPix(data.pix);
+      if (data.pix?.qr_code) {
+        // Pix gerado → mostra o QR aqui mesmo; o pedido é acompanhado por esta tela
+        setPix(data.pix);
         clear();
-        router.push(`/pedido/${order.orderId}`);
       } else if (data.status === "rejected") {
         setError("Pagamento recusado. Tente outro método ou cartão.");
       } else {
+        // cartão aprovado / pendente
         clear();
         router.push(`/pedido/${order.orderId}`);
       }
@@ -610,42 +613,47 @@ export function CheckoutClient({
         )}
 
         {/* Pagamento */}
-        <section className="rounded-2xl border border-border bg-surface p-5">
-          <h2 className="mb-4 font-black">{mode === "delivery" ? "5" : "4"}. Pagamento</h2>
-          {phase === "form" ? (
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={goToPayment}
-              disabled={!readyForPayment || submitting}
-            >
-              {submitting ? <Spinner /> : `Continuar para pagamento · ${formatBRL(total)}`}
+        {pix && order ? (
+          <div className="space-y-4">
+            <PixQr qrCode={pix.qr_code} qrCodeBase64={pix.qr_code_base64} amount={order.amount} />
+            <OrderStatusPoller orderId={order.orderId} initialStatus="pending" demo={paymentsMocked} redirectTo={`/pedido/${order.orderId}`} />
+            <Button asChild variant="outline" className="w-full">
+              <Link href={`/pedido/${order.orderId}`}>Ver o pedido</Link>
             </Button>
-          ) : order ? (
-            !paymentsMocked && site.mpPublicKey ? (
-              <PaymentBrick
-                amount={order.amount}
-                email={form.email}
-                onSubmit={({ formData }) => processPayment(formData)}
-                onError={(err) => {
-                  console.error(err);
-                  setError("Erro ao carregar o pagamento.");
-                }}
-              />
-            ) : (
-              <MockPayment
-                amount={order.amount}
-                submitting={submitting}
-                onSubmit={(fd) => processPayment(fd)}
-              />
-            )
-          ) : null}
-          {pix && (
-            <p className="mt-3 text-sm text-muted">
-              Pix gerado — você será levado para a página do pedido.
-            </p>
-          )}
-        </section>
+          </div>
+        ) : (
+          <section className="rounded-2xl border border-border bg-surface p-5">
+            <h2 className="mb-4 font-black">{mode === "delivery" ? "5" : "4"}. Pagamento</h2>
+            {phase === "form" ? (
+              <Button
+                size="lg"
+                className="w-full"
+                onClick={goToPayment}
+                disabled={!readyForPayment || submitting}
+              >
+                {submitting ? <Spinner /> : `Continuar para pagamento · ${formatBRL(total)}`}
+              </Button>
+            ) : order ? (
+              !paymentsMocked && site.mpPublicKey ? (
+                <PaymentBrick
+                  amount={order.amount}
+                  email={form.email}
+                  onSubmit={({ formData }) => processPayment(formData)}
+                  onError={(err) => {
+                    console.error(err);
+                    setError("Erro ao carregar o pagamento.");
+                  }}
+                />
+              ) : (
+                <MockPayment
+                  amount={order.amount}
+                  submitting={submitting}
+                  onSubmit={(fd) => processPayment(fd)}
+                />
+              )
+            ) : null}
+          </section>
+        )}
       </div>
 
       <aside className="lg:sticky lg:top-28 lg:h-fit">{summary}</aside>

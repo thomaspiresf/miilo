@@ -9,10 +9,13 @@ export function OrderStatusPoller({
   orderId,
   initialStatus,
   demo,
+  redirectTo,
 }: {
   orderId: string;
   initialStatus: string;
   demo: boolean;
+  /** pra onde ir quando o pagamento confirmar (senão só dá refresh na página) */
+  redirectTo?: string;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
@@ -26,15 +29,16 @@ export function OrderStatusPoller({
         const data = await res.json();
         if (data.status && data.status !== "pending") {
           setStatus(data.status);
-          router.refresh();
           clearInterval(id);
+          if (redirectTo) router.push(redirectTo);
+          else router.refresh();
         }
       } catch {
         /* segue tentando */
       }
     }, 4000);
     return () => clearInterval(id);
-  }, [status, orderId, router]);
+  }, [status, orderId, router, redirectTo]);
 
   if (status !== "pending") return null;
 

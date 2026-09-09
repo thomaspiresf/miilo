@@ -39,3 +39,19 @@ export async function reconcileOrderPayment(
     console.warn("reconcileOrderPayment", orderId, (err as Error).message);
   }
 }
+
+/** QR/copia-e-cola de um pagamento Pix ainda pendente (pra mostrar de novo ao cliente). */
+export async function pixQrForPayment(
+  mpPaymentId: string,
+): Promise<{ qr_code: string; qr_code_base64: string | null } | null> {
+  if (paymentsMocked()) return null;
+  try {
+    const p = await getPayment(mpPaymentId);
+    if (p.status === "pending" && p.pix?.qr_code) {
+      return { qr_code: p.pix.qr_code, qr_code_base64: p.pix.qr_code_base64 ?? null };
+    }
+  } catch {
+    /* silencioso */
+  }
+  return null;
+}

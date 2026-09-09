@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { formatBRL } from "@/lib/format";
 import { site } from "@/lib/site";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
 import { MockPayment } from "@/components/checkout/mock-payment";
 import { PaymentBrick } from "@/components/checkout/payment-brick";
+import { PixQr } from "@/components/checkout/pix-qr";
+import { OrderStatusPoller } from "@/components/order/order-status-poller";
 
 type Item = { id: string; name: string; label: string | null; qty: number; total: number };
 
@@ -32,6 +36,7 @@ export function PayOrderClient({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [pix, setPix] = useState<{ qr_code: string; qr_code_base64?: string } | null>(null);
 
   async function processPayment(formData: Record<string, unknown>) {
     setSubmitting(true);
@@ -49,7 +54,12 @@ export function PayOrderClient({
         setError("Pagamento recusado. Tente outro método ou cartão.");
         return;
       }
-      // aprovado, Pix gerado ou pendente — acompanha na página do pedido
+      // Pix gerado → mostra o QR aqui mesmo (não redireciona)
+      if (data.pix?.qr_code) {
+        setPix(data.pix);
+        return;
+      }
+      // cartão aprovado / pendente → vai pra página do pedido
       setDone(true);
       router.push(`/pedido/${orderId}`);
     } catch (err) {
@@ -109,25 +119,37 @@ export function PayOrderClient({
         <p className="rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>
       )}
 
-      <div className="rounded-2xl border border-border bg-surface p-5">
-        {!paymentsMocked && site.mpPublicKey ? (
-          <PaymentBrick
-            amount={amount}
-            email={email}
-            onSubmit={({ formData }) => processPayment(formData)}
-            onError={(err) => {
-              console.error(err);
-              setError("Erro ao carregar o pagamento.");
-            }}
-          />
-        ) : (
-          <MockPayment amount={amount} submitting={submitting} onSubmit={processPayment} />
-        )}
-      </div>
+      {pix ? (
+        <>
+          <PixQr qrCode={pix.qr_code} qrCodeBase64={pix.qr_code_base64} amount={amount} />
+          <OrderStatusPoller orderId={orderId} initialStatus="pending" demo={paymentsMocked} redirectTo={`/pedido/${orderId}`} />
+          <Button asChild variant="outline" className="w-full">
+            <Link href={`/pedido/${orderId}`}>Ver o pedido</Link>
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="rounded-2xl border border-border bg-surface p-5">
+            {!paymentsMocked && site.mpPublicKey ? (
+              <PaymentBrick
+                amount={amount}
+                email={email}
+                onSubmit={({ formData }) => processPayment(formData)}
+                onError={(err) => {
+                  console.error(err);
+                  setError("Erro ao carregar o pagamento.");
+                }}
+              />
+            ) : (
+              <MockPayment amount={amount} submitting={submitting} onSubmit={processPayment} />
+            )}
+          </div>
 
-      <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
-        <CheckCircle2 className="h-3.5 w-3.5" /> Pagamento processado pelo Mercado Pago
-      </p>
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Pagamento processado pelo Mercado Pago
+          </p>
+        </>
+      )}
     </div>
   );
 }
