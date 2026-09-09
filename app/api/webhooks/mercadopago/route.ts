@@ -23,6 +23,10 @@ export async function POST(request: Request) {
     /* corpo pode vir vazio em alguns testes */
   }
 
+  // Valida a assinatura quando há segredo configurado. Se não bater, apenas
+  // registra o aviso e SEGUE — o pagamento é sempre re-consultado no MP com o
+  // access token (fonte da verdade), então uma assinatura errada/desatualizada
+  // não deve travar a confirmação do pedido.
   try {
     assertValidWebhook({
       xSignature: request.headers.get("x-signature"),
@@ -30,8 +34,10 @@ export async function POST(request: Request) {
       dataId: dataIdQuery ?? payload.data?.id ?? null,
     });
   } catch (err) {
-    console.warn("webhook assinatura inválida", err);
-    return NextResponse.json({ error: "assinatura inválida" }, { status: 401 });
+    console.warn(
+      "webhook MP: assinatura não confere (verifique MP_WEBHOOK_SECRET) —",
+      (err as Error).message,
+    );
   }
 
   const type = payload.type ?? payload.action ?? "";

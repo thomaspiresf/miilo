@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrderById } from "@/lib/data/orders";
+import { reconcileOrderPayment } from "@/lib/mp-reconcile";
 import { requireAdmin } from "@/lib/auth";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/order-status";
-import { updateOrderStatusAction } from "@/app/admin/actions";
+import { updateOrderStatusAction, recheckPaymentAction } from "@/app/admin/actions";
 import { site } from "@/lib/site";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
@@ -23,8 +24,14 @@ const ALL_STATUS: OrderStatus[] = [
 export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[id]">) {
   const { id } = await props.params;
   const user = await requireAdmin();
-  const order = await getOrderById(id);
+  let order = await getOrderById(id);
   if (!order) notFound();
+
+  // pedido pendente com pagamento no MP → re-checa (caso o webhook não tenha caído)
+  if (order.status === "pending" && order.mp_payment_id) {
+    await reconcileOrderPayment(id, order.mp_payment_id);
+    order = (await getOrderById(id)) ?? order;
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -54,6 +61,14 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
           Método: {order.payment_method ?? "—"} · MP: {order.mp_payment_id ?? "—"} (
           {order.mp_status ?? "—"})
         </p>
+        {order.status === "pending" && order.mp_payment_id && (
+          <form action={recheckPaymentAction} className="mt-3">
+            <input type="hidden" name="id" value={order.id} />
+            <Button type="submit" size="sm" variant="outline">
+              Rechecar pagamento no Mercado Pago
+            </Button>
+          </form>
+        )}
       </section>
 
       <section className="rounded-2xl border border-border bg-surface p-5">

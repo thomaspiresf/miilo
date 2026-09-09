@@ -23,6 +23,7 @@ import {
   getOrderById,
   setOrderStatus,
 } from "@/lib/data/orders";
+import { reconcileOrderPayment } from "@/lib/mp-reconcile";
 import { parseMoney } from "@/lib/format";
 import type { CategoryKind, OrderStatus } from "@/lib/types";
 
@@ -249,6 +250,14 @@ export async function updateOrderStatusAction(formData: FormData) {
   revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin");
+}
+
+export async function recheckPaymentAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id"));
+  await reconcileOrderPayment(id);
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/pedidos");
 }
 
 export async function deleteOrderAction(
