@@ -47,6 +47,7 @@ export default async function PayOrderPage(props: PageProps<"/pagar/[id]">) {
       orderId={order.id}
       orderNumber={order.number}
       amount={order.total}
+      discount={order.discount}
       email={order.email}
       paymentsMocked={paymentsMocked()}
       items={order.items.map((it) => ({

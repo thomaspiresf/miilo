@@ -17,7 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, parseMoney } from "@/lib/format";
 import { onlyDigits, cn } from "@/lib/utils";
 import { ORDER_STATUS } from "@/lib/order-status";
 import type { OrderStatus } from "@/lib/types";
@@ -97,6 +97,7 @@ export function PosClient({
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [discountInput, setDiscountInput] = useState("");
   const [payMode, setPayMode] = useState<PayMode>("cash");
 
   const [submitting, setSubmitting] = useState(false);
@@ -104,6 +105,8 @@ export function PosClient({
   const [created, setCreated] = useState<Created | null>(null);
 
   const subtotal = cart.reduce((s, l) => s + l.price * l.qty, 0);
+  const discount = Math.min(Math.max(0, parseMoney(discountInput) ?? 0), subtotal);
+  const total = subtotal - discount;
   const phoneDigits = onlyDigits(phone);
 
   const results = useMemo(() => {
@@ -162,6 +165,7 @@ export function PosClient({
         phone: phoneDigits || null,
         email: email.trim() || null,
         payMode,
+        discount,
         lines: cart.map((l) => ({ variantId: l.variantId, qty: l.qty })),
       });
       if ("error" in res) {
@@ -189,6 +193,7 @@ export function PosClient({
     setCustomerName("");
     setPhone("");
     setEmail("");
+    setDiscountInput("");
     setPayMode("cash");
     setQuery("");
     setError(null);
@@ -431,12 +436,37 @@ export function PosClient({
         <aside className="lg:sticky lg:top-6 lg:h-fit">
           <div className="rounded-2xl border border-border bg-surface p-5">
             <h2 className="font-black">Resumo</h2>
+
             <div className="mt-3 flex items-center justify-between text-sm">
               <span className="text-muted">
                 {cart.reduce((n, l) => n + l.qty, 0)} {cart.reduce((n, l) => n + l.qty, 0) === 1 ? "item" : "itens"}
               </span>
-              <span className="text-lg font-black">{formatBRL(subtotal)}</span>
+              <span>{formatBRL(subtotal)}</span>
             </div>
+
+            <div className="mt-2">
+              <label className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-muted">Desconto R$</span>
+                <input
+                  inputMode="decimal"
+                  value={discountInput}
+                  onChange={(e) => setDiscountInput(e.target.value)}
+                  placeholder="0,00"
+                  className="h-9 w-24 rounded-lg border border-border bg-background px-2.5 text-right text-sm outline-none focus:border-primary"
+                />
+              </label>
+              {discount > 0 && (
+                <p className="mt-1 text-right text-xs text-success">
+                  −{formatBRL(discount)}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+              <span className="text-sm font-semibold">Total</span>
+              <span className="text-lg font-black">{formatBRL(total)}</span>
+            </div>
+
             <Button
               className="mt-4 w-full"
               size="lg"

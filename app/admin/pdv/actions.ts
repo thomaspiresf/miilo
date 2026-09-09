@@ -27,7 +27,7 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
-  const { customerName, phone, email, payMode, lines } = parsed.data;
+  const { customerName, phone, email, payMode, lines, discount } = parsed.data;
 
   try {
     const order = await createOrder({
@@ -40,6 +40,7 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
       shipping: { company: "", service: "Venda na loja", price: 0 },
       lines,
       channel: "pos",
+      discount: discount || 0,
     });
 
     if (payMode === "cash") {

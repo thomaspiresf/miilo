@@ -15,6 +15,7 @@ export function PayOrderClient({
   orderId,
   orderNumber,
   amount,
+  discount = 0,
   email,
   items,
   paymentsMocked,
@@ -22,6 +23,7 @@ export function PayOrderClient({
   orderId: string;
   orderNumber: string;
   amount: number;
+  discount?: number;
   email: string;
   items: Item[];
   paymentsMocked: boolean;
@@ -87,7 +89,17 @@ export function PayOrderClient({
             </li>
           ))}
         </ul>
-        <div className="mt-3 flex justify-between border-t border-border pt-3 text-base font-black">
+        {discount > 0 && (
+          <div className="mt-3 flex justify-between border-t border-border pt-3 text-sm text-success">
+            <span>Desconto</span>
+            <span>−{formatBRL(discount)}</span>
+          </div>
+        )}
+        <div
+          className={`flex justify-between text-base font-black ${
+            discount > 0 ? "mt-1" : "mt-3 border-t border-border pt-3"
+          }`}
+        >
           <span>Total</span>
           <span>{formatBRL(amount)}</span>
         </div>

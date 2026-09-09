@@ -31,6 +31,8 @@ export const posOrderSchema = z.object({
     }),
   /** dinheiro/maquininha (já pago) · link para o cliente · pagar agora na tela */
   payMode: z.enum(["cash", "link", "now"]),
+  /** desconto em reais aplicado na venda (o servidor limita ao subtotal) */
+  discount: z.number().nonnegative().optional().default(0),
   lines: z
     .array(
       z.object({
