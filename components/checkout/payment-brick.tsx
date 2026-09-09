@@ -11,7 +11,9 @@ let initialized = false;
 
 /**
  * Payment Brick do Mercado Pago (checkout transparente).
- * Renderiza Pix, cartão de crédito e cartão de débito no próprio site.
+ * Renderiza cartão de crédito (com parcelamento) e Pix no próprio site.
+ * Débito fica de fora — no checkout transparente o MP só oferece "Débito
+ * Virtual CAIXA", que confunde mais do que ajuda.
  */
 export function PaymentBrick({
   amount,
@@ -42,7 +44,7 @@ export function PaymentBrick({
         paymentMethods: {
           bankTransfer: "all", // Pix
           creditCard: "all",
-          debitCard: "all",
+          debitCard: [], // sem débito (só teria "Débito Virtual CAIXA")
           ticket: [], // sem boleto
           mercadoPago: [], // sem saldo em conta
         },
