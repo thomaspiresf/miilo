@@ -413,7 +413,7 @@ export function CheckoutClient({
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
       <div className="space-y-8">
         {error && (
           <p className="rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>

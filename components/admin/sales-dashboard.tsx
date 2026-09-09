@@ -503,7 +503,7 @@ export function SalesDashboard({
         <RevenueChart buckets={view.buckets} />
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <h2 className="mb-3 font-black">Mais vendidos</h2>
           <p className="mb-3 -mt-2 text-xs text-muted">

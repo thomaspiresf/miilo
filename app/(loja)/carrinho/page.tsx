@@ -34,7 +34,7 @@ export default function CartPage() {
           }
         />
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
           <ul className="divide-y divide-border rounded-2xl border border-border bg-surface">
             {lines.map((l) => (
               <li key={l.variantId} className="flex gap-4 p-4">

@@ -139,7 +139,7 @@ export function ProductForm({
             className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-primary"
           />
         </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Categoria">
             <select
               name="categoryId"
@@ -226,7 +226,7 @@ export function ProductForm({
 
         {/* Detalhes — variam por tipo de produto */}
         {isGoods ? (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label="Material"
               hint={
@@ -328,7 +328,7 @@ export function ProductForm({
             {kind === "livros" ? "Livro" : "Brinquedo"} não tem tamanho nem cor —
             é só o preço, o estoque e o peso.
           </p>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label="Preço R$">
               <Input
                 inputMode="decimal"

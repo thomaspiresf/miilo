@@ -24,7 +24,7 @@ export function UserForm() {
         <p className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">Conta criada!</p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="E-mail">
           <Input name="email" type="email" required placeholder="pessoa@email.com" />
         </Field>

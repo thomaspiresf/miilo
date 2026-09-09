@@ -248,7 +248,7 @@ export function PosClient({
         <p className="rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">{error}</p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           {/* Buscar produto */}
           <section className="rounded-2xl border border-border bg-surface p-5">
@@ -454,7 +454,7 @@ export function PosClient({
                   placeholder="Nome do cliente"
                 />
               </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="WhatsApp">
                   <Input
                     inputMode="numeric"

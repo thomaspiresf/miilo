@@ -48,7 +48,7 @@ export default async function HomePage() {
         ))
       )}
 
-      <section className="grid gap-3 rounded-2xl border border-border bg-surface p-5 text-sm sm:grid-cols-3">
+      <section className="grid grid-cols-1 gap-3 rounded-2xl border border-border bg-surface p-5 text-sm sm:grid-cols-3">
         <div>
           <p className="font-bold">Frete para todo o Brasil</p>
           <p className="text-muted">Cálculo por CEP no checkout.</p>

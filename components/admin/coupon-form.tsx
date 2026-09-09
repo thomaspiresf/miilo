@@ -20,7 +20,7 @@ export function CouponForm() {
         <p className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">Cupom criado!</p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Código" hint="Letras, números e hífen. Vira maiúsculo.">
           <Input name="code" required placeholder="BEMVINDO10" autoCapitalize="characters" />
         </Field>
