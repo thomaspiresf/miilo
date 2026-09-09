@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
 import { saveProductAction } from "@/app/admin/actions";
 import { isSimpleKind, type Category, type Product } from "@/lib/types";
 import { parseMoney } from "@/lib/format";
@@ -9,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/misc";
+import { VariantEditor } from "@/components/admin/variant-editor";
 
 type VariantRow = {
   id?: string;
@@ -104,13 +104,13 @@ export function ProductForm({
     setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
   }
 
-  // brinquedo comum = 1 "variação" só, sem tamanho/cor; roupa = grade de variações
-  const variantsJson = JSON.stringify(
-    (goodsSimple ? rows.slice(0, 1) : rows).map((r) => ({
+  // brinquedo/livro sem variação: 1 "variação" só, sem tamanho/cor.
+  const simpleVariantsJson = JSON.stringify(
+    rows.slice(0, 1).map((r) => ({
       id: r.id,
-      size: goodsSimple ? null : r.size.trim() || null,
-      color: goodsSimple ? null : r.color.trim() || null,
-      colorHex: goodsSimple ? null : r.colorHex.trim() || null,
+      size: null,
+      color: null,
+      colorHex: null,
       price: parseMoney(r.price) ?? 0,
       stock: parseInt(r.stock || "0", 10),
       weightGrams: parseInt(r.weightGrams || "300", 10),
@@ -120,7 +120,6 @@ export function ProductForm({
   return (
     <form action={action} className="space-y-6">
       <input type="hidden" name="id" value={product?.id ?? "novo"} />
-      <input type="hidden" name="variants" value={variantsJson} />
       <input type="hidden" name="ageMinMonths" value={toMonths(ageMin)} />
       <input type="hidden" name="ageMaxMonths" value={toMonths(ageMax)} />
 
@@ -302,6 +301,7 @@ export function ProductForm({
 
       {goodsSimple ? (
         <div className="rounded-2xl border border-border bg-surface p-5">
+          <input type="hidden" name="variants" value={simpleVariantsJson} />
           <Label>Preço e estoque</Label>
           <p className="mb-3 mt-1 text-xs text-muted">
             {kind === "livros" ? "Livro" : "Brinquedo"} não tem tamanho nem cor —
@@ -333,89 +333,7 @@ export function ProductForm({
           </div>
         </div>
       ) : (
-      <div className="rounded-2xl border border-border bg-surface p-5">
-        <div className="mb-1 flex items-center justify-between">
-          <Label className="mb-0">Variações</Label>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setRows((r) => [...r, { ...emptyRow }])}
-          >
-            <Plus className="h-4 w-4" /> Adicionar
-          </Button>
-        </div>
-        <p className="mb-3 text-xs text-muted">
-          <strong className="font-semibold text-foreground">O preço e o estoque de venda ficam aqui</strong>, um para
-          cada tamanho/cor. Só tem um preço? Deixe uma variação só (ex.: tamanho “Único”).
-        </p>
-        <div className="space-y-3">
-          {rows.map((row, i) => (
-            <div key={i} className="grid grid-cols-2 gap-2 rounded-xl border border-border p-3 sm:grid-cols-6">
-              <input
-                placeholder="Tamanho"
-                value={row.size}
-                onChange={(e) => updateRow(i, { size: e.target.value })}
-                className="h-10 rounded-lg border border-border px-2.5 text-sm"
-              />
-              <input
-                placeholder="Cor"
-                value={row.color}
-                onChange={(e) => updateRow(i, { color: e.target.value })}
-                className="h-10 rounded-lg border border-border px-2.5 text-sm"
-              />
-              <div className="flex items-center gap-1.5 rounded-lg border border-border px-2">
-                <input
-                  type="color"
-                  value={row.colorHex || "#cccccc"}
-                  onChange={(e) => updateRow(i, { colorHex: e.target.value })}
-                  className="h-7 w-7 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"
-                  aria-label="Cor do swatch"
-                />
-                <input
-                  placeholder="#hex"
-                  value={row.colorHex}
-                  onChange={(e) => updateRow(i, { colorHex: e.target.value })}
-                  className="h-9 w-full min-w-0 text-sm outline-none"
-                />
-              </div>
-              <input
-                placeholder="Preço R$"
-                inputMode="decimal"
-                value={row.price}
-                onChange={(e) => updateRow(i, { price: e.target.value })}
-                className="h-10 rounded-lg border border-border px-2.5 text-sm"
-              />
-              <input
-                placeholder="Estoque"
-                inputMode="numeric"
-                value={row.stock}
-                onChange={(e) => updateRow(i, { stock: e.target.value })}
-                className="h-10 rounded-lg border border-border px-2.5 text-sm"
-              />
-              <div className="flex items-center gap-1">
-                <input
-                  placeholder="Peso (g)"
-                  inputMode="numeric"
-                  value={row.weightGrams}
-                  onChange={(e) => updateRow(i, { weightGrams: e.target.value })}
-                  className="h-10 w-full rounded-lg border border-border px-2.5 text-sm"
-                />
-                {rows.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setRows((r) => r.filter((_, idx) => idx !== i))}
-                    className="p-1.5 text-muted hover:text-danger"
-                    aria-label="Remover variação"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+        <VariantEditor product={product} />
       )}
 
       <Button type="submit" size="lg" disabled={pending}>
