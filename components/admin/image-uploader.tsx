@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, GripVertical, ImagePlus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImagePlus, Star, X } from "lucide-react";
 import {
   deleteImageAction,
   setImageColorAction,
@@ -15,8 +15,10 @@ import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/misc";
 import type { ProductImage } from "@/lib/types";
 
-const ALL = "__all__";
+const NONE = "__none__";
 const MAX_MB = 10;
+
+type Color = { name: string; hex: string | null };
 
 export function ImageUploader({
   productId,
@@ -25,17 +27,17 @@ export function ImageUploader({
 }: {
   productId: string;
   images: ProductImage[];
-  colors: string[];
+  colors: Color[];
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [uploadColor, setUploadColor] = useState<string>(ALL);
+  const uploadColorRef = useRef<string>(NONE);
 
   const hasColors = colors.length > 0;
 
-  // ordem local (otimista) — só é usada enquanto casa com o conjunto do servidor
+  // ordem local (otimista) enquanto casa com o conjunto do servidor
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
   const serverIds = images.map((i) => i.id);
   const effectiveOrder =
@@ -45,46 +47,46 @@ export function ImageUploader({
       ? localOrder
       : serverIds;
 
+  const byId = new Map(images.map((im) => [im.id, im] as const));
   const ordered = effectiveOrder
-    .map((id) => images.find((i) => i.id === id))
+    .map((id) => byId.get(id))
     .filter((i): i is ProductImage => !!i);
 
-  const dragIdRef = useRef<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
-
-  function persist(next: string[]) {
-    setLocalOrder(next);
-    reorderImagesAction(productId, next).then(() => router.refresh());
+  // agrupa por cor, na ordem: sem cor → cores (ordem das variações)
+  const groupKeys = [NONE, ...colors.map((c) => c.name)];
+  const groups: Record<string, ProductImage[]> = { [NONE]: [] };
+  for (const c of colors) groups[c.name] = [];
+  for (const im of ordered) {
+    const key =
+      im.color && groups[im.color] !== undefined ? im.color : NONE;
+    groups[key].push(im);
   }
 
-  function move(id: string, dir: -1 | 1) {
-    const cur = [...effectiveOrder];
-    const from = cur.indexOf(id);
-    const to = from + dir;
-    if (from < 0 || to < 0 || to >= cur.length) return;
-    [cur[from], cur[to]] = [cur[to], cur[from]];
-    persist(cur);
+  function persistFromGroups(next: Record<string, ProductImage[]>) {
+    const flat = groupKeys.flatMap((k) => next[k].map((im) => im.id));
+    setLocalOrder(flat);
+    reorderImagesAction(productId, flat).then(() => router.refresh());
   }
 
-  function drop(targetId: string) {
-    const src = dragIdRef.current;
-    dragIdRef.current = null;
-    setDraggingId(null);
-    setOverId(null);
-    if (!src || src === targetId) return;
-    const next = [...effectiveOrder];
-    const from = next.indexOf(src);
-    const to = next.indexOf(targetId);
-    if (from < 0 || to < 0) return;
-    next.splice(from, 1);
-    next.splice(to, 0, src);
-    persist(next);
+  function reorderWithin(key: string, from: number, to: number) {
+    const arr = [...groups[key]];
+    if (to < 0 || to >= arr.length) return;
+    const [it] = arr.splice(from, 1);
+    arr.splice(to, 0, it);
+    persistFromGroups({ ...groups, [key]: arr });
+  }
+
+  function makePrimary(key: string, id: string) {
+    const arr = groups[key].filter((im) => im.id !== id);
+    const it = groups[key].find((im) => im.id === id);
+    if (!it) return;
+    persistFromGroups({ ...groups, [key]: [it, ...arr] });
   }
 
   async function upload(files: FileList | null) {
     if (!files?.length) return;
     setError(null);
+    const color = uploadColorRef.current;
     setBusy((n) => n + files.length);
     for (const file of Array.from(files)) {
       try {
@@ -95,7 +97,7 @@ export function ImageUploader({
         const fd = new FormData();
         fd.append("productId", productId);
         fd.append("url", path);
-        if (uploadColor !== ALL) fd.append("color", uploadColor);
+        if (color !== NONE) fd.append("color", color);
         await addImageUrlAction(fd);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Falha no upload");
@@ -107,149 +109,144 @@ export function ImageUploader({
     router.refresh();
   }
 
+  function pickFiles(color: string) {
+    uploadColorRef.current = color;
+    inputRef.current?.click();
+  }
+
   return (
-    <div>
-      {hasColors && (
-        <label className="mb-3 flex items-center gap-2 text-sm">
-          <span className="font-semibold">Atrelar novas fotos a:</span>
-          <select
-            value={uploadColor}
-            onChange={(e) => setUploadColor(e.target.value)}
-            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm"
-          >
-            <option value={ALL}>Todas as cores</option>
-            {colors.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      <div className="flex flex-wrap gap-3">
-        {ordered.map((im, i) => (
-          <div
-            key={im.id}
-            className="w-24"
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (overId !== im.id) setOverId(im.id);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              drop(im.id);
-            }}
-          >
-            <div className="relative">
-              <div
-                draggable
-                onDragStart={(e) => {
-                  dragIdRef.current = im.id;
-                  setDraggingId(im.id);
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onDragEnd={() => {
-                  dragIdRef.current = null;
-                  setDraggingId(null);
-                  setOverId(null);
-                }}
-                className={cn(
-                  "relative h-24 w-24 cursor-grab overflow-hidden rounded-lg border border-border bg-black/5 active:cursor-grabbing",
-                  draggingId === im.id && "opacity-40",
-                  overId === im.id && "ring-2 ring-primary ring-offset-1",
-                )}
-              >
-                <Image src={im.url} alt="" fill sizes="96px" className="object-cover" unoptimized />
-                {i === 0 && (
-                  <span className="absolute bottom-0 left-0 right-0 bg-foreground/70 py-0.5 text-center text-[10px] font-semibold text-background">
-                    principal
-                  </span>
-                )}
-                <GripVertical className="pointer-events-none absolute left-1 top-1 h-4 w-4 text-white/90 drop-shadow" />
-              </div>
-
-              {/* botão remover — FORA do elemento draggable, pra não conflitar com o toque */}
-              <form
-                action={async (fd) => {
-                  await deleteImageAction(fd);
-                  router.refresh();
-                }}
-                className="absolute -right-2 -top-2 z-10"
-              >
-                <input type="hidden" name="imageId" value={im.id} />
-                <input type="hidden" name="productId" value={productId} />
-                <button
-                  type="submit"
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-danger text-white shadow"
-                  aria-label="Remover imagem"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </form>
+    <div className="space-y-5">
+      {groupKeys.map((key) => {
+        const list = groups[key];
+        const color = colors.find((c) => c.name === key);
+        return (
+          <div key={key}>
+            <div className="mb-2 flex items-center gap-2">
+              {key === NONE ? (
+                <span className="text-sm font-bold">Sem cor específica</span>
+              ) : (
+                <>
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full border border-border"
+                    style={{ backgroundColor: color?.hex ?? "#d4d4d8" }}
+                  />
+                  <span className="text-sm font-bold">{key}</span>
+                </>
+              )}
+              <span className="text-xs text-muted">
+                {key === NONE
+                  ? "aparece quando as cores estão juntas / como fallback"
+                  : `1ª foto = a que aparece na vitrine pra ${key}`}
+              </span>
             </div>
 
-            {ordered.length > 1 && (
-              <div className="mt-1 flex justify-between">
-                <button
-                  type="button"
-                  onClick={() => move(im.id, -1)}
-                  disabled={i === 0}
-                  aria-label="Mover pra esquerda"
-                  className="rounded border border-border p-1 text-muted disabled:opacity-30 hover:bg-black/5"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(im.id, 1)}
-                  disabled={i === ordered.length - 1}
-                  aria-label="Mover pra direita"
-                  className="rounded border border-border p-1 text-muted disabled:opacity-30 hover:bg-black/5"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-3">
+              {list.map((im, i) => (
+                <div key={im.id} className="w-24">
+                  <div className="relative">
+                    <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-border bg-black/5">
+                      <Image src={im.url} alt="" fill sizes="96px" className="object-cover" unoptimized />
+                      {i === 0 && (
+                        <span className="absolute inset-x-0 bottom-0 bg-foreground/70 py-0.5 text-center text-[10px] font-semibold text-background">
+                          principal
+                        </span>
+                      )}
+                    </div>
 
-            {hasColors && (
-              <form
-                action={async (fd) => {
-                  await setImageColorAction(fd);
-                  router.refresh();
-                }}
-                className="mt-1"
+                    <form
+                      action={async (fd) => {
+                        await deleteImageAction(fd);
+                        router.refresh();
+                      }}
+                      className="absolute -right-2 -top-2 z-10"
+                    >
+                      <input type="hidden" name="imageId" value={im.id} />
+                      <input type="hidden" name="productId" value={productId} />
+                      <button
+                        type="submit"
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-danger text-white shadow"
+                        aria-label="Remover imagem"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="mt-1 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => reorderWithin(key, i, i - 1)}
+                      disabled={i === 0}
+                      aria-label="Mover pra esquerda"
+                      className="rounded border border-border p-1 text-muted disabled:opacity-30 hover:bg-black/5"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => reorderWithin(key, i, i + 1)}
+                      disabled={i === list.length - 1}
+                      aria-label="Mover pra direita"
+                      className="rounded border border-border p-1 text-muted disabled:opacity-30 hover:bg-black/5"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => makePrimary(key, im.id)}
+                      disabled={i === 0}
+                      aria-label="Tornar principal"
+                      title="Tornar principal"
+                      className={cn(
+                        "ml-auto rounded border border-border p-1 hover:bg-black/5",
+                        i === 0 ? "text-yellow-500" : "text-muted disabled:opacity-30",
+                      )}
+                    >
+                      <Star className="h-3.5 w-3.5" fill={i === 0 ? "currentColor" : "none"} />
+                    </button>
+                  </div>
+
+                  {hasColors && (
+                    <form
+                      action={async (fd) => {
+                        await setImageColorAction(fd);
+                        router.refresh();
+                      }}
+                      className="mt-1"
+                    >
+                      <input type="hidden" name="imageId" value={im.id} />
+                      <input type="hidden" name="productId" value={productId} />
+                      <select
+                        name="color"
+                        defaultValue={im.color ?? ""}
+                        onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                        className="h-8 w-24 rounded-lg border border-border bg-surface px-1 text-xs"
+                      >
+                        <option value="">Sem cor</option>
+                        {colors.map((c) => (
+                          <option key={c.name} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </form>
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => pickFiles(key)}
+                disabled={busy > 0}
+                className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-xs font-semibold text-muted hover:border-primary hover:text-primary disabled:opacity-50"
               >
-                <input type="hidden" name="imageId" value={im.id} />
-                <input type="hidden" name="productId" value={productId} />
-                <select
-                  name="color"
-                  defaultValue={im.color ?? ""}
-                  onChange={(e) => e.currentTarget.form?.requestSubmit()}
-                  className="h-8 w-24 rounded-lg border border-border bg-surface px-1 text-xs"
-                >
-                  <option value="">Todas</option>
-                  {colors.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </form>
-            )}
+                {busy > 0 ? <Spinner /> : <ImagePlus className="h-5 w-5" />}
+                {busy > 0 ? "enviando…" : key === NONE ? "adicionar" : `foto ${key}`}
+              </button>
+            </div>
           </div>
-        ))}
-
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy > 0}
-          className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-xs font-semibold text-muted hover:border-primary hover:text-primary disabled:opacity-50"
-        >
-          {busy > 0 ? <Spinner /> : <ImagePlus className="h-5 w-5" />}
-          {busy > 0 ? "enviando…" : "adicionar"}
-        </button>
-      </div>
+        );
+      })}
 
       <input
         ref={inputRef}
@@ -260,10 +257,10 @@ export function ImageUploader({
         onChange={(e) => upload(e.target.files)}
       />
 
-      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-      <p className="mt-2 text-xs text-muted">
-        JPG, PNG ou WebP até 10 MB. Arraste as fotos pra reordenar — a primeira é a principal.
-        {hasColors && " Fotos atreladas a uma cor aparecem quando o cliente seleciona aquela cor."}
+      {error && <p className="text-xs text-danger">{error}</p>}
+      <p className="text-xs text-muted">
+        JPG, PNG ou WebP até 10 MB. Use ◀ ▶ ou a estrela pra escolher qual foto
+        representa cada cor na vitrine.
       </p>
     </div>
   );

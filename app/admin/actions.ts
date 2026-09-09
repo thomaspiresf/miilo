@@ -51,6 +51,7 @@ const productSchema = z.object({
   fitNotes: z.string().nullable(),
   careNotes: z.string().nullable(),
   active: z.boolean(),
+  splitByColor: z.boolean(),
   variants: z.array(variantSchema).min(1),
 });
 
@@ -79,6 +80,7 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
     fitNotes: str("fitNotes"),
     careNotes: str("careNotes"),
     active: formData.get("active") === "on",
+    splitByColor: formData.get("splitByColor") === "on",
     variants: JSON.parse(String(formData.get("variants") ?? "[]")),
   };
 

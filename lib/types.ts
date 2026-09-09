@@ -67,6 +67,8 @@ export type Product = {
   max_installments: number;
   /** vídeo do produto: URL pública de um MP4 hospedado OU link YouTube/Vimeo */
   video_url: string | null;
+  /** true = cada cor vira um card na vitrine; false = um card só pro produto */
+  split_by_color: boolean;
   category: Pick<Category, "id" | "slug" | "name" | "kind">;
   images: ProductImage[];
   variants: ProductVariant[];

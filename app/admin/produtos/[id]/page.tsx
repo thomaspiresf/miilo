@@ -26,9 +26,16 @@ export default async function AdminProductEditPage(
 
   const alerts = product ? await listStockAlerts(product.id) : [];
 
-  const colors = product
-    ? [...new Set(product.variants.map((v) => v.color).filter((c): c is string => !!c))]
-    : [];
+  const colors: { name: string; hex: string | null }[] = [];
+  if (product) {
+    const seen = new Set<string>();
+    for (const v of product.variants) {
+      if (v.color && !seen.has(v.color.toLowerCase())) {
+        seen.add(v.color.toLowerCase());
+        colors.push({ name: v.color, hex: v.color_hex });
+      }
+    }
+  }
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -58,7 +65,11 @@ export default async function AdminProductEditPage(
 
       {product && (
         <section className="rounded-2xl border border-border bg-surface p-5">
-          <h2 className="mb-3 font-bold">Fotos</h2>
+          <h2 className="mb-1 font-bold">Fotos</h2>
+          <p className="mb-4 text-xs text-muted">
+            Adicione as fotos de cada cor no bloco dela. A 1ª foto de cada cor é
+            a que aparece na vitrine quando o produto é mostrado separado por cor.
+          </p>
           <ImageUploader productId={product.id} images={product.images} colors={colors} />
 
           <details className="mt-4 text-sm">
@@ -78,10 +89,10 @@ export default async function AdminProductEditPage(
                   defaultValue=""
                   className="h-10 rounded-lg border border-border bg-surface px-2 text-sm"
                 >
-                  <option value="">Todas as cores</option>
+                  <option value="">Sem cor específica</option>
                   {colors.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                    <option key={c.name} value={c.name}>
+                      {c.name}
                     </option>
                   ))}
                 </select>

@@ -43,6 +43,7 @@ export type ProductInput = {
   fitNotes: string | null;
   careNotes: string | null;
   active: boolean;
+  splitByColor: boolean;
 };
 
 export type VariantInput = {
@@ -121,6 +122,7 @@ function productRow(input: ProductInput, basePrice: number) {
     fit_notes: input.fitNotes,
     care_notes: input.careNotes,
     active: input.active,
+    split_by_color: input.splitByColor,
   };
 }
 
@@ -131,6 +133,7 @@ function stripNewColumns(row: Record<string, unknown>) {
   const clone = { ...row };
   delete clone.material;
   delete clone.dimensions;
+  delete clone.split_by_color;
   return clone;
 }
 
@@ -177,6 +180,7 @@ function buildMockProduct(
     rating_count: 0,
     max_installments: 3,
     video_url: null,
+    split_by_color: input.splitByColor,
     category: { id: category.id, slug: category.slug, name: category.name, kind: category.kind },
     images: [],
     variants: variants.map((v, i) => ({

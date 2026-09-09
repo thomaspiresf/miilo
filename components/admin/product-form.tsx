@@ -297,6 +297,27 @@ export function ProductForm({
           />
           Produto ativo (visível na loja)
         </label>
+
+        {isGoods ? (
+          <input type="hidden" name="splitByColor" value="on" />
+        ) : (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="splitByColor"
+              defaultChecked={product ? product.split_by_color : true}
+              className="mt-0.5 accent-primary"
+            />
+            <span>
+              <span className="font-semibold">Mostrar cada cor separada na vitrine</span>
+              <span className="block text-xs font-normal text-muted">
+                Ligado: “Body Azul”, “Body Verde”… aparecem como produtos
+                diferentes, cada um com sua foto. Desligado: um card só, com
+                todas as cores dentro.
+              </span>
+            </span>
+          </label>
+        )}
       </div>
 
       {goodsSimple ? (

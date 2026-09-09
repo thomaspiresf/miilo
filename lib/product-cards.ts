@@ -75,8 +75,9 @@ export function toCardItem(product: Product): ProductCardItem {
 export function explodeByColor(products: Product[]): ProductCardItem[] {
   return products.flatMap((p) => {
     const colors = productColors(p);
-    if (colors.length <= 1) {
-      return [cardForColor(p, colors[0] ?? null, false)];
+    if (colors.length <= 1 || p.split_by_color === false) {
+      // um card só (produto sem cor, ou marcado pra "mostrar tudo junto")
+      return [cardForColor(p, null, false)];
     }
     return colors.map((c) => cardForColor(p, c, true));
   });
