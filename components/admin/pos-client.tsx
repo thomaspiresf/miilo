@@ -6,6 +6,7 @@ import Image from "next/image";
 import {
   Banknote,
   Check,
+  ChevronDown,
   Copy,
   CreditCard,
   ExternalLink,
@@ -93,6 +94,7 @@ export function PosClient({
 }) {
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [cart, setCart] = useState<CartLine[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
@@ -254,48 +256,93 @@ export function PosClient({
               {results.length === 0 && (
                 <p className="py-4 text-center text-sm text-muted">Nenhum produto encontrado.</p>
               )}
-              {results.map((p) => (
-                <div key={p.id} className="rounded-xl border border-border p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-black/5">
-                      {p.image && (
-                        <Image
-                          src={p.image}
-                          alt={p.name}
-                          fill
-                          sizes="48px"
-                          className="object-cover"
+              {results.map((p) => {
+                const single = p.variants.length === 1;
+                const open = single || expanded.has(p.id) || results.length === 1;
+                const inCartQty = p.variants.reduce(
+                  (n, v) => n + (cart.find((l) => l.variantId === v.id)?.qty ?? 0),
+                  0,
+                );
+                const totalStock = p.variants.reduce((n, v) => n + v.stock, 0);
+
+                return (
+                  <div key={p.id} className="overflow-hidden rounded-xl border border-border">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (single) {
+                          addVariant(p, p.variants[0]);
+                          return;
+                        }
+                        setExpanded((cur) => {
+                          const next = new Set(cur);
+                          if (next.has(p.id)) next.delete(p.id);
+                          else next.add(p.id);
+                          return next;
+                        });
+                      }}
+                      className="flex w-full items-center gap-3 p-3 text-left hover:bg-black/[0.02]"
+                    >
+                      <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-black/5">
+                        {p.image && (
+                          <Image src={p.image} alt={p.name} fill sizes="44px" className="object-cover" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{p.name}</p>
+                        <p className="text-xs text-muted">
+                          {single
+                            ? `${formatBRL(p.variants[0].price)} · ${totalStock} em estoque`
+                            : `${p.variants.length} variações · ${totalStock} em estoque`}
+                          {inCartQty > 0 ? ` · ${inCartQty} na venda` : ""}
+                        </p>
+                      </div>
+                      {inCartQty > 0 && (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+                          {inCartQty}
+                        </span>
+                      )}
+                      {!single && (
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 shrink-0 text-muted transition",
+                            open && "rotate-180",
+                          )}
                         />
                       )}
-                    </div>
-                    <p className="text-sm font-semibold">{p.name}</p>
+                    </button>
+
+                    {open && !single && (
+                      <div className="flex flex-wrap gap-2 border-t border-border p-3">
+                        {p.variants.map((v) => {
+                          const inCart = cart.find((l) => l.variantId === v.id)?.qty ?? 0;
+                          const full = inCart >= v.stock || v.stock < 1;
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => addVariant(p, v)}
+                              disabled={full}
+                              className={cn(
+                                "rounded-lg border px-2.5 py-1.5 text-left text-xs transition disabled:opacity-40",
+                                inCart > 0
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-foreground/30",
+                              )}
+                            >
+                              <span className="block font-semibold">{v.label}</span>
+                              <span className="block text-muted">
+                                {formatBRL(v.price)} · {v.stock} em estoque
+                                {inCart > 0 ? ` · ${inCart} na venda` : ""}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {p.variants.map((v) => {
-                      const inCart = cart.find((l) => l.variantId === v.id)?.qty ?? 0;
-                      const full = inCart >= v.stock || v.stock < 1;
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => addVariant(p, v)}
-                          disabled={full}
-                          className={cn(
-                            "rounded-lg border px-2.5 py-1.5 text-left text-xs transition disabled:opacity-40",
-                            inCart > 0 ? "border-primary bg-primary/5" : "border-border hover:border-foreground/30",
-                          )}
-                        >
-                          <span className="block font-semibold">{v.label}</span>
-                          <span className="block text-muted">
-                            {formatBRL(v.price)} · {v.stock} em estoque
-                            {inCart > 0 ? ` · ${inCart} na venda` : ""}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 
