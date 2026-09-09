@@ -1,3 +1,5 @@
+import Image from "next/image";
+import { ImageOff } from "lucide-react";
 import { adminListVariants, adminRecentStockMovements } from "@/lib/data/admin";
 import { StockTable } from "@/components/admin/stock-table";
 import { formatDateTime } from "@/lib/format";
@@ -17,7 +19,7 @@ export default async function AdminStockPage(props: PageProps<"/admin/estoque">)
 
   const [rows, movements] = await Promise.all([
     adminListVariants(),
-    adminRecentStockMovements(20),
+    adminRecentStockMovements(24),
   ]);
 
   return (
@@ -40,16 +42,24 @@ export default async function AdminStockPage(props: PageProps<"/admin/estoque">)
             rode <code>supabase/migration-stock.sql</code> no SQL Editor.)
           </p>
         ) : (
-          <div className="divide-y divide-border rounded-2xl border border-border bg-surface text-sm">
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface text-sm">
             {movements.map((m) => (
-              <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
-                <span
-                  className={`w-12 shrink-0 text-right font-bold ${
-                    m.delta < 0 ? "text-danger" : "text-success"
-                  }`}
-                >
-                  {m.delta > 0 ? `+${m.delta}` : m.delta}
-                </span>
+              <div key={m.id} className="flex items-center gap-3 px-3 py-2.5">
+                <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border bg-black/[0.03]">
+                  {m.product_image ? (
+                    <Image
+                      src={m.product_image}
+                      alt={m.product_name ?? ""}
+                      fill
+                      sizes="36px"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center text-muted">
+                      <ImageOff className="h-3.5 w-3.5" />
+                    </div>
+                  )}
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">
                     {m.product_name ?? "—"}
@@ -60,8 +70,15 @@ export default async function AdminStockPage(props: PageProps<"/admin/estoque">)
                     {m.note ? ` — ${m.note}` : ""} · {formatDateTime(m.created_at)}
                   </p>
                 </div>
+                <span
+                  className={`shrink-0 text-right font-bold ${
+                    m.delta < 0 ? "text-danger" : "text-success"
+                  }`}
+                >
+                  {m.delta > 0 ? `+${m.delta}` : m.delta}
+                </span>
                 {m.balance_after != null && (
-                  <span className="shrink-0 text-xs text-muted">
+                  <span className="w-10 shrink-0 text-right text-xs text-muted">
                     → {m.balance_after}
                   </span>
                 )}

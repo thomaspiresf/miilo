@@ -2,8 +2,9 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabase, hasSupabaseAdmin } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
-import { mapProduct, listProducts, getCategories } from "@/lib/data/catalog";
+import { mapProduct, listProducts, getCategories, imageUrl } from "@/lib/data/catalog";
 import { notifyRestockForProduct } from "@/lib/data/restock-notify";
+import { imagesForColor } from "@/lib/product-cards";
 import { slugify } from "@/lib/utils";
 import type {
   Category,
@@ -582,6 +583,8 @@ export async function adminListVariants(): Promise<VariantStockRow[]> {
   const rows: VariantStockRow[] = [];
   for (const p of products) {
     for (const v of p.variants) {
+      const img =
+        imagesForColor(p.images, v.color)[0]?.url ?? p.images[0]?.url ?? null;
       rows.push({
         variantId: v.id,
         productId: p.id,
@@ -589,9 +592,13 @@ export async function adminListVariants(): Promise<VariantStockRow[]> {
         productSlug: p.slug,
         productActive: p.active,
         label: variantLabel(v.size, v.color),
+        color: v.color,
+        colorHex: v.color_hex,
+        size: v.size,
         sku: v.sku,
         price: v.price,
         stock: v.stock,
+        imageUrl: img,
       });
     }
   }
@@ -685,26 +692,36 @@ export async function adminRecentStockMovements(limit = 30): Promise<StockMoveme
   const { data, error } = await admin
     .from("stock_movements")
     .select(
-      "id, variant_id, delta, reason, note, order_id, balance_after, created_at, variant:product_variants(size, color, product:products(name))",
+      "id, variant_id, delta, reason, note, order_id, balance_after, created_at, variant:product_variants(size, color, product:products(name, images:product_images(storage_path, sort, color)))",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) return []; // migração de estoque ainda não aplicada
 
-  return (data ?? []).map((m: any) => ({
-    id: m.id,
-    variant_id: m.variant_id,
-    delta: m.delta,
-    reason: m.reason,
-    note: m.note ?? null,
-    order_id: m.order_id ?? null,
-    balance_after: m.balance_after ?? null,
-    created_at: m.created_at,
-    product_name: m.variant?.product?.name ?? undefined,
-    variant_label: m.variant
-      ? variantLabel(m.variant.size ?? null, m.variant.color ?? null)
-      : null,
-  }));
+  return (data ?? []).map((m: any) => {
+    const imgs = (m.variant?.product?.images ?? []) as any[];
+    const color = (m.variant?.color as string | null) ?? null;
+    const forColor = color
+      ? imgs.find((im) => im.color && im.color.toLowerCase() === color.toLowerCase())
+      : null;
+    const pick =
+      forColor ?? [...imgs].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))[0] ?? null;
+    return {
+      id: m.id,
+      variant_id: m.variant_id,
+      delta: m.delta,
+      reason: m.reason,
+      note: m.note ?? null,
+      order_id: m.order_id ?? null,
+      balance_after: m.balance_after ?? null,
+      created_at: m.created_at,
+      product_name: m.variant?.product?.name ?? undefined,
+      variant_label: m.variant
+        ? variantLabel(m.variant.size ?? null, m.variant.color ?? null)
+        : null,
+      product_image: pick ? imageUrl(pick.storage_path) : null,
+    };
+  });
 }
 
 /* eslint-enable @typescript-eslint/no-explicit-any */

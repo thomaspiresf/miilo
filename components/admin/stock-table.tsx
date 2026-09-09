@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { Check, Minus, Plus, Search } from "lucide-react";
+import { Check, ChevronDown, ImageOff, Minus, Plus, Search } from "lucide-react";
 import type { VariantStockRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,80 @@ import { Spinner } from "@/components/ui/misc";
 
 type Filter = "all" | "low" | "out";
 
-const LOW = 3;
+function stockTone(stock: number) {
+  if (stock === 0) return "bg-danger/10 text-danger ring-danger/20";
+  if (stock === 1) return "bg-warning/15 text-warning ring-warning/25";
+  return "bg-success/10 text-success ring-success/20";
+}
+
+function ThumbLink({
+  productId,
+  src,
+  alt,
+  size = 48,
+}: {
+  productId: string;
+  src: string | null;
+  alt: string;
+  size?: number;
+}) {
+  return (
+    <Link
+      href={`/admin/produtos/${productId}`}
+      title="Abrir produto"
+      className="relative block shrink-0 overflow-hidden rounded-lg border border-border bg-black/[0.03]"
+      style={{ width: size, height: size }}
+    >
+      {src ? (
+        <Image src={src} alt={alt} fill sizes={`${size}px`} className="object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-muted">
+          <ImageOff className="h-4 w-4" />
+        </div>
+      )}
+    </Link>
+  );
+}
+
+function Swatch({ hex }: { hex: string | null }) {
+  if (!hex) return null;
+  return (
+    <span
+      className="inline-block h-3 w-3 shrink-0 rounded-full border border-black/10"
+      style={{ background: hex }}
+    />
+  );
+}
+
+function StockChip({ n }: { n: number }) {
+  return (
+    <span
+      className={cn(
+        "grid h-7 min-w-7 shrink-0 place-items-center rounded-md px-1.5 text-xs font-bold ring-1 ring-inset",
+        stockTone(n),
+      )}
+    >
+      {n}
+    </span>
+  );
+}
+
+type ProductGroup = {
+  productId: string;
+  productName: string;
+  productActive: boolean;
+  image: string | null;
+  total: number;
+  outCount: number;
+  variantCount: number;
+  colors: {
+    color: string | null;
+    hex: string | null;
+    image: string | null;
+    distinctImage: boolean;
+    items: VariantStockRow[];
+  }[];
+};
 
 export function StockTable({
   rows: initial,
@@ -26,27 +100,69 @@ export function StockTable({
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>(initialFilter);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+
+  const term = q.trim().toLowerCase();
+  const browsing = term !== "" || filter !== "all";
 
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (term && !r.productName.toLowerCase().includes(term) && !(r.sku ?? "").toLowerCase().includes(term))
+      if (
+        term &&
+        !r.productName.toLowerCase().includes(term) &&
+        !(r.sku ?? "").toLowerCase().includes(term) &&
+        !(r.color ?? "").toLowerCase().includes(term)
+      )
         return false;
       if (filter === "out") return r.stock === 0;
-      if (filter === "low") return r.stock > 0 && r.stock <= LOW;
+      if (filter === "low") return r.stock === 1;
       return true;
     });
-  }, [rows, q, filter]);
+  }, [rows, term, filter]);
 
   const counts = useMemo(
     () => ({
       all: rows.length,
-      low: rows.filter((r) => r.stock > 0 && r.stock <= LOW).length,
+      low: rows.filter((r) => r.stock === 1).length,
       out: rows.filter((r) => r.stock === 0).length,
       units: rows.reduce((s, r) => s + r.stock, 0),
     }),
     [rows],
   );
+
+  const groups = useMemo<ProductGroup[]>(() => {
+    const map = new Map<string, ProductGroup>();
+    for (const r of filtered) {
+      let g = map.get(r.productId);
+      if (!g) {
+        g = {
+          productId: r.productId,
+          productName: r.productName,
+          productActive: r.productActive,
+          image: r.imageUrl,
+          total: 0,
+          outCount: 0,
+          variantCount: 0,
+          colors: [],
+        };
+        map.set(r.productId, g);
+      }
+      g.total += r.stock;
+      g.variantCount += 1;
+      if (r.stock === 0) g.outCount += 1;
+      const key = (r.color ?? "").toLowerCase();
+      let c = g.colors.find((x) => (x.color ?? "").toLowerCase() === key);
+      if (!c) {
+        c = { color: r.color, hex: r.colorHex, image: r.imageUrl, distinctImage: false, items: [] };
+        g.colors.push(c);
+      }
+      c.items.push(r);
+    }
+    for (const g of map.values()) {
+      for (const c of g.colors) c.distinctImage = !!c.image && c.image !== g.image;
+    }
+    return [...map.values()];
+  }, [filtered]);
 
   function draftFor(r: VariantStockRow) {
     return drafts[r.variantId] ?? r.stock;
@@ -54,6 +170,14 @@ export function StockTable({
   function setDraft(id: string, v: number) {
     setDrafts((d) => ({ ...d, [id]: Math.max(0, Math.round(v || 0)) }));
     setSaved((s) => ({ ...s, [id]: false }));
+  }
+  function toggle(id: string) {
+    setOpen((o) => {
+      const n = new Set(o);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   }
 
   async function save(r: VariantStockRow) {
@@ -86,21 +210,87 @@ export function StockTable({
     }
   }
 
+  function Stepper({ r }: { r: VariantStockRow }) {
+    const d = draftFor(r);
+    const dirty = d !== r.stock;
+    return (
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="flex items-center rounded-lg border border-border bg-background">
+          <button
+            type="button"
+            onClick={() => setDraft(r.variantId, d - 1)}
+            className="grid h-9 w-9 place-items-center text-muted hover:text-foreground"
+            aria-label="Diminuir"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <input
+            value={d}
+            onChange={(e) => setDraft(r.variantId, Number(e.target.value))}
+            inputMode="numeric"
+            className="h-9 w-11 border-x border-border text-center text-sm font-bold outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setDraft(r.variantId, d + 1)}
+            className="grid h-9 w-9 place-items-center text-muted hover:text-foreground"
+            aria-label="Aumentar"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+        <Button
+          size="sm"
+          variant={dirty ? "primary" : "ghost"}
+          disabled={!dirty || saving[r.variantId]}
+          onClick={() => save(r)}
+          className="w-[68px] shrink-0"
+        >
+          {saving[r.variantId] ? (
+            <Spinner />
+          ) : saved[r.variantId] ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            "Salvar"
+          )}
+        </Button>
+      </div>
+    );
+  }
+
   const tabs: { id: Filter; label: string }[] = [
     { id: "all", label: `Tudo (${counts.all})` },
-    { id: "low", label: `Acabando (${counts.low})` },
+    { id: "low", label: `Última peça (${counts.low})` },
     { id: "out", label: `Esgotado (${counts.out})` },
   ];
 
   return (
     <div>
+      {/* resumo */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:max-w-sm">
+        <div className="rounded-xl border border-border bg-surface px-4 py-3 text-center">
+          <p className="text-xl font-black leading-none">{counts.units}</p>
+          <p className="mt-1 text-xs text-muted">unidades no estoque</p>
+        </div>
+        <div
+          className={cn(
+            "rounded-xl border px-4 py-3 text-center",
+            counts.out ? "border-danger/30 bg-danger/10" : "border-border bg-surface",
+          )}
+        >
+          <p className="text-xl font-black leading-none">{counts.out}</p>
+          <p className="mt-1 text-xs text-muted">variações esgotadas</p>
+        </div>
+      </div>
+
+      {/* busca + filtros */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex items-center rounded-full border border-border bg-surface px-3 sm:max-w-xs">
           <Search className="h-4 w-4 text-muted" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar produto ou SKU"
+            placeholder="Buscar produto, cor ou SKU"
             className="h-10 w-full bg-transparent px-2 text-sm outline-none"
           />
         </div>
@@ -108,6 +298,7 @@ export function StockTable({
           {tabs.map((t) => (
             <button
               key={t.id}
+              type="button"
               onClick={() => setFilter(t.id)}
               className={cn(
                 "rounded-full px-3 py-1.5 text-xs font-semibold",
@@ -120,96 +311,146 @@ export function StockTable({
             </button>
           ))}
         </div>
-        <span className="text-xs text-muted sm:ml-auto">
-          {counts.units} unidades no total
-        </span>
       </div>
 
       {error && (
         <p className="mb-3 rounded-xl bg-danger/10 px-4 py-2 text-sm text-danger">{error}</p>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-        {filtered.length === 0 && (
-          <p className="p-6 text-center text-sm text-muted">Nada aqui.</p>
-        )}
-        {filtered.map((r, i) => {
-          const header = i === 0 || filtered[i - 1].productName !== r.productName;
-          const d = draftFor(r);
-          const dirty = d !== r.stock;
+      {groups.length === 0 && (
+        <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
+          Nada aqui.
+        </p>
+      )}
+
+      <div className="space-y-2.5">
+        {groups.map((g) => {
+          const single = g.variantCount === 1;
+          const collapsible = !single && !browsing;
+          const isOpen = !collapsible || open.has(g.productId);
+          const only = single ? g.colors[0].items[0] : null;
+
           return (
-            <div key={r.variantId}>
-              {header && (
-                <div className="flex items-center justify-between border-t border-border bg-black/[0.015] px-4 pb-1 pt-3 first:border-t-0">
+            <div
+              key={g.productId}
+              className="overflow-hidden rounded-2xl border border-border bg-surface"
+            >
+              {/* cabeçalho */}
+              <div
+                className={cn(
+                  "flex items-center gap-3 p-3",
+                  single ? "flex-wrap" : "",
+                )}
+              >
+                <ThumbLink
+                  productId={g.productId}
+                  src={g.image}
+                  alt={g.productName}
+                  size={48}
+                />
+                <div className="min-w-0 flex-1">
                   <Link
-                    href={`/admin/produtos/${r.productId}`}
-                    className="text-sm font-bold hover:text-primary"
+                    href={`/admin/produtos/${g.productId}`}
+                    className="line-clamp-2 text-sm font-bold leading-snug hover:text-primary"
                   >
-                    {r.productName}
+                    {g.productName}
                   </Link>
-                  {!r.productActive && (
-                    <span className="text-[11px] font-semibold text-danger">inativo</span>
-                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+                    {!single && (
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 font-bold ring-1 ring-inset",
+                          stockTone(g.total),
+                        )}
+                      >
+                        {g.total} un.
+                      </span>
+                    )}
+                    {g.colors.length > 1 && <span>{g.colors.length} cores</span>}
+                    {!single && g.outCount > 0 && (
+                      <span className="font-semibold text-danger">
+                        {g.outCount} esgotad{g.outCount > 1 ? "as" : "a"}
+                      </span>
+                    )}
+                    {!g.productActive && (
+                      <span className="font-semibold text-danger">inativo</span>
+                    )}
+                    {g.colors.length > 1 && (
+                      <span className="flex items-center gap-1">
+                        {g.colors.slice(0, 10).map((c, i) => (
+                          <Swatch key={i} hex={c.hex} />
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {single && only ? (
+                  <div className="ml-[60px] flex w-full items-center gap-2 sm:ml-0 sm:w-auto">
+                    <StockChip n={only.stock} />
+                    <span className="mr-auto text-sm text-muted sm:mr-0">Único</span>
+                    <Stepper r={only} />
+                  </div>
+                ) : collapsible ? (
+                  <button
+                    type="button"
+                    onClick={() => toggle(g.productId)}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-black/[0.04]"
+                    aria-label={isOpen ? "Fechar" : "Abrir"}
+                  >
+                    <ChevronDown
+                      className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")}
+                    />
+                  </button>
+                ) : null}
+              </div>
+
+              {/* variações (multi) */}
+              {!single && isOpen && (
+                <div className="divide-y divide-border border-t border-border">
+                  {g.colors.map((c, ci) => (
+                    <div key={ci} className="flex gap-3 p-3">
+                      {c.distinctImage ? (
+                        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border">
+                          <Image
+                            src={c.image!}
+                            alt={c.color ?? ""}
+                            fill
+                            sizes="40px"
+                            className="object-cover"
+                          />
+                        </div>
+                      ) : c.color && c.hex ? (
+                        <div className="grid h-10 w-10 shrink-0 place-items-center">
+                          <span
+                            className="h-6 w-6 rounded-full border border-black/10"
+                            style={{ background: c.hex }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="hidden w-10 shrink-0 sm:block" />
+                      )}
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        {c.color && <p className="text-xs font-semibold">{c.color}</p>}
+                        {c.items.map((r) => (
+                          <div
+                            key={r.variantId}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <StockChip n={r.stock} />
+                              <span className="truncate text-sm">
+                                {r.size ?? (c.color ? "—" : "Único")}
+                              </span>
+                            </div>
+                            <Stepper r={r} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-              <div className="flex items-center gap-3 px-4 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{r.label}</p>
-                  {r.sku && <p className="text-[11px] text-muted">{r.sku}</p>}
-                </div>
-
-                <span
-                  className={cn(
-                    "hidden w-16 text-right text-xs sm:block",
-                    r.stock === 0
-                      ? "text-danger"
-                      : r.stock <= LOW
-                        ? "text-warning"
-                        : "text-muted",
-                  )}
-                >
-                  {r.stock} atual
-                </span>
-
-                <div className="flex items-center rounded-lg border border-border">
-                  <button
-                    onClick={() => setDraft(r.variantId, d - 1)}
-                    className="p-2 text-muted hover:text-foreground"
-                    aria-label="Diminuir"
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </button>
-                  <input
-                    value={d}
-                    onChange={(e) => setDraft(r.variantId, Number(e.target.value))}
-                    inputMode="numeric"
-                    className="w-12 border-x border-border py-1.5 text-center text-sm font-semibold outline-none"
-                  />
-                  <button
-                    onClick={() => setDraft(r.variantId, d + 1)}
-                    className="p-2 text-muted hover:text-foreground"
-                    aria-label="Aumentar"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                <Button
-                  size="sm"
-                  variant={dirty ? "primary" : "ghost"}
-                  disabled={!dirty || saving[r.variantId]}
-                  onClick={() => save(r)}
-                  className="w-20 shrink-0"
-                >
-                  {saving[r.variantId] ? (
-                    <Spinner />
-                  ) : saved[r.variantId] ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    "Salvar"
-                  )}
-                </Button>
-              </div>
             </div>
           );
         })}

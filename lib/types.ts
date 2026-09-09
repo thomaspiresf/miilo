@@ -208,6 +208,7 @@ export type StockMovement = {
   /** preenchido nas listagens do admin */
   product_name?: string;
   variant_label?: string | null;
+  product_image?: string | null;
 };
 
 export type VariantStockRow = {
@@ -217,9 +218,14 @@ export type VariantStockRow = {
   productSlug: string;
   productActive: boolean;
   label: string;
+  color: string | null;
+  colorHex: string | null;
+  size: string | null;
   sku: string | null;
   price: number;
   stock: number;
+  /** foto da cor desta variação (ou a 1ª foto do produto). */
+  imageUrl: string | null;
 };
 
 export type CartLine = {
