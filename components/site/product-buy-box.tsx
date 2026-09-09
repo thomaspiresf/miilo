@@ -10,6 +10,7 @@ import { discountPercent, formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SizeGuide } from "@/components/site/size-guide";
+import { StockAlertForm } from "@/components/site/stock-alert-form";
 import { CepEstimate } from "@/components/checkout/cep-estimate";
 
 function variantLabel(v: ProductVariant) {
@@ -198,39 +199,43 @@ export function ProductBuyBox({
         </div>
       )}
 
-      <p className="text-xs text-muted">
-        {outOfStock
-          ? sizes.length > 0 || colors.length > 0
-            ? "Combinação indisponível — escolha outro tamanho ou cor."
-            : "Esgotado"
-          : selected && selected.stock <= 5
+      {!outOfStock && (
+        <p className="text-xs text-muted">
+          {selected && selected.stock <= 5
             ? `Últimas ${selected.stock} unidades`
             : "Pronta entrega"}
-      </p>
+        </p>
+      )}
 
-      {/* CTA — barra fixa no mobile */}
-      <div className="sticky bottom-0 z-10 -mx-4 space-y-2 border-t border-border bg-background/95 p-4 pb-safe backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
-        <Button onClick={handleBuyNow} size="lg" className="w-full" disabled={outOfStock}>
-          <Zap className="h-5 w-5" /> Comprar agora
-        </Button>
-        <Button
-          onClick={handleAdd}
-          size="lg"
-          variant="outline"
-          className="w-full"
-          disabled={outOfStock}
-        >
-          {added ? (
-            <>
-              <Check className="h-5 w-5" /> Na sacola
-            </>
-          ) : (
-            <>
-              <ShoppingBag className="h-5 w-5" /> Adicionar à sacola
-            </>
-          )}
-        </Button>
-      </div>
+      {outOfStock ? (
+        <StockAlertForm
+          productId={product.id}
+          variantId={selected?.id ?? null}
+          variantLabel={
+            selected && (sizes.length > 0 || colors.length > 0)
+              ? variantLabel(selected)
+              : null
+          }
+        />
+      ) : (
+        /* CTA — barra fixa no mobile */
+        <div className="sticky bottom-0 z-10 -mx-4 space-y-2 border-t border-border bg-background/95 p-4 pb-safe backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
+          <Button onClick={handleBuyNow} size="lg" className="w-full">
+            <Zap className="h-5 w-5" /> Comprar agora
+          </Button>
+          <Button onClick={handleAdd} size="lg" variant="outline" className="w-full">
+            {added ? (
+              <>
+                <Check className="h-5 w-5" /> Na sacola
+              </>
+            ) : (
+              <>
+                <ShoppingBag className="h-5 w-5" /> Adicionar à sacola
+              </>
+            )}
+          </Button>
+        </div>
+      )}
 
       <div className="border-t border-border pt-5">
         <CepEstimate

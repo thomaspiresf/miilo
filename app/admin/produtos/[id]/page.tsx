@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminGetProduct, adminListCategories } from "@/lib/data/admin";
+import { listStockAlerts } from "@/lib/data/stock-alerts";
 import { ProductForm } from "@/components/admin/product-form";
 import { ImageUploader } from "@/components/admin/image-uploader";
 import { VideoUploader } from "@/components/admin/video-uploader";
 import { addImageUrlAction } from "@/app/admin/actions";
+import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 
 export default async function AdminProductEditPage(
@@ -21,6 +23,8 @@ export default async function AdminProductEditPage(
   ]);
 
   if (!isNew && !product) notFound();
+
+  const alerts = product ? await listStockAlerts(product.id) : [];
 
   const colors = product
     ? [...new Set(product.variants.map((v) => v.color).filter((c): c is string => !!c))]
@@ -97,6 +101,32 @@ export default async function AdminProductEditPage(
             Aparece logo depois da primeira foto na galeria da página do produto.
           </p>
           <VideoUploader productId={product.id} video={product.video_url} />
+        </section>
+      )}
+
+      {product && alerts.length > 0 && (
+        <section className="rounded-2xl border border-border bg-surface p-5">
+          <h2 className="font-bold">
+            Lista de espera{" "}
+            <span className="text-muted">({alerts.length})</span>
+          </h2>
+          <p className="mb-3 text-xs text-muted">
+            Clientes que pediram pra ser avisados quando o produto voltar. Quando
+            repor o estoque, avise essas pessoas.
+          </p>
+          <ul className="divide-y divide-border text-sm">
+            {alerts.map((a, i) => (
+              <li key={i} className="flex flex-wrap items-center justify-between gap-x-3 py-2">
+                <a href={`mailto:${a.email}`} className="font-medium text-primary">
+                  {a.email}
+                </a>
+                <span className="text-xs text-muted">
+                  {a.variantLabel ? `${a.variantLabel} · ` : ""}
+                  {formatDate(a.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
     </div>
