@@ -50,6 +50,22 @@ function startOfDay(d: Date) {
   return x;
 }
 
+const TONE_CLASS: Record<string, string> = {
+  success: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-danger",
+  primary: "bg-accent",
+  neutral: "bg-muted",
+};
+
+const PAY_CLASS: Record<string, string> = {
+  Pix: "bg-accent",
+  Cartão: "bg-sky",
+  "Dinheiro / maquininha": "bg-yellow",
+  "Saldo Mercado Pago": "bg-pink",
+  "Não informado": "bg-muted",
+};
+
 // -------------------------------------------------------------------------
 
 function Delta({ now, prev, money }: { now: number; prev: number; money?: boolean }) {
@@ -109,6 +125,51 @@ function BarList({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function SegmentBar({
+  title,
+  segments,
+  empty,
+}: {
+  title: string;
+  segments: { label: string; value: number; className: string }[];
+  empty: string;
+}) {
+  const shown = segments.filter((s) => s.value > 0);
+  const total = shown.reduce((s, x) => s + x.value, 0);
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold text-muted">{title}</p>
+      {total === 0 ? (
+        <p className="text-sm text-muted">{empty}</p>
+      ) : (
+        <>
+          <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
+            {shown.map((s, i) => (
+              <div
+                key={i}
+                className={cn("h-full", s.className)}
+                style={{ width: `${(s.value / total) * 100}%` }}
+                title={`${s.label}: ${s.value}`}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {shown.map((s, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5">
+                <span className={cn("h-2 w-2 rounded-full", s.className)} />
+                <span className="font-medium">{s.label}</span>
+                <span className="text-muted">
+                  {s.value} · {Math.round((s.value / total) * 100)}%
+                </span>
+              </span>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -298,8 +359,12 @@ export function SalesDashboard({
     const statusCounts = new Map<OrderStatus, number>();
     for (const o of inRange)
       statusCounts.set(o.status, (statusCounts.get(o.status) ?? 0) + 1);
-    const statusBars = (Object.keys(ORDER_STATUS) as OrderStatus[])
-      .map((s) => ({ label: ORDER_STATUS[s].label, value: statusCounts.get(s) ?? 0 }))
+    const statusSegs = (Object.keys(ORDER_STATUS) as OrderStatus[])
+      .map((s) => ({
+        label: ORDER_STATUS[s].label,
+        value: statusCounts.get(s) ?? 0,
+        className: TONE_CLASS[ORDER_STATUS[s].tone],
+      }))
       .filter((b) => b.value > 0);
 
     // top produtos
@@ -323,13 +388,17 @@ export function SalesDashboard({
     // meios de pagamento
     const payMap = new Map<string, number>();
     for (const o of paid) payMap.set(payLabel(o.paymentMethod), (payMap.get(payLabel(o.paymentMethod)) ?? 0) + 1);
-    const payBars = [...payMap.entries()]
+    const paySegs = [...payMap.entries()]
       .sort((a, b) => b[1] - a[1])
-      .map(([label, value]) => ({ label, value }));
+      .map(([label, value]) => ({ label, value, className: PAY_CLASS[label] ?? "bg-muted" }));
 
     // canal
     const online = paid.filter((o) => o.channel === "online").length;
     const pos = paid.filter((o) => o.channel === "pos").length;
+    const channelSegs = [
+      { label: "Loja online", value: online, className: "bg-accent" },
+      { label: "Venda na loja", value: pos, className: "bg-sky" },
+    ];
 
     return {
       revenue,
@@ -342,11 +411,11 @@ export function SalesDashboard({
       prevAvg: prevPaid.length ? prevRevenue / prevPaid.length : 0,
       pending: inRange.filter((o) => o.status === "pending").length,
       buckets,
-      statusBars,
+      statusSegs,
       topProducts,
-      payBars,
-      online,
-      pos,
+      paySegs,
+      channelSegs,
+      channelTotal: online + pos,
       hasCompare: !!cutoff,
       recent: [...inRange]
         .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
@@ -437,29 +506,30 @@ export function SalesDashboard({
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <h2 className="mb-3 font-black">Mais vendidos</h2>
+          <p className="mb-3 -mt-2 text-xs text-muted">
+            Por unidades vendidas · receita ao lado
+          </p>
           <BarList items={view.topProducts} empty="Nenhuma venda no período." />
         </Card>
         <Card>
-          <h2 className="mb-3 font-black">Pedidos por status</h2>
-          <BarList items={view.statusBars} empty="Nenhum pedido no período." />
-        </Card>
-        <Card>
-          <h2 className="mb-3 font-black">Meios de pagamento</h2>
-          <BarList items={view.payBars} empty="Nenhuma venda paga." />
-        </Card>
-        <Card>
-          <h2 className="mb-3 font-black">Canal de venda</h2>
-          {view.online + view.pos === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">Nenhuma venda paga.</p>
-          ) : (
-            <BarList
-              items={[
-                { label: "Loja online", value: view.online },
-                { label: "Venda na loja", value: view.pos },
-              ].filter((b) => b.value > 0)}
-              empty=""
+          <h2 className="mb-4 font-black">Como as vendas se dividem</h2>
+          <div className="space-y-4">
+            <SegmentBar
+              title="Pedidos por status"
+              segments={view.statusSegs}
+              empty="Nenhum pedido no período."
             />
-          )}
+            <SegmentBar
+              title="Meios de pagamento"
+              segments={view.paySegs}
+              empty="Nenhuma venda paga."
+            />
+            <SegmentBar
+              title="Canal de venda"
+              segments={view.channelSegs}
+              empty="Nenhuma venda paga."
+            />
+          </div>
         </Card>
       </div>
 
