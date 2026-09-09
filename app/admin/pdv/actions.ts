@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { posOrderSchema, type PosOrderInput } from "@/lib/pos-schema";
-import { createOrder, approveOrder } from "@/lib/data/orders";
+import {
+  createOrder,
+  approveOrder,
+  getOrderById,
+  adminDeleteOrder,
+} from "@/lib/data/orders";
 import { site } from "@/lib/site";
 
 /** E-mail usado quando a venda na loja é anônima (o MP exige um e-mail no pagador). */
@@ -63,4 +68,21 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
     console.error("createPosOrder", err);
     return { error: err instanceof Error ? err.message : "Falha ao registrar a venda" };
   }
+}
+
+/**
+ * Descarta uma venda recém-criada que ainda não foi paga (pra corrigir e
+ * refazer — ex.: esqueceu um item). Só apaga pedido PDV pendente.
+ */
+export async function discardPosOrder(orderId: string): Promise<{ ok: boolean }> {
+  await requireAdmin();
+  const order = await getOrderById(orderId);
+  if (!order || order.channel !== "pos" || order.status !== "pending") {
+    return { ok: false };
+  }
+  await adminDeleteOrder(orderId);
+  revalidatePath("/admin/pdv");
+  revalidatePath("/admin/pedidos");
+  revalidatePath("/admin");
+  return { ok: true };
 }

@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Link2,
   Minus,
+  Pencil,
   Plus,
   QrCode,
   Search,
@@ -25,7 +26,7 @@ import type { OrderStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/misc";
-import { createPosOrder } from "@/app/admin/pdv/actions";
+import { createPosOrder, discardPosOrder } from "@/app/admin/pdv/actions";
 
 export type PosProduct = {
   id: string;
@@ -110,6 +111,13 @@ export function PosClient({
   const discount = Math.min(Math.max(0, parseMoney(discountInput) ?? 0), subtotal);
   const total = subtotal - discount;
   const phoneDigits = onlyDigits(phone);
+  const itemCount = cart.reduce((n, l) => n + l.qty, 0);
+  const submitLabel =
+    payMode === "cash"
+      ? "Registrar venda paga"
+      : payMode === "link"
+        ? "Gerar link de pagamento"
+        : "Ir para o pagamento";
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -201,12 +209,34 @@ export function PosClient({
     setError(null);
   }
 
+  // volta pro carrinho pra corrigir (esqueceu um item, etc). Só se não foi pago.
+  const [editing, setEditing] = useState(false);
+  async function editSale() {
+    if (!created || created.paid || editing) return;
+    setEditing(true);
+    try {
+      await discardPosOrder(created.orderId);
+    } catch {
+      /* segue mesmo assim — o pedido pendente antigo fica pra limpar depois */
+    }
+    setCreated(null);
+    setEditing(false);
+  }
+
   if (created) {
-    return <SaleResult created={created} phoneDigits={phoneDigits} onNewSale={newSale} />;
+    return (
+      <SaleResult
+        created={created}
+        phoneDigits={phoneDigits}
+        onNewSale={newSale}
+        onEdit={editSale}
+        editing={editing}
+      />
+    );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 lg:pb-0">
       <div>
         <h1 className="text-2xl font-black">Venda na loja</h1>
         <p className="text-sm text-muted">
@@ -515,22 +545,14 @@ export function PosClient({
             </div>
 
             <Button
-              className="mt-4 w-full"
+              className="mt-4 hidden w-full lg:flex"
               size="lg"
               onClick={submit}
               disabled={submitting || cart.length === 0}
             >
-              {submitting ? (
-                <Spinner />
-              ) : payMode === "cash" ? (
-                "Registrar venda paga"
-              ) : payMode === "link" ? (
-                "Gerar link de pagamento"
-              ) : (
-                "Ir para o pagamento"
-              )}
+              {submitting ? <Spinner /> : submitLabel}
             </Button>
-            <p className="mt-2 text-center text-xs text-muted">
+            <p className="mt-2 hidden text-center text-xs text-muted lg:block">
               {payMode === "cash"
                 ? "O estoque é baixado na hora."
                 : "O estoque é baixado quando o pagamento é confirmado."}
@@ -569,6 +591,26 @@ export function PosClient({
           )}
         </aside>
       </div>
+
+      {/* barra fixa no mobile — total + ação sempre à mão */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-6xl items-center gap-3">
+          <div className="shrink-0">
+            <p className="text-[11px] text-muted">
+              {itemCount} {itemCount === 1 ? "item" : "itens"}
+            </p>
+            <p className="text-lg font-black leading-tight">{formatBRL(total)}</p>
+          </div>
+          <Button
+            className="flex-1"
+            size="lg"
+            onClick={submit}
+            disabled={submitting || cart.length === 0}
+          >
+            {submitting ? <Spinner /> : submitLabel}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -580,10 +622,14 @@ function SaleResult({
   created,
   phoneDigits,
   onNewSale,
+  onEdit,
+  editing,
 }: {
   created: Created;
   phoneDigits: string;
   onNewSale: () => void;
+  onEdit: () => void;
+  editing: boolean;
 }) {
   const [paid, setPaid] = useState(created.paid);
   const [copied, setCopied] = useState(false);
@@ -663,6 +709,18 @@ function SaleResult({
             ? "Estoque baixado. Tudo certo."
             : "O estoque será baixado assim que o cliente pagar."}
         </p>
+
+        {!paid && (
+          <button
+            type="button"
+            onClick={onEdit}
+            disabled={editing}
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-primary disabled:opacity-50"
+          >
+            {editing ? <Spinner className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+            Esqueci algo — editar a venda
+          </button>
+        )}
       </div>
 
       {!paid && payUrl && (
