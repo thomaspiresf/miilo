@@ -8,11 +8,7 @@ import type { CategoryKind, Product } from "@/lib/types";
 import { CATEGORY_KINDS, KIND_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatBRL } from "@/lib/format";
-import {
-  toggleProductActiveAction,
-  deleteProductAction,
-} from "@/app/admin/actions";
-import { ConfirmSubmit } from "@/components/admin/confirm-submit";
+import { ProductRowActions } from "@/components/admin/product-row-actions";
 
 type Status = "all" | "active" | "inactive";
 type Sort = "name" | "recent" | "price-asc" | "price-desc" | "stock-asc";
@@ -180,7 +176,10 @@ export function AdminProductList({ products }: { products: Product[] }) {
         {filtered.map((p) => {
           const stock = p.variants.reduce((s, v) => s + v.stock, 0);
           return (
-            <div key={p.id} className="flex items-center gap-3 p-3">
+            <div
+              key={p.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 sm:flex-nowrap"
+            >
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/5">
                 {p.images[0]?.url ? (
                   <Image
@@ -196,7 +195,7 @@ export function AdminProductList({ products }: { products: Product[] }) {
                   </div>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[10rem] grow basis-0">
                 <Link
                   href={`/admin/produtos/${p.id}`}
                   className="line-clamp-2 text-sm font-semibold leading-snug hover:text-primary"
@@ -208,36 +207,17 @@ export function AdminProductList({ products }: { products: Product[] }) {
                   <span className={stock === 0 ? "font-semibold text-danger" : ""}>
                     {stock} em estoque
                   </span>
-                  {!p.active && (
-                    <span className="ml-1 font-semibold text-danger">· inativo</span>
-                  )}
+                  <span className="ml-1 hidden font-bold text-foreground sm:inline">
+                    · {formatBRL(p.price_from)}
+                  </span>
                 </p>
               </div>
-              <span className="hidden shrink-0 text-sm font-bold sm:block">
-                {formatBRL(p.price_from)}
-              </span>
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                <form action={toggleProductActiveAction}>
-                  <input type="hidden" name="id" value={p.id} />
-                  <input
-                    type="hidden"
-                    name="active"
-                    value={p.active ? "false" : "true"}
-                  />
-                  <button className="text-xs font-semibold text-primary">
-                    {p.active ? "desativar" : "ativar"}
-                  </button>
-                </form>
-                <form action={deleteProductAction}>
-                  <input type="hidden" name="id" value={p.id} />
-                  <ConfirmSubmit
-                    message={`Apagar "${p.name}" de vez? Isso não pode ser desfeito. (O histórico de pedidos é mantido.)`}
-                    className="text-xs font-semibold text-danger hover:underline"
-                  >
-                    apagar
-                  </ConfirmSubmit>
-                </form>
-              </div>
+              <ProductRowActions
+                id={p.id}
+                name={p.name}
+                active={p.active}
+                className="ml-auto sm:ml-0"
+              />
             </div>
           );
         })}

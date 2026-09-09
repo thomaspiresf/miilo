@@ -110,31 +110,34 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
   redirect(newId ? `/admin/produtos/${newId}?criado=1` : "/admin/produtos");
 }
 
-export async function deleteProductAction(formData: FormData) {
+export async function deleteProductAction(id: string): Promise<{ error?: string }> {
   await requireAdmin();
   try {
-    await adminDeleteProduct(String(formData.get("id")));
+    await adminDeleteProduct(id);
   } catch (err) {
     console.error("deleteProduct:", (err as Error).message);
+    return { error: "Não foi possível apagar o produto." };
   }
   revalidatePath("/admin/produtos");
   revalidatePath("/admin");
   revalidatePath("/");
-  redirect("/admin/produtos");
+  return {};
 }
 
-export async function toggleProductActiveAction(formData: FormData) {
+export async function toggleProductActiveAction(
+  id: string,
+  active: boolean,
+): Promise<{ error?: string }> {
   await requireAdmin();
   try {
-    await adminSetProductActive(
-      String(formData.get("id")),
-      formData.get("active") === "true",
-    );
+    await adminSetProductActive(id, active);
   } catch (err) {
     console.error("toggleProductActive:", (err as Error).message);
+    return { error: "Não foi possível mudar o status." };
   }
   revalidatePath("/admin/produtos");
   revalidatePath("/");
+  return {};
 }
 
 export async function addImageUrlAction(formData: FormData) {
