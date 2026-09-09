@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOrderById, approveOrder, setOrderStatus } from "@/lib/data/orders";
 import { createPayment, type BrickFormData } from "@/lib/mercadopago";
+import { rateLimit, clientIp, tooMany } from "@/lib/rate-limit";
+import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
 
 const schema = z.object({
   orderId: z.string().min(1),
@@ -23,6 +25,10 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return forbiddenCrossOrigin();
+  const rl = rateLimit(`pay:${clientIp(request)}`, 15, 10 * 60_000);
+  if (!rl.ok) return tooMany(rl.retryAfterSeconds);
+
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

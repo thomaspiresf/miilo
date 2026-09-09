@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { assertValidWebhook, getPayment } from "@/lib/mercadopago";
+import { env, paymentsMocked } from "@/lib/env";
 import {
   approveOrder,
   getOrderById,
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
   // registra o aviso e SEGUE — o pagamento é sempre re-consultado no MP com o
   // access token (fonte da verdade), então uma assinatura errada/desatualizada
   // não deve travar a confirmação do pedido.
+  let signatureOk = true;
   try {
     assertValidWebhook({
       xSignature: request.headers.get("x-signature"),
@@ -34,10 +36,18 @@ export async function POST(request: Request) {
       dataId: dataIdQuery ?? payload.data?.id ?? null,
     });
   } catch (err) {
+    signatureOk = false;
     console.warn(
       "webhook MP: assinatura não confere (verifique MP_WEBHOOK_SECRET) —",
       (err as Error).message,
     );
+  }
+
+  // Com o segredo configurado, uma assinatura inválida é rejeitada.
+  // Sem segredo (setup inicial), segue — a reconciliação no /pedido/[id]
+  // continua sendo a rede de segurança.
+  if (!signatureOk && env.mercadopago.webhookSecret && !paymentsMocked()) {
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
   const type = payload.type ?? payload.action ?? "";

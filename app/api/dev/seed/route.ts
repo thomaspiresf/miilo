@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hasSupabaseAdmin } from "@/lib/env";
+import { hasSupabaseAdmin, isProd } from "@/lib/env";
 import { seedCategories, seedProducts } from "@/lib/data/seed";
 
 /**
@@ -12,6 +12,10 @@ import { seedCategories, seedProducts } from "@/lib/data/seed";
  * Exige a chave service_role configurada. Depois é só editar/apagar pelo /admin.
  */
 export async function POST(request: Request) {
+  // rota de bootstrap de catálogo — não fica exposta em produção
+  if (isProd && process.env.ALLOW_SEED !== "true") {
+    return NextResponse.json({ error: "não encontrado" }, { status: 404 });
+  }
   const token = new URL(request.url).searchParams.get("token");
   if (!process.env.SEED_TOKEN || token !== process.env.SEED_TOKEN) {
     return NextResponse.json({ error: "token inválido" }, { status: 401 });

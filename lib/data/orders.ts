@@ -54,7 +54,17 @@ export async function resolveSubtotal(lines: NewOrderLine[]): Promise<number> {
   return round2(resolved.reduce((sum, l) => sum + l.unitPrice * l.qty, 0));
 }
 
-export async function resolveLines(lines: NewOrderLine[]): Promise<ResolvedLine[]> {
+/** Junta linhas repetidas do mesmo variantId (evita furar a checagem de estoque). */
+function mergeLines(lines: NewOrderLine[]): NewOrderLine[] {
+  const byId = new Map<string, number>();
+  for (const l of lines) {
+    byId.set(l.variantId, (byId.get(l.variantId) ?? 0) + l.qty);
+  }
+  return [...byId].map(([variantId, qty]) => ({ variantId, qty }));
+}
+
+export async function resolveLines(rawLines: NewOrderLine[]): Promise<ResolvedLine[]> {
+  const lines = mergeLines(rawLines);
   const ids = lines.map((l) => l.variantId);
 
   if (!hasSupabase()) {

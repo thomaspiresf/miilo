@@ -5,9 +5,15 @@ import { createOrder, resolveLines } from "@/lib/data/orders";
 import { validateCoupon } from "@/lib/data/coupons";
 import { quoteShipping } from "@/lib/melhorenvio";
 import { onlyDigits } from "@/lib/utils";
+import { rateLimit, clientIp, tooMany } from "@/lib/rate-limit";
+import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
 import { site } from "@/lib/site";
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return forbiddenCrossOrigin();
+  const rl = rateLimit(`checkout:${clientIp(request)}`, 20, 10 * 60_000);
+  if (!rl.ok) return tooMany(rl.retryAfterSeconds);
+
   const body = await request.json().catch(() => null);
   const parsed = checkoutCreateSchema.safeParse(body);
   if (!parsed.success) {

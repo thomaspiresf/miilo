@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { adminSetVariantStock } from "@/lib/data/admin";
+import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
 
 const schema = z.object({
   variantId: z.string().min(1),
@@ -10,6 +11,7 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return forbiddenCrossOrigin();
   await requireAdmin();
 
   const parsed = schema.safeParse(await request.json().catch(() => null));

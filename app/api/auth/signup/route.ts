@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabase, hasSupabaseAdmin } from "@/lib/env";
+import { rateLimit, clientIp, tooMany } from "@/lib/rate-limit";
+import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
 
 const schema = z.object({
   email: z.string().email(),
@@ -14,6 +16,12 @@ const schema = z.object({
  * do Supabase). Depois o cliente faz signInWithPassword normalmente.
  */
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return forbiddenCrossOrigin();
+
+  const ip = clientIp(request);
+  const rl = rateLimit(`signup:${ip}`, 8, 60 * 60_000); // 8 por hora
+  if (!rl.ok) return tooMany(rl.retryAfterSeconds);
+
   if (!hasSupabase()) {
     return NextResponse.json({ error: "Contas indisponíveis." }, { status: 400 });
   }

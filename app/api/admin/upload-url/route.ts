@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseAdmin } from "@/lib/env";
+import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
 
 const BUCKET = "product-images";
 const IMG_EXT = ["jpg", "jpeg", "png", "webp", "avif"];
@@ -12,6 +13,7 @@ const VID_EXT = ["mp4", "webm", "mov"];
  * sem passar pela função da Vercel (que limita o corpo a ~4,5 MB).
  */
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return forbiddenCrossOrigin();
   await requireAdmin();
 
   if (!hasSupabaseAdmin()) {

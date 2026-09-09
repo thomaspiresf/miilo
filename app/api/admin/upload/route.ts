@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { adminUploadImage, adminUploadVideo } from "@/lib/data/admin";
+import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return forbiddenCrossOrigin();
   await requireAdmin();
 
   const form = await request.formData().catch(() => null);

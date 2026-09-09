@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { quoteShipping } from "@/lib/melhorenvio";
 import { onlyDigits } from "@/lib/utils";
+import { rateLimit, clientIp, tooMany } from "@/lib/rate-limit";
+import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
 
 const schema = z.object({
   cep: z.string(),
@@ -17,6 +19,10 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) return forbiddenCrossOrigin();
+  const rl = rateLimit(`ship:${clientIp(request)}`, 60, 10 * 60_000);
+  if (!rl.ok) return tooMany(rl.retryAfterSeconds);
+
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

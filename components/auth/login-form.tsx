@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/safe-redirect";
 import { site } from "@/lib/site";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
@@ -20,8 +21,9 @@ function friendly(msg: string) {
   return msg;
 }
 
-export function LoginForm({ next, demo }: { next: string; demo: boolean }) {
+export function LoginForm({ next: rawNext, demo }: { next: string; demo: boolean }) {
   const router = useRouter();
+  const next = safeNextPath(rawNext, "/conta");
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

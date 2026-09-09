@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser, isDemoMode } from "@/lib/auth";
+import { safeNextPath } from "@/lib/safe-redirect";
 import { LoginForm } from "@/components/auth/login-form";
 
 export const metadata: Metadata = { title: "Entrar" };
 
 export default async function LoginPage(props: PageProps<"/conta/login">) {
   const sp = await props.searchParams;
-  const next = typeof sp.next === "string" ? sp.next : "/conta";
+  const next = safeNextPath(sp.next, "/conta");
 
   const user = await getUser();
   // já logado → segue direto (mesmo que não seja admin: cai no /conta, sem aviso)
