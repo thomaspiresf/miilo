@@ -251,14 +251,17 @@ export async function updateOrderStatusAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
-export async function deleteOrderAction(formData: FormData) {
+export async function deleteOrderAction(
+  id: string,
+): Promise<{ ok: true } | { error: string }> {
   await requireMasterAdmin();
   try {
-    await adminDeleteOrder(String(formData.get("id")));
+    await adminDeleteOrder(id);
   } catch (err) {
-    console.error("deleteOrder:", (err as Error).message);
+    return { error: err instanceof Error ? err.message : "Falha ao apagar" };
   }
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin");
-  redirect("/admin/pedidos");
+  // a navegação é feita no cliente (a página do pedido deixa de existir)
+  return { ok: true };
 }

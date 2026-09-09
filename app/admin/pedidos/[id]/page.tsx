@@ -4,11 +4,11 @@ import { getOrderById } from "@/lib/data/orders";
 import { requireAdmin } from "@/lib/auth";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/order-status";
-import { updateOrderStatusAction, deleteOrderAction } from "@/app/admin/actions";
+import { updateOrderStatusAction } from "@/app/admin/actions";
 import { site } from "@/lib/site";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
-import { ConfirmSubmit } from "@/components/admin/confirm-submit";
+import { DeleteOrderButton } from "@/components/admin/delete-order-button";
 import type { OrderStatus } from "@/lib/types";
 
 const ALL_STATUS: OrderStatus[] = [
@@ -157,23 +157,14 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
       </form>
 
       {user?.master && (
-        <form
-          action={deleteOrderAction}
-          className="rounded-2xl border border-danger/30 bg-danger/[0.03] p-5"
-        >
+        <div className="rounded-2xl border border-danger/30 bg-danger/[0.03] p-5">
           <h2 className="font-bold text-danger">Apagar pedido</h2>
           <p className="mt-1 text-xs text-muted">
             Some de vez do sistema. Se o estoque já tinha sido baixado, ele volta.
             Use só pra pedidos de teste ou lixo.
           </p>
-          <input type="hidden" name="id" value={order.id} />
-          <ConfirmSubmit
-            message={`Apagar o pedido ${order.number} para sempre? Não dá pra desfazer.`}
-            className="mt-3 rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-danger hover:bg-danger hover:text-white"
-          >
-            Apagar pedido
-          </ConfirmSubmit>
-        </form>
+          <DeleteOrderButton orderId={order.id} number={order.number} />
+        </div>
       )}
     </div>
   );
