@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Clock, PartyPopper } from "lucide-react";
 import { getOrderById } from "@/lib/data/orders";
 import { reconcileOrderPayment, pixQrForPayment } from "@/lib/mp-reconcile";
 import { isDemoMode } from "@/lib/auth";
@@ -36,19 +36,55 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
   const demo = await isDemoMode();
   const status = ORDER_STATUS[order.status];
 
+  const confirmed = ["paid", "shipped", "delivered"].includes(order.status);
+  const pickup = order.delivery_mode === "pickup";
+  const realEmail = order.email && !order.email.endsWith("@miilo.com.br");
+
+  const headline = confirmed
+    ? "Obrigado pela compra! 🎉"
+    : order.status === "failed" || order.status === "cancelled"
+      ? `Pedido ${status.label.toLowerCase()}`
+      : "Pedido recebido";
+
+  const subline = confirmed
+    ? pickup
+      ? "Pagamento confirmado. Vamos separar tudo e te avisar quando estiver pronto pra retirar."
+      : "Pagamento confirmado. Já estamos preparando seu pedido — quando enviarmos, você recebe o código de rastreio."
+    : order.status === "pending"
+      ? "Assim que o pagamento cair, o pedido é confirmado automaticamente."
+      : "";
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="rounded-2xl border border-border bg-surface p-6 text-center">
-        {order.status === "paid" || order.status === "delivered" ? (
-          <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
+        {confirmed ? (
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/10">
+            <PartyPopper className="h-7 w-7 text-success" />
+          </div>
+        ) : order.status === "pending" ? (
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-warning/10">
+            <Clock className="h-7 w-7 text-warning" />
+          </div>
         ) : null}
-        <h1 className="mt-2 text-xl font-black">Pedido {order.number}</h1>
-        <p className="mt-1 text-sm text-muted">
-          Feito em {formatDateTime(order.created_at)}
-        </p>
-        <div className="mt-3">
+
+        <h1 className="mt-3 text-xl font-black">{headline}</h1>
+        {subline && <p className="mx-auto mt-1 max-w-md text-sm text-muted">{subline}</p>}
+
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
+          <span className="font-semibold">Pedido {order.number}</span>
+          <span className="text-muted">·</span>
+          <span className="text-muted">{formatDateTime(order.created_at)}</span>
+        </div>
+        <div className="mt-2">
           <Badge tone={status.tone}>{status.label}</Badge>
         </div>
+
+        {confirmed && realEmail && (
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted">
+            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+            Enviamos a confirmação para {order.email}
+          </p>
+        )}
       </div>
 
       {pixQr && (
