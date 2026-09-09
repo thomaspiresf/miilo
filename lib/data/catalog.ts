@@ -16,7 +16,7 @@ const PRODUCT_SELECT = `
   *,
   category:categories!inner(id, slug, name, kind),
   images:product_images(*),
-  variants:product_variants(id, sku, size, color, color_hex, price, stock, weight_grams, active)
+  variants:product_variants(id, sku, size, color, color_hex, price, cost, stock, weight_grams, active)
 `;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -40,6 +40,7 @@ export function mapProduct(row: any): Product {
       color: v.color ?? null,
       color_hex: v.color_hex ?? null,
       price: Number(v.price),
+      cost: v.cost != null ? Number(v.cost) : null,
       stock: Number(v.stock ?? 0),
       weight_grams: Number(v.weight_grams ?? 300),
       active: v.active ?? true,

@@ -291,6 +291,7 @@ function buildProduct(input: SeedInput): Product {
     color: v.color ?? null,
     color_hex: v.colorHex ?? null,
     price: v.price,
+    cost: null,
     stock: v.stock,
     weight_grams: v.weight ?? 300,
     active: true,

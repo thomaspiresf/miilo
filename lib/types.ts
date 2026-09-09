@@ -38,9 +38,25 @@ export type ProductVariant = {
   color: string | null;
   color_hex: string | null;
   price: number;
+  /** custo de compra por unidade (null = não cadastrado). */
+  cost: number | null;
   stock: number;
   weight_grams: number;
   active: boolean;
+};
+
+export type FixedCost = { label: string; amount: number };
+
+export type PricingSettings = {
+  taxPercent: number;
+  mpCreditPercent: number;
+  mpPixPercent: number;
+  mpDebitPercent: number;
+  packagingCost: number;
+  freeShippingThreshold: number | null;
+  freeShippingStoreShare: number;
+  targetMarginPercent: number;
+  fixedCosts: FixedCost[];
 };
 
 export type Product = {

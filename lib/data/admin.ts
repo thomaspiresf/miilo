@@ -61,7 +61,7 @@ const ADMIN_PRODUCT_SELECT = `
   *,
   category:categories(id, slug, name, kind),
   images:product_images(*),
-  variants:product_variants(id, sku, size, color, color_hex, price, stock, weight_grams, active)
+  variants:product_variants(id, sku, size, color, color_hex, price, cost, stock, weight_grams, active)
 `;
 
 // --------------------------------------------------------------------------
@@ -192,6 +192,7 @@ function buildMockProduct(
       color: v.color,
       color_hex: v.colorHex,
       price: v.price,
+      cost: null,
       stock: v.stock,
       weight_grams: v.weightGrams,
       active: true,
