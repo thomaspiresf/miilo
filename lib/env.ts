@@ -42,12 +42,24 @@ export const env = {
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean),
+  /** Admin "master": além do painel, gerencia usuários e apaga pedidos. */
+  adminMasterEmails: (process.env.ADMIN_MASTER_EMAILS || "thomas.pires.f@gmail.com")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
 };
 
 /** O e-mail informado é de um administrador? */
 export function isAdminEmail(email: string | null | undefined) {
   if (!email) return false;
-  return env.adminEmails.includes(email.trim().toLowerCase());
+  const e = email.trim().toLowerCase();
+  return env.adminEmails.includes(e) || env.adminMasterEmails.includes(e);
+}
+
+/** O e-mail informado é de um admin master? */
+export function isMasterAdminEmail(email: string | null | undefined) {
+  if (!email) return false;
+  return env.adminMasterEmails.includes(email.trim().toLowerCase());
 }
 
 export const isProd = process.env.NODE_ENV === "production";

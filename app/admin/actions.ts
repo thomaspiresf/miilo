@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireMasterAdmin } from "@/lib/auth";
 import {
   adminCreateProduct,
   adminUpdateProduct,
@@ -17,7 +17,12 @@ import {
   adminDeleteCategory,
   adminSetProductVideo,
 } from "@/lib/data/admin";
-import { setOrderStatus } from "@/lib/data/orders";
+import {
+  adminDeleteOrder,
+  approveOrder,
+  getOrderById,
+  setOrderStatus,
+} from "@/lib/data/orders";
 import { parseMoney } from "@/lib/format";
 import type { CategoryKind, OrderStatus } from "@/lib/types";
 
@@ -214,12 +219,44 @@ export async function deleteCategoryAction(formData: FormData) {
   revalidatePath("/");
 }
 
+const ORDER_STATUSES: OrderStatus[] = [
+  "pending",
+  "paid",
+  "failed",
+  "cancelled",
+  "shipped",
+  "delivered",
+];
+
 export async function updateOrderStatusAction(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id"));
-  const status = String(formData.get("status")) as OrderStatus;
+  const raw = String(formData.get("status"));
+  const status = (ORDER_STATUSES.includes(raw as OrderStatus) ? raw : "pending") as OrderStatus;
   const trackingCode = String(formData.get("trackingCode") ?? "").trim() || null;
-  await setOrderStatus(id, status, { trackingCode });
+
+  const current = await getOrderById(id);
+  // marcar como "pago" manualmente baixa o estoque + envia confirmação (como o webhook)
+  if (status === "paid" && current && current.status !== "paid") {
+    await approveOrder(id, { mpStatus: "manual", method: current.payment_method ?? "manual" });
+    if (trackingCode) await setOrderStatus(id, "paid", { trackingCode });
+  } else {
+    await setOrderStatus(id, status, { trackingCode });
+  }
+
   revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/pedidos");
+  revalidatePath("/admin");
+}
+
+export async function deleteOrderAction(formData: FormData) {
+  await requireMasterAdmin();
+  try {
+    await adminDeleteOrder(String(formData.get("id")));
+  } catch (err) {
+    console.error("deleteOrder:", (err as Error).message);
+  }
+  revalidatePath("/admin/pedidos");
+  revalidatePath("/admin");
+  redirect("/admin/pedidos");
 }

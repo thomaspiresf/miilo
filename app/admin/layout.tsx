@@ -5,7 +5,8 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { Logo } from "@/components/site/logo";
 
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
-  await requireAdmin();
+  const user = await requireAdmin();
+  const master = user?.master ?? false;
   const demo = await isDemoMode();
   const bypass = isAdminBypass();
   // Supabase ligado para leitura mas sem a chave secret => escrita não persiste
@@ -47,11 +48,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
 
       <div className="mx-auto flex max-w-6xl gap-6 px-4 py-6 sm:px-6">
         <aside className="hidden w-48 shrink-0 md:block">
-          <AdminNav />
+          <AdminNav master={master} />
         </aside>
         <main className="min-w-0 flex-1">
           <div className="mb-4 md:hidden">
-            <AdminNav />
+            <AdminNav master={master} />
           </div>
           {children}
         </main>

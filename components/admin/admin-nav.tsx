@@ -14,11 +14,14 @@ const LINKS = [
   { href: "/admin/pedidos", label: "Pedidos" },
 ];
 
-export function AdminNav() {
+const MASTER_LINKS = [{ href: "/admin/usuarios", label: "Usuários" }];
+
+export function AdminNav({ master = false }: { master?: boolean }) {
   const pathname = usePathname();
+  const links = master ? [...LINKS, ...MASTER_LINKS] : LINKS;
   return (
     <nav className="flex gap-1 overflow-x-auto no-scrollbar md:flex-col">
-      {LINKS.map((l) => {
+      {links.map((l) => {
         const active =
           l.href === "/admin" ? pathname === "/admin" : pathname.startsWith(l.href);
         return (

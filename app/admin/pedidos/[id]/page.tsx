@@ -1,17 +1,28 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrderById } from "@/lib/data/orders";
+import { requireAdmin } from "@/lib/auth";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/order-status";
-import { updateOrderStatusAction } from "@/app/admin/actions";
+import { updateOrderStatusAction, deleteOrderAction } from "@/app/admin/actions";
 import { site } from "@/lib/site";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
+import { ConfirmSubmit } from "@/components/admin/confirm-submit";
+import type { OrderStatus } from "@/lib/types";
 
-const NEXT_STATUS = ["paid", "shipped", "delivered", "cancelled"] as const;
+const ALL_STATUS: OrderStatus[] = [
+  "pending",
+  "paid",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "failed",
+];
 
 export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[id]">) {
   const { id } = await props.params;
+  const user = await requireAdmin();
   const order = await getOrderById(id);
   if (!order) notFound();
 
@@ -122,7 +133,7 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
               defaultValue={order.status}
               className="h-11 w-full rounded-xl border border-border bg-surface px-3"
             >
-              {NEXT_STATUS.map((s) => (
+              {ALL_STATUS.map((s) => (
                 <option key={s} value={s}>
                   {ORDER_STATUS[s].label}
                 </option>
@@ -138,8 +149,32 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
             />
           </label>
         </div>
+        <p className="text-xs text-muted">
+          Marcar como “Pagamento aprovado” baixa o estoque e envia a confirmação
+          por e-mail (igual quando o pagamento cai sozinho).
+        </p>
         <Button type="submit">Salvar</Button>
       </form>
+
+      {user?.master && (
+        <form
+          action={deleteOrderAction}
+          className="rounded-2xl border border-danger/30 bg-danger/[0.03] p-5"
+        >
+          <h2 className="font-bold text-danger">Apagar pedido</h2>
+          <p className="mt-1 text-xs text-muted">
+            Some de vez do sistema. Se o estoque já tinha sido baixado, ele volta.
+            Use só pra pedidos de teste ou lixo.
+          </p>
+          <input type="hidden" name="id" value={order.id} />
+          <ConfirmSubmit
+            message={`Apagar o pedido ${order.number} para sempre? Não dá pra desfazer.`}
+            className="mt-3 rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-danger hover:bg-danger hover:text-white"
+          >
+            Apagar pedido
+          </ConfirmSubmit>
+        </form>
+      )}
     </div>
   );
 }

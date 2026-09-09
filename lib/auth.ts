@@ -1,7 +1,12 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { hasSupabase, adminBypassActive, isAdminEmail } from "@/lib/env";
+import {
+  hasSupabase,
+  adminBypassActive,
+  isAdminEmail,
+  isMasterAdminEmail,
+} from "@/lib/env";
 import type { User } from "@supabase/supabase-js";
 
 export type SessionUser = {
@@ -9,6 +14,8 @@ export type SessionUser = {
   email: string | null;
   name: string | null;
   role: "customer" | "admin";
+  /** admin master — gerencia usuários e apaga pedidos */
+  master: boolean;
 };
 
 const DEV_ADMIN: SessionUser = {
@@ -16,6 +23,7 @@ const DEV_ADMIN: SessionUser = {
   email: "admin@local",
   name: "Admin (dev)",
   role: "admin",
+  master: true,
 };
 
 function toSessionUser(user: User): SessionUser {
@@ -28,6 +36,7 @@ function toSessionUser(user: User): SessionUser {
       null,
     // quem é admin é definido pela lista ADMIN_EMAILS, não pelo banco
     role: isAdminEmail(user.email) ? "admin" : "customer",
+    master: isMasterAdminEmail(user.email),
   };
 }
 
@@ -61,6 +70,16 @@ export async function requireAdmin(nextPath = "/admin"): Promise<SessionUser | n
   // conta sem acesso ao painel → manda pro login comum, sem revelar o motivo
   // (não dá pistas de que existe um "modo admin" pra ficar testando contas)
   if (user.role !== "admin") redirect("/conta/login");
+  return user;
+}
+
+/**
+ * Acesso "master": gerenciar usuários, apagar pedidos. Lista `ADMIN_MASTER_EMAILS`.
+ * Um admin comum que tente acessar cai de volta no painel.
+ */
+export async function requireMasterAdmin(): Promise<SessionUser | null> {
+  const user = await requireAdmin();
+  if (user && !user.master) redirect("/admin");
   return user;
 }
 

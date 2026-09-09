@@ -479,6 +479,31 @@ export async function setOrderStatus(
   if (error) throw error;
 }
 
+/**
+ * Apaga um pedido de vez (só admin master). Se o estoque já tinha sido baixado,
+ * devolve antes (via o mesmo caminho do cancelamento). order_items somem junto
+ * (cascade); stock_movements e payment_events ficam com order_id nulo.
+ */
+export async function adminDeleteOrder(id: string): Promise<void> {
+  if (!hasSupabaseAdmin()) {
+    const db = mockDB();
+    const order = db.orders.find((o) => o.id === id);
+    if (!order) return;
+    if (["paid", "shipped", "delivered"].includes(order.status) && !order.stock_restored) {
+      for (const item of order.items) {
+        mockMoveStock(item.variant_id, item.qty, "cancellation", order.id);
+      }
+    }
+    db.orders = db.orders.filter((o) => o.id !== id);
+    return;
+  }
+  // devolve estoque se necessário (idempotente), depois apaga
+  await setOrderStatus(id, "cancelled");
+  const admin = createAdminClient();
+  const { error } = await admin.from("orders").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // --------------------------------------------------------------------------
 //  Idempotência de webhook
 // --------------------------------------------------------------------------
