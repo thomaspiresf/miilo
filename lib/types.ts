@@ -137,6 +137,18 @@ export type DeliveryMode = "delivery" | "pickup";
 /** Origem do pedido: loja online ou venda presencial (PDV). */
 export type OrderChannel = "online" | "pos";
 
+export type Coupon = {
+  id: string;
+  code: string;
+  percent_off: number;
+  min_subtotal: number | null;
+  max_uses: number | null;
+  uses_count: number;
+  expires_at: string | null;
+  active: boolean;
+  created_at: string;
+};
+
 export type Order = {
   id: string;
   number: string;
@@ -151,6 +163,9 @@ export type Order = {
   shipping_cost: number;
   shipping_service: string | null;
   total: number;
+  /** Desconto de cupom aplicado (em reais). 0 = sem cupom. */
+  discount: number;
+  coupon_code: string | null;
   address: {
     cep: string;
     street: string;

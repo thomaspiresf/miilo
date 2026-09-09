@@ -1,4 +1,4 @@
-import type { Category, Order, Product, StockMovement } from "@/lib/types";
+import type { Category, Coupon, Order, Product, StockMovement } from "@/lib/types";
 import { seedCategories, seedProducts } from "@/lib/data/seed";
 
 /**
@@ -11,6 +11,7 @@ type MockDB = {
   products: Product[];
   orders: Order[];
   movements: StockMovement[];
+  coupons: Coupon[];
 };
 
 const g = globalThis as unknown as { __miiloMock?: MockDB };
@@ -22,6 +23,7 @@ export function mockDB(): MockDB {
       products: structuredClone(seedProducts),
       orders: [],
       movements: [],
+      coupons: [],
     };
   }
   return g.__miiloMock;

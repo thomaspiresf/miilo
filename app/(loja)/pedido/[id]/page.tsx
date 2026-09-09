@@ -68,6 +68,12 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
             <span className="text-muted">Subtotal</span>
             <span>{formatBRL(order.subtotal)}</span>
           </div>
+          {order.discount > 0 && (
+            <div className="flex justify-between text-success">
+              <span>Desconto{order.coupon_code ? ` (${order.coupon_code})` : ""}</span>
+              <span>−{formatBRL(order.discount)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted">
               Frete {order.shipping_service ? `(${order.shipping_service})` : ""}

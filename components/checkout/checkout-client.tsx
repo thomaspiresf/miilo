@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Home, Store } from "lucide-react";
 import { useCart } from "@/lib/cart-store";
@@ -98,13 +98,21 @@ export function CheckoutClient({
   const [submitting, setSubmitting] = useState(false);
   const [pix, setPix] = useState<{ qr_code: string; qr_code_base64: string } | null>(null);
 
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percentOff: number } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+
   const locked = phase === "payment";
   const cepDigits = onlyDigits(form.cep);
   const phoneDigits = onlyDigits(form.phone);
   const canQuote = cepDigits.length === 8 && lines.length > 0;
 
   const shippingCost = mode === "pickup" ? 0 : (selectedShipping?.price ?? 0);
-  const total = subtotal + shippingCost;
+  const discount = appliedCoupon
+    ? Math.min(Math.round(subtotal * appliedCoupon.percentOff) / 100, Math.round(subtotal * 100) / 100)
+    : 0;
+  const total = Math.max(0, subtotal - discount + shippingCost);
 
   const contactOk = form.email && form.name.trim().length >= 3;
   const addressOk =
@@ -171,6 +179,41 @@ export function CheckoutClient({
     }
   }
 
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code || couponLoading) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    try {
+      const res = await fetch("/api/checkout/coupon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          lines: lines.map((l) => ({ variantId: l.variantId, qty: l.qty })),
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setAppliedCoupon({ code: data.code, percentOff: data.percentOff });
+        setCouponInput(data.code);
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(data.error || "Cupom inválido.");
+      }
+    } catch {
+      setCouponError("Não foi possível validar o cupom.");
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponError(null);
+  }
+
   async function goToPayment() {
     if (!readyForPayment) return;
     setSubmitting(true);
@@ -184,6 +227,7 @@ export function CheckoutClient({
           name: form.name.trim(),
           phone: phoneDigits || null,
           deliveryMode: mode,
+          couponCode: appliedCoupon?.code ?? null,
           address:
             mode === "delivery"
               ? {
@@ -208,7 +252,14 @@ export function CheckoutClient({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao criar pedido");
+      if (!res.ok) {
+        // cupom ficou inválido entre aplicar e finalizar — tira e deixa tentar de novo
+        if (typeof data.error === "string" && data.error.startsWith("Cupom:")) {
+          setAppliedCoupon(null);
+          setCouponError(data.error.replace(/^Cupom:\s*/, ""));
+        }
+        throw new Error(data.error || "Falha ao criar pedido");
+      }
       setOrder({ orderId: data.orderId, amount: data.amount });
       setPhase("payment");
     } catch (err) {
@@ -248,8 +299,7 @@ export function CheckoutClient({
     }
   }
 
-  const summary = useMemo(
-    () => (
+  const summary = (
       <div className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="font-black">Resumo</h2>
         <ul className="mt-3 space-y-3">
@@ -270,11 +320,59 @@ export function CheckoutClient({
             </li>
           ))}
         </ul>
+        {/* Cupom */}
+        <div className="mt-4 border-t border-border pt-4">
+          {appliedCoupon ? (
+            <div className="flex items-center justify-between rounded-xl bg-success/10 px-3 py-2 text-sm">
+              <span className="font-semibold text-success">
+                Cupom {appliedCoupon.code} · {appliedCoupon.percentOff}% OFF
+              </span>
+              <button
+                type="button"
+                onClick={removeCoupon}
+                disabled={locked}
+                className="text-xs font-semibold text-muted underline underline-offset-2 disabled:opacity-50"
+              >
+                remover
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                value={couponInput}
+                disabled={locked || couponLoading}
+                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyCoupon())}
+                placeholder="Cupom de desconto"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-sm uppercase outline-none focus:border-primary"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={applyCoupon}
+                disabled={locked || couponLoading || !couponInput.trim()}
+              >
+                {couponLoading ? <Spinner /> : "Aplicar"}
+              </Button>
+            </div>
+          )}
+          {couponError && (
+            <p className="mt-1.5 text-xs text-danger">{couponError}</p>
+          )}
+        </div>
+
         <div className="mt-4 space-y-1 border-t border-border pt-4 text-sm">
           <div className="flex justify-between">
             <span className="text-muted">Subtotal</span>
             <span>{formatBRL(subtotal)}</span>
           </div>
+          {discount > 0 && (
+            <div className="flex justify-between text-success">
+              <span>Desconto{appliedCoupon ? ` (${appliedCoupon.code})` : ""}</span>
+              <span>−{formatBRL(discount)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted">{mode === "pickup" ? "Retirada" : "Frete"}</span>
             <span>
@@ -293,8 +391,6 @@ export function CheckoutClient({
           </div>
         </div>
       </div>
-    ),
-    [lines, subtotal, selectedShipping, total, mode],
   );
 
   if (!mounted) return null;

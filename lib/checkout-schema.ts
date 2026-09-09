@@ -36,6 +36,13 @@ export const checkoutCreateSchema = z
       .nullable()
       .transform((v) => (v ? v : null)),
     deliveryMode: z.enum(["delivery", "pickup"]),
+    couponCode: z
+      .string()
+      .trim()
+      .max(40)
+      .optional()
+      .nullable()
+      .transform((v) => (v ? v : null)),
     address: shippingAddressSchema.nullable().optional(),
     shipping: z.object({
       company: z.string(),

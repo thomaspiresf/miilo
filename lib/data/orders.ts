@@ -5,6 +5,7 @@ import { hasSupabaseAdmin, hasSupabase } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
 import { imageUrl } from "@/lib/data/catalog";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { incrementCouponUse } from "@/lib/data/coupons";
 import type {
   DeliveryMode,
   Order,
@@ -26,6 +27,9 @@ export type NewOrderInput = {
   lines: NewOrderLine[];
   /** "pos" para vendas presenciais no /admin/pdv. Padrão: "online". */
   channel?: OrderChannel;
+  /** Desconto de cupom já validado no servidor (em reais). */
+  discount?: number;
+  couponCode?: string | null;
 };
 
 type ResolvedLine = {
@@ -43,6 +47,12 @@ type ResolvedLine = {
 // --------------------------------------------------------------------------
 //  Resolve preço/estoque/nome das variações a partir do banco (fonte da verdade)
 // --------------------------------------------------------------------------
+/** Subtotal (preços reais do banco) de um conjunto de linhas do carrinho. */
+export async function resolveSubtotal(lines: NewOrderLine[]): Promise<number> {
+  const resolved = await resolveLines(lines);
+  return round2(resolved.reduce((sum, l) => sum + l.unitPrice * l.qty, 0));
+}
+
 async function resolveLines(lines: NewOrderLine[]): Promise<ResolvedLine[]> {
   const ids = lines.map((l) => l.variantId);
 
@@ -110,7 +120,9 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
     resolved.reduce((sum, l) => sum + l.unitPrice * l.qty, 0),
   );
   const shippingCost = pickup ? 0 : round2(input.shipping.price);
-  const total = round2(subtotal + shippingCost);
+  const discount = Math.min(round2(Math.max(0, input.discount ?? 0)), subtotal);
+  const couponCode = discount > 0 ? (input.couponCode ?? null) : null;
+  const total = round2(subtotal - discount + shippingCost);
   const shippingService = pickup
     ? "Retirada na loja"
     : `${input.shipping.company} ${input.shipping.service}`.trim();
@@ -134,6 +146,8 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       shipping_cost: shippingCost,
       shipping_service: shippingService,
       total,
+      discount,
+      coupon_code: couponCode,
       address,
       mp_payment_id: null,
       mp_status: null,
@@ -169,14 +183,17 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
   };
   // Tenta com todas as colunas; se alguma migração ainda não foi aplicada,
   // vai removendo campos até o insert passar (channel -> trio do checkout).
+  const coupon = discount > 0 ? { discount, coupon_code: couponCode } : {};
+  const full = {
+    ...baseRow,
+    customer_name: input.name,
+    phone: input.phone,
+    delivery_mode: input.deliveryMode,
+    channel,
+  };
   const rowAttempts = [
-    {
-      ...baseRow,
-      customer_name: input.name,
-      phone: input.phone,
-      delivery_mode: input.deliveryMode,
-      channel,
-    },
+    { ...full, ...coupon },
+    full,
     {
       ...baseRow,
       customer_name: input.name,
@@ -227,6 +244,8 @@ function mapOrder(row: any, items: any[]): Order {
     shipping_cost: Number(row.shipping_cost),
     shipping_service: row.shipping_service ?? null,
     total: Number(row.total),
+    discount: Number(row.discount ?? 0),
+    coupon_code: row.coupon_code ?? null,
     address: row.address ?? null,
     mp_payment_id: row.mp_payment_id ?? null,
     mp_status: row.mp_status ?? null,
@@ -344,10 +363,18 @@ export async function approveOrder(
     for (const item of order.items) {
       mockMoveStock(item.variant_id, -item.qty, "sale", order.id);
     }
+    await incrementCouponUse(order.coupon_code);
     await sendOrderConfirmationEmail(order);
     return;
   }
   const admin = createAdminClient();
+  const { data: prev } = await admin
+    .from("orders")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle();
+  const wasPaid = prev?.status === "paid";
+
   const { error } = await admin.rpc("approve_order", {
     p_order_id: id,
     p_mp_payment_id: opts.mpPaymentId ?? null,
@@ -356,8 +383,13 @@ export async function approveOrder(
   });
   if (error) throw error;
 
+  if (wasPaid) return; // já estava pago — não conta cupom nem reenvia e-mail
+
   const fresh = await getOrderById(id);
-  if (fresh && fresh.status === "paid") await sendOrderConfirmationEmail(fresh);
+  if (fresh && fresh.status === "paid") {
+    await incrementCouponUse(fresh.coupon_code);
+    await sendOrderConfirmationEmail(fresh);
+  }
 }
 
 export async function setOrderStatus(
