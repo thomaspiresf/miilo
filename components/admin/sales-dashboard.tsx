@@ -103,7 +103,7 @@ function BarList({
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
             <div
-              className="h-full rounded-full bg-primary"
+              className="h-full rounded-full bg-accent"
               style={{ width: `${Math.max(2, (i.value / max) * 100)}%` }}
             />
           </div>
@@ -147,7 +147,7 @@ function RevenueChart({
           >
             <div
               className={cn(
-                "w-full rounded-t bg-primary/85 transition-colors group-hover:bg-primary",
+                "w-full rounded-t bg-accent/85 transition-colors group-hover:bg-accent",
                 b.value === 0 && "bg-black/[0.06]",
               )}
               style={{ height: `${b.value === 0 ? 2 : Math.max(4, (b.value / max) * 100)}%` }}
