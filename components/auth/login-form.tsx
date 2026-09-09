@@ -77,20 +77,27 @@ export function LoginForm({ next: rawNext, demo }: { next: string; demo: boolean
       }
 
       if (mode === "signup") {
-        // cria a conta no servidor (senha já ativa, sem e-mail de confirmação)
-        const res = await fetch("/api/auth/signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name: name || null }),
+        // cria a conta e manda o e-mail de confirmação (via Supabase Auth).
+        // Se o e-mail já tiver conta, o Supabase responde igual e NÃO revela
+        // isso (anti-enumeração) — a mensagem abaixo é sempre a mesma.
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: redirectTo,
+            data: name ? { full_name: name } : undefined,
+          },
         });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error || "Falha ao criar conta");
-
-        // já entra
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        router.push(next);
-        router.refresh();
+        // "User already registered" só aparece se a confirmação de e-mail
+        // estiver desligada no Supabase — tratamos como sucesso pra não
+        // revelar que a conta existe.
+        if (error && !/already\s*registered|already\s*exists/i.test(error.message)) {
+          throw error;
+        }
+        setMode("password");
+        setNotice(
+          `Se ${email} ainda não tiver conta, enviamos um link de confirmação. Abra o e-mail para ativar a conta e depois entre por aqui.`,
+        );
         return;
       }
 
