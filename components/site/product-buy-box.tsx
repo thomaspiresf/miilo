@@ -40,8 +40,11 @@ export function ProductBuyBox({
     return [...map.entries()].map(([name, hex]) => ({ name, hex }));
   }, [variants]);
 
-  const firstAvailable = variants.find((v) => v.stock > 0) ?? variants[0];
-  const [size, setSize] = useState<string | null>(firstAvailable?.size ?? null);
+  // tamanho inicial: preferindo um com estoque NA COR selecionada
+  const [size, setSize] = useState<string | null>(() => {
+    const pool = variants.filter((v) => colors.length === 0 || v.color === color);
+    return (pool.find((v) => v.stock > 0) ?? pool[0])?.size ?? null;
+  });
   const [added, setAdded] = useState(false);
 
   const selected = useMemo(

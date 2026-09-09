@@ -1,4 +1,5 @@
 import { listProducts } from "@/lib/data/catalog";
+import { explodeByColor } from "@/lib/product-cards";
 import { ProductGrid } from "@/components/site/product-card";
 import { HeroBanner } from "@/components/site/hero-banner";
 import { CategoryPills } from "@/components/site/category-pills";
@@ -6,6 +7,7 @@ import { EmptyState } from "@/components/ui/misc";
 
 export default async function HomePage() {
   const products = await listProducts(); // padrão: ordem alfabética
+  const items = explodeByColor(products); // um card por cor na vitrine
 
   return (
     <div className="space-y-6">
@@ -15,10 +17,10 @@ export default async function HomePage() {
         <CategoryPills active="tudo" />
       </div>
 
-      {products.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState title="Em breve" description="Estamos preparando a vitrine." />
       ) : (
-        <ProductGrid products={products} />
+        <ProductGrid items={items} />
       )}
 
       <section className="grid gap-3 rounded-2xl border border-border bg-surface p-5 text-sm sm:grid-cols-3">

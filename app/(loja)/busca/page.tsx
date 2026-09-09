@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getAvailableSizes, listProducts } from "@/lib/data/catalog";
 import { parseFilters } from "@/lib/data/parse-filters";
+import { explodeByColor } from "@/lib/product-cards";
 import { ProductGrid } from "@/components/site/product-card";
 import { Filters } from "@/components/site/filters";
 import { MobileFilters } from "@/components/site/mobile-filters";
@@ -18,6 +19,7 @@ export default async function SearchPage(props: PageProps<"/busca">) {
     listProducts(filters),
     getAvailableSizes(),
   ]);
+  const items = explodeByColor(products);
 
   return (
     <div>
@@ -28,7 +30,7 @@ export default async function SearchPage(props: PageProps<"/busca">) {
         </div>
         {q && (
           <p className="mt-2 text-sm text-muted">
-            {products.length} resultados para “{q}”
+            {items.length} resultados para “{q}”
           </p>
         )}
       </header>
@@ -44,13 +46,13 @@ export default async function SearchPage(props: PageProps<"/busca">) {
           </div>
         </aside>
         <div className="min-w-0 flex-1">
-          {products.length === 0 ? (
+          {items.length === 0 ? (
             <EmptyState
               title={q ? "Nenhum produto encontrado" : "O que você procura?"}
               description={q ? "Tente outras palavras." : "Digite acima para buscar."}
             />
           ) : (
-            <ProductGrid products={products} />
+            <ProductGrid items={items} />
           )}
         </div>
       </div>

@@ -5,6 +5,7 @@ import { getAllProductSlugs, getProductBySlug, listProducts } from "@/lib/data/c
 import { formatAgeRange } from "@/lib/format";
 import { ProductDetail } from "@/components/site/product-detail";
 import { getInstallmentsForPrices } from "@/lib/mp-installments";
+import { toCardItem } from "@/lib/product-cards";
 import { ProductGrid } from "@/components/site/product-card";
 import { Rating } from "@/components/site/rating";
 import { ExpandableText } from "@/components/site/expandable-text";
@@ -38,12 +39,22 @@ export async function generateMetadata(
 
 export default async function ProductPage(props: PageProps<"/p/[slug]">) {
   const { slug } = await props.params;
+  const sp = await props.searchParams;
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
+  // ?cor= vindo da vitrine → cor inicial (normaliza pro nome exato da variação)
+  const rawColor = typeof sp.cor === "string" ? sp.cor : null;
+  const initialColor = rawColor
+    ? (product.variants.find(
+        (v) => v.color && v.color.toLowerCase() === rawColor.toLowerCase(),
+      )?.color ?? null)
+    : null;
+
   const related = (await listProducts({ categorySlug: product.category.slug }))
     .filter((p) => p.id !== product.id)
-    .slice(0, 4);
+    .slice(0, 4)
+    .map(toCardItem);
 
   const age = formatAgeRange(product.age_min_months, product.age_max_months);
   const installments = await getInstallmentsForPrices([
@@ -62,6 +73,7 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
       <ProductDetail
         product={product}
         installments={installments}
+        initialColor={initialColor}
         info={
           <>
             {product.brand && (
@@ -135,7 +147,7 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
       {related.length > 0 && (
         <section>
           <h2 className="mb-4 text-xl font-black">Você também pode gostar</h2>
-          <ProductGrid products={related} />
+          <ProductGrid items={related} />
         </section>
       )}
     </div>

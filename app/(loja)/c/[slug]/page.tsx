@@ -6,6 +6,7 @@ import {
   listProducts,
 } from "@/lib/data/catalog";
 import { parseFilters } from "@/lib/data/parse-filters";
+import { explodeByColor } from "@/lib/product-cards";
 import { ProductGrid } from "@/components/site/product-card";
 import { CategoryPills, SubcategoryPills } from "@/components/site/category-pills";
 import { Filters } from "@/components/site/filters";
@@ -47,6 +48,7 @@ export default async function CategoryPage(props: PageProps<"/c/[slug]">) {
     getAvailableSizes(r.kind),
     getCategories(),
   ]);
+  const items = explodeByColor(products);
 
   return (
     <div>
@@ -63,7 +65,9 @@ export default async function CategoryPage(props: PageProps<"/c/[slug]">) {
 
       <header className="mb-4">
         <h1 className="text-2xl font-black">{r.title}</h1>
-        <p className="text-sm text-muted">{products.length} produtos</p>
+        <p className="text-sm text-muted">
+          {items.length} {items.length === 1 ? "item" : "itens"}
+        </p>
       </header>
 
       <div className="mb-4 lg:hidden">
@@ -78,13 +82,13 @@ export default async function CategoryPage(props: PageProps<"/c/[slug]">) {
         </aside>
 
         <div className="min-w-0 flex-1">
-          {products.length === 0 ? (
+          {items.length === 0 ? (
             <EmptyState
               title="Nada por aqui com esses filtros"
               description="Tente remover alguns filtros."
             />
           ) : (
-            <ProductGrid products={products} />
+            <ProductGrid items={items} />
           )}
         </div>
       </div>
