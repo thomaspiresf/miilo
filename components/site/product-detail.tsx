@@ -26,7 +26,7 @@ export function ProductDetail({
   const galleryKey = gallery.map((im) => im.id).join(",");
 
   return (
-    <div className="grid gap-8 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <ProductGallery
         key={galleryKey}
         images={gallery}
