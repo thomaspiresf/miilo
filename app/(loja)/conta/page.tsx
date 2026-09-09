@@ -10,8 +10,7 @@ import { EmptyState } from "@/components/ui/misc";
 
 export const metadata: Metadata = { title: "Minha conta" };
 
-export default async function AccountPage(props: PageProps<"/conta">) {
-  const sp = await props.searchParams;
+export default async function AccountPage() {
   const demo = await isDemoMode();
   const user = await getUser();
 
@@ -30,12 +29,6 @@ export default async function AccountPage(props: PageProps<"/conta">) {
         </div>
         {user && <SignOutButton />}
       </div>
-
-      {sp.erro === "sem-acesso" && (
-        <p className="rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
-          Esta conta não tem acesso ao painel administrativo.
-        </p>
-      )}
 
       {demo && (
         <p className="rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">

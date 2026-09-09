@@ -11,7 +11,8 @@ export default async function LoginPage(props: PageProps<"/conta/login">) {
   const next = typeof sp.next === "string" ? sp.next : "/conta";
 
   const user = await getUser();
-  if (user) redirect(next);
+  // já logado → segue direto (mesmo que não seja admin: cai no /conta, sem aviso)
+  if (user) redirect(next === "/admin" ? "/conta" : next);
   const demo = await isDemoMode();
 
   return (

@@ -30,6 +30,49 @@ export async function createStockAlert(input: {
   if (error && (error as any).code !== "23505") throw error;
 }
 
+function memId(a: { productId: string; variantId: string | null; email: string }) {
+  return `${a.productId}:${a.variantId ?? ""}:${a.email}`;
+}
+
+export type PendingAlert = { id: string; email: string; variantId: string | null };
+
+/** Inscrições pendentes de um produto (para notificar quando o estoque voltar). */
+export async function listPendingAlertsForProduct(productId: string): Promise<PendingAlert[]> {
+  if (!hasSupabaseAdmin()) {
+    return mem
+      .filter((a) => a.productId === productId)
+      .map((a) => ({ id: memId(a), email: a.email, variantId: a.variantId }));
+  }
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("stock_alerts")
+    .select("id, email, variant_id")
+    .eq("product_id", productId)
+    .is("notified_at", null);
+  return (data ?? []).map((r: any) => ({
+    id: r.id as string,
+    email: r.email as string,
+    variantId: (r.variant_id as string | null) ?? null,
+  }));
+}
+
+/** Marca inscrições como avisadas (some da lista de espera). */
+export async function markAlertsNotified(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  if (!hasSupabaseAdmin()) {
+    for (const id of ids) {
+      const i = mem.findIndex((a) => memId(a) === id);
+      if (i >= 0) mem.splice(i, 1);
+    }
+    return;
+  }
+  const admin = createAdminClient();
+  await admin
+    .from("stock_alerts")
+    .update({ notified_at: new Date().toISOString() })
+    .in("id", ids);
+}
+
 export type StockAlertRow = {
   email: string;
   variantLabel: string | null;

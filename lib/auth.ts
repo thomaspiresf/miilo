@@ -58,7 +58,9 @@ export async function requireAdmin(nextPath = "/admin"): Promise<SessionUser | n
   if (!hasSupabase()) return null; // modo demonstração (sem Supabase)
   const user = await getUser();
   if (!user) redirect(`/conta/login?next=${encodeURIComponent(nextPath)}`);
-  if (user.role !== "admin") redirect("/conta?erro=sem-acesso");
+  // conta sem acesso ao painel → manda pro login comum, sem revelar o motivo
+  // (não dá pistas de que existe um "modo admin" pra ficar testando contas)
+  if (user.role !== "admin") redirect("/conta/login");
   return user;
 }
 

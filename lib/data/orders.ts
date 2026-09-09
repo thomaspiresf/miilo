@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseAdmin, hasSupabase } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
 import { imageUrl } from "@/lib/data/catalog";
+import { sendOrderConfirmationEmail } from "@/lib/email";
 import type {
   DeliveryMode,
   Order,
@@ -343,6 +344,7 @@ export async function approveOrder(
     for (const item of order.items) {
       mockMoveStock(item.variant_id, -item.qty, "sale", order.id);
     }
+    await sendOrderConfirmationEmail(order);
     return;
   }
   const admin = createAdminClient();
@@ -353,6 +355,9 @@ export async function approveOrder(
     p_method: opts.method ?? null,
   });
   if (error) throw error;
+
+  const fresh = await getOrderById(id);
+  if (fresh && fresh.status === "paid") await sendOrderConfirmationEmail(fresh);
 }
 
 export async function setOrderStatus(

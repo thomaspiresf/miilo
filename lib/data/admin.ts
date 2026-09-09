@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabase, hasSupabaseAdmin } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
 import { mapProduct, listProducts, getCategories } from "@/lib/data/catalog";
+import { notifyRestockForProduct } from "@/lib/data/restock-notify";
 import { slugify } from "@/lib/utils";
 import type {
   Category,
@@ -243,6 +244,7 @@ export async function adminUpdateProduct(
     rebuilt.rating_count = p.rating_count;
     rebuilt.video_url = p.video_url;
     Object.assign(p, rebuilt);
+    await notifyRestockForProduct(id);
     return;
   }
 
@@ -267,6 +269,8 @@ export async function adminUpdateProduct(
       await admin.from("product_variants").insert({ product_id: id, ...variantRow(v) });
     }
   }
+
+  await notifyRestockForProduct(id);
 }
 
 export async function adminSetProductActive(id: string, active: boolean): Promise<void> {
@@ -601,12 +605,16 @@ export async function adminSetVariantStock(
 ): Promise<number> {
   assertPersistable();
   const stock = Math.max(0, Math.round(newStock));
+  let productId: string | null = null;
+  let wasOutOfStock = false;
 
   if (!hasSupabaseAdmin()) {
     const db = mockDB();
     for (const p of db.products) {
       const v = p.variants.find((x) => x.id === variantId);
       if (v) {
+        productId = p.id;
+        wasOutOfStock = v.stock <= 0;
         const delta = stock - v.stock;
         v.stock = stock;
         p.in_stock = p.variants.some((x) => x.stock > 0);
@@ -624,15 +632,28 @@ export async function adminSetVariantStock(
         });
       }
     }
+    if (productId && wasOutOfStock && stock > 0) {
+      await notifyRestockForProduct(productId);
+    }
     return stock;
   }
 
   const admin = createAdminClient();
+  // descobre o produto e o estoque atual antes de escrever
+  const { data: cur } = await admin
+    .from("product_variants")
+    .select("product_id, stock")
+    .eq("id", variantId)
+    .maybeSingle();
+  productId = (cur as { product_id?: string } | null)?.product_id ?? null;
+  wasOutOfStock = Number((cur as { stock?: number } | null)?.stock ?? 0) <= 0;
+
   const { data, error } = await admin.rpc("adjust_variant_stock", {
     p_variant_id: variantId,
     p_new_stock: stock,
     p_note: note ?? null,
   });
+  let result = stock;
   if (error) {
     // fallback se a migração de estoque ainda não foi aplicada
     const { error: upErr } = await admin
@@ -640,9 +661,14 @@ export async function adminSetVariantStock(
       .update({ stock })
       .eq("id", variantId);
     if (upErr) throw upErr;
-    return stock;
+  } else {
+    result = Number(data);
   }
-  return Number(data);
+
+  if (productId && wasOutOfStock && stock > 0) {
+    await notifyRestockForProduct(productId);
+  }
+  return result;
 }
 
 /** Últimas movimentações de estoque, com nome do produto. */
