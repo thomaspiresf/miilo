@@ -1,8 +1,12 @@
 import { z } from "zod";
 
-/** Normaliza o código do cupom: sem espaços, maiúsculas. */
+/** Normaliza o código do cupom: sem espaços, maiúsculas, sem curingas de LIKE. */
 export function normalizeCode(raw: string) {
-  return raw.trim().toUpperCase().replace(/\s+/g, "");
+  return raw
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/[%_]/g, "");
 }
 
 const emptyToNull = (v: unknown) => {

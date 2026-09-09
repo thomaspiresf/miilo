@@ -96,7 +96,7 @@ async function findCoupon(code: string): Promise<Coupon | null> {
   const { data, error } = await admin
     .from("coupons")
     .select("*")
-    .ilike("code", code)
+    .eq("code", code)
     .maybeSingle();
   if (error) {
     if (MISSING_TABLE.test(error.message)) return null; // migração ainda não rodou
@@ -122,7 +122,7 @@ export async function incrementCouponUse(code: string | null | undefined) {
       const { data } = await admin
         .from("coupons")
         .select("id, uses_count")
-        .ilike("code", norm)
+        .eq("code", norm)
         .maybeSingle();
       if (data) {
         await admin

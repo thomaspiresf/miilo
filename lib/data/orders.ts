@@ -32,7 +32,7 @@ export type NewOrderInput = {
   couponCode?: string | null;
 };
 
-type ResolvedLine = {
+export type ResolvedLine = {
   variantId: string;
   productName: string;
   variantLabel: string | null;
@@ -40,6 +40,7 @@ type ResolvedLine = {
   qty: number;
   imageUrl: string | null;
   stock: number;
+  weightGrams: number;
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -53,7 +54,7 @@ export async function resolveSubtotal(lines: NewOrderLine[]): Promise<number> {
   return round2(resolved.reduce((sum, l) => sum + l.unitPrice * l.qty, 0));
 }
 
-async function resolveLines(lines: NewOrderLine[]): Promise<ResolvedLine[]> {
+export async function resolveLines(lines: NewOrderLine[]): Promise<ResolvedLine[]> {
   const ids = lines.map((l) => l.variantId);
 
   if (!hasSupabase()) {
@@ -71,6 +72,7 @@ async function resolveLines(lines: NewOrderLine[]): Promise<ResolvedLine[]> {
         qty: l.qty,
         imageUrl: product.images[0]?.url ?? null,
         stock: variant.stock,
+        weightGrams: variant.weight_grams || 300,
       };
     });
   }
@@ -79,7 +81,7 @@ async function resolveLines(lines: NewOrderLine[]): Promise<ResolvedLine[]> {
   const { data, error } = await supabase
     .from("product_variants")
     .select(
-      "id, size, color, price, stock, active, product:products(name, images:product_images(storage_path, sort))",
+      "id, size, color, price, stock, active, weight_grams, product:products(name, images:product_images(storage_path, sort))",
     )
     .in("id", ids);
   if (error) throw error;
@@ -98,6 +100,7 @@ async function resolveLines(lines: NewOrderLine[]): Promise<ResolvedLine[]> {
       qty: l.qty,
       imageUrl: firstImage ? imageUrl(firstImage.storage_path) : null,
       stock: Number(v.stock ?? 0),
+      weightGrams: Number(v.weight_grams) || 300,
     };
   });
 }

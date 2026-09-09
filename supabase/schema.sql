@@ -49,12 +49,13 @@ create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
 -- helper: o usuário atual é admin?
+-- NEUTRALIZADA de propósito (ver supabase/migration-security.sql): o app decide
+-- admin pela lista ADMIN_EMAILS (env) e toda escrita sensível usa a service_role
+-- (que ignora RLS). Confiar em profiles.role aqui permitia um cliente se
+-- auto-promover a admin e ler todos os pedidos pela chave anon.
 create or replace function public.is_admin()
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'admin'
-  );
+returns boolean language sql immutable as $$
+  select false;
 $$;
 
 -- =====================================================================
@@ -351,7 +352,12 @@ create policy "profile self read" on public.profiles
   for select to authenticated using (id = auth.uid() or public.is_admin());
 drop policy if exists "profile self update" on public.profiles;
 create policy "profile self update" on public.profiles
-  for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+  for update to authenticated
+  using (id = auth.uid())
+  with check (
+    id = auth.uid()
+    and role = (select p.role from public.profiles p where p.id = auth.uid())
+  );
 
 -- catálogo: leitura pública; escrita só admin
 drop policy if exists "categories read" on public.categories;
