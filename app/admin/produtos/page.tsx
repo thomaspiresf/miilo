@@ -1,10 +1,6 @@
 import Link from "next/link";
-import Image from "next/image";
 import { adminListProducts } from "@/lib/data/admin";
-import { formatBRL } from "@/lib/format";
-import { toggleProductActiveAction, deleteProductAction } from "@/app/admin/actions";
-import { ConfirmSubmit } from "@/components/admin/confirm-submit";
-import { Badge } from "@/components/ui/misc";
+import { AdminProductList } from "@/components/admin/admin-product-list";
 import { Button } from "@/components/ui/button";
 
 export default async function AdminProductsPage() {
@@ -19,51 +15,7 @@ export default async function AdminProductsPage() {
         </Button>
       </div>
 
-      <div className="divide-y divide-border rounded-2xl border border-border bg-surface">
-        {products.map((p) => {
-          const stock = p.variants.reduce((s, v) => s + v.stock, 0);
-          return (
-            <div key={p.id} className="flex items-center gap-3 p-3">
-              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-black/5">
-                {p.images[0]?.url && (
-                  <Image src={p.images[0].url} alt="" fill sizes="56px" className="object-cover" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <Link href={`/admin/produtos/${p.id}`} className="font-semibold hover:text-primary">
-                  {p.name}
-                </Link>
-                <p className="text-xs text-muted">
-                  {p.category.name} · {p.variants.length} variações · {stock} em estoque
-                </p>
-              </div>
-              <span className="hidden text-sm font-bold sm:block">
-                {formatBRL(p.price_from)}
-              </span>
-              {!p.active && <Badge tone="danger">inativo</Badge>}
-              <form action={toggleProductActiveAction}>
-                <input type="hidden" name="id" value={p.id} />
-                <input type="hidden" name="active" value={p.active ? "false" : "true"} />
-                <button className="text-xs font-semibold text-primary">
-                  {p.active ? "desativar" : "ativar"}
-                </button>
-              </form>
-              <form action={deleteProductAction}>
-                <input type="hidden" name="id" value={p.id} />
-                <ConfirmSubmit
-                  message={`Apagar "${p.name}" de vez? Isso não pode ser desfeito. (O histórico de pedidos é mantido.)`}
-                  className="text-xs font-semibold text-danger hover:underline"
-                >
-                  apagar
-                </ConfirmSubmit>
-              </form>
-            </div>
-          );
-        })}
-        {products.length === 0 && (
-          <p className="p-6 text-center text-sm text-muted">Nenhum produto cadastrado.</p>
-        )}
-      </div>
+      <AdminProductList products={products} />
     </div>
   );
 }
