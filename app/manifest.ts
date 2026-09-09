@@ -11,7 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#fbfbfd",
     theme_color: "#ff514f",
     icons: [
-      { src: "/logo/2x/icon_positivo@2x.png", sizes: "410x345", type: "image/png" },
+      { src: "/logo/miilo-icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/logo/miilo-icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }
