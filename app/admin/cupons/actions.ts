@@ -7,7 +7,9 @@ import {
   adminCreateCoupon,
   adminDeleteCoupon,
   adminSetCouponActive,
+  listCoupons,
 } from "@/lib/data/coupons";
+import { logAction } from "@/lib/data/audit";
 
 export async function createCouponAction(_prev: unknown, formData: FormData) {
   await requireAdmin();
@@ -26,6 +28,11 @@ export async function createCouponAction(_prev: unknown, formData: FormData) {
 
   try {
     await adminCreateCoupon(parsed.data);
+    await logAction({
+      action: "coupon.create",
+      entity: "coupon",
+      summary: `Criou o cupom ${parsed.data.code} (${parsed.data.percentOff}% off)`,
+    });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Falha ao criar o cupom" };
   }
@@ -33,13 +40,22 @@ export async function createCouponAction(_prev: unknown, formData: FormData) {
   return { ok: true };
 }
 
+async function couponCode(id: string) {
+  return (await listCoupons()).find((c) => c.id === id)?.code ?? id;
+}
+
 export async function toggleCouponAction(formData: FormData) {
   await requireAdmin();
+  const id = String(formData.get("id"));
+  const active = formData.get("active") === "true";
   try {
-    await adminSetCouponActive(
-      String(formData.get("id")),
-      formData.get("active") === "true",
-    );
+    await adminSetCouponActive(id, active);
+    await logAction({
+      action: "coupon.active",
+      entity: "coupon",
+      entityId: id,
+      summary: `${active ? "Ativou" : "Desativou"} o cupom ${await couponCode(id)}`,
+    });
   } catch (err) {
     console.error("toggleCoupon:", (err as Error).message);
   }
@@ -48,8 +64,16 @@ export async function toggleCouponAction(formData: FormData) {
 
 export async function deleteCouponAction(formData: FormData) {
   await requireAdmin();
+  const id = String(formData.get("id"));
+  const code = await couponCode(id);
   try {
-    await adminDeleteCoupon(String(formData.get("id")));
+    await adminDeleteCoupon(id);
+    await logAction({
+      action: "coupon.delete",
+      entity: "coupon",
+      entityId: id,
+      summary: `Apagou o cupom ${code}`,
+    });
   } catch (err) {
     console.error("deleteCoupon:", (err as Error).message);
   }

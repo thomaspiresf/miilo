@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireMasterAdmin } from "@/lib/auth";
-import { adminCreateUser, adminDeleteUser } from "@/lib/data/users";
+import { adminCreateUser, adminDeleteUser, listUsers } from "@/lib/data/users";
+import { logAction } from "@/lib/data/audit";
 
 const createSchema = z.object({
   email: z.string().email("E-mail inválido"),
@@ -27,6 +28,11 @@ export async function createUserAction(_prev: unknown, formData: FormData) {
       password: parsed.data.password,
       name: parsed.data.name ?? null,
     });
+    await logAction({
+      action: "user.create",
+      entity: "user",
+      summary: `Criou a conta ${parsed.data.email}`,
+    });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Falha ao criar a conta" };
   }
@@ -41,8 +47,15 @@ export async function deleteUserAction(formData: FormData) {
     // não deixa apagar a própria conta
     return;
   }
+  const email = (await listUsers()).find((u) => u.id === id)?.email ?? id;
   try {
     await adminDeleteUser(id);
+    await logAction({
+      action: "user.delete",
+      entity: "user",
+      entityId: id,
+      summary: `Apagou a conta ${email}`,
+    });
   } catch (err) {
     console.error("deleteUser:", (err as Error).message);
   }

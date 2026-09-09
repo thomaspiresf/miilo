@@ -51,6 +51,14 @@ export async function getUser(): Promise<SessionUser | null> {
   return toSessionUser(user);
 }
 
+/** Quem está executando a ação agora (pro log de atividade). */
+export async function currentActor(): Promise<{ email: string; name: string | null }> {
+  if (adminBypassActive())
+    return { email: DEV_ADMIN.email ?? "admin@local", name: DEV_ADMIN.name };
+  const u = await getUser();
+  return { email: u?.email ?? "sistema", name: u?.name ?? null };
+}
+
 export async function requireUser(nextPath = "/conta"): Promise<SessionUser> {
   const user = await getUser();
   if (!user) redirect(`/conta/login?next=${encodeURIComponent(nextPath)}`);

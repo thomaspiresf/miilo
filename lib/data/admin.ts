@@ -4,6 +4,7 @@ import { hasSupabase, hasSupabaseAdmin } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
 import { mapProduct, listProducts, getCategories, imageUrl } from "@/lib/data/catalog";
 import { notifyRestockForProduct } from "@/lib/data/restock-notify";
+import { logAction } from "@/lib/data/audit";
 import { imagesForColor } from "@/lib/product-cards";
 import { slugify } from "@/lib/utils";
 import type {
@@ -654,11 +655,13 @@ export async function adminSetVariantStock(
   // descobre o produto e o estoque atual antes de escrever
   const { data: cur } = await admin
     .from("product_variants")
-    .select("product_id, stock")
+    .select("product_id, stock, size, color, product:products(name)")
     .eq("id", variantId)
     .maybeSingle();
-  productId = (cur as { product_id?: string } | null)?.product_id ?? null;
-  wasOutOfStock = Number((cur as { stock?: number } | null)?.stock ?? 0) <= 0;
+  const curAny = cur as any;
+  productId = curAny?.product_id ?? null;
+  const oldStock = Number(curAny?.stock ?? 0);
+  wasOutOfStock = oldStock <= 0;
 
   const { data, error } = await admin.rpc("adjust_variant_stock", {
     p_variant_id: variantId,
@@ -675,6 +678,19 @@ export async function adminSetVariantStock(
     if (upErr) throw upErr;
   } else {
     result = Number(data);
+  }
+
+  if (result !== oldStock) {
+    const lbl = variantLabel(curAny?.size ?? null, curAny?.color ?? null);
+    await logAction({
+      action: "stock.adjust",
+      entity: "variant",
+      entityId: variantId,
+      summary: `Ajustou o estoque de "${curAny?.product?.name ?? "produto"}${
+        lbl ? ` · ${lbl}` : ""
+      }" de ${oldStock} para ${result}`,
+      meta: { from: oldStock, to: result, note: note ?? null },
+    });
   }
 
   if (productId && wasOutOfStock && stock > 0) {

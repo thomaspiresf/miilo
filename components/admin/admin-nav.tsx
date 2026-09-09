@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/admin/categorias", label: "Categorias" },
   { href: "/admin/cupons", label: "Cupons" },
   { href: "/admin/pedidos", label: "Pedidos" },
+  { href: "/admin/atividade", label: "Atividade" },
 ];
 
 const MASTER_LINKS = [{ href: "/admin/usuarios", label: "Usuários" }];

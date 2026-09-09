@@ -9,6 +9,8 @@ import {
   getOrderById,
   adminDeleteOrder,
 } from "@/lib/data/orders";
+import { logAction } from "@/lib/data/audit";
+import { formatBRL } from "@/lib/format";
 import { site } from "@/lib/site";
 
 /** E-mail usado quando a venda na loja é anônima (o MP exige um e-mail no pagador). */
@@ -52,6 +54,15 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
       await approveOrder(order.id, { mpStatus: "manual", method: "dinheiro" });
     }
 
+    await logAction({
+      action: "pos.sale",
+      entity: "order",
+      entityId: order.id,
+      summary: `Venda na loja ${order.number} — ${formatBRL(order.total)} ${
+        payMode === "cash" ? "(dinheiro/maquininha, pago)" : "(link de pagamento)"
+      }`,
+    });
+
     revalidatePath("/admin/pdv");
     revalidatePath("/admin/pedidos");
     revalidatePath("/admin");
@@ -81,6 +92,12 @@ export async function discardPosOrder(orderId: string): Promise<{ ok: boolean }>
     return { ok: false };
   }
   await adminDeleteOrder(orderId);
+  await logAction({
+    action: "pos.discard",
+    entity: "order",
+    entityId: orderId,
+    summary: `Descartou a venda na loja ${order.number} (não paga)`,
+  });
   revalidatePath("/admin/pdv");
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin");

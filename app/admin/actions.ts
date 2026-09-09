@@ -9,6 +9,7 @@ import {
   adminUpdateProduct,
   adminSetProductActive,
   adminDeleteProduct,
+  adminGetProduct,
   adminAddImageUrl,
   adminSetImageColor,
   adminReorderImages,
@@ -24,6 +25,8 @@ import {
   setOrderStatus,
 } from "@/lib/data/orders";
 import { reconcileOrderPayment } from "@/lib/mp-reconcile";
+import { logAction } from "@/lib/data/audit";
+import { ORDER_STATUS } from "@/lib/order-status";
 import { parseMoney } from "@/lib/format";
 import type { CategoryKind, OrderStatus } from "@/lib/types";
 
@@ -97,8 +100,20 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
   try {
     if (id && id !== "novo") {
       await adminUpdateProduct(id, product, variants);
+      await logAction({
+        action: "product.update",
+        entity: "product",
+        entityId: id,
+        summary: `Editou o produto "${product.name}"`,
+      });
     } else {
       newId = await adminCreateProduct(product, variants);
+      await logAction({
+        action: "product.create",
+        entity: "product",
+        entityId: newId,
+        summary: `Criou o produto "${product.name}"`,
+      });
     }
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Falha ao salvar" };
@@ -112,12 +127,19 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
 
 export async function deleteProductAction(id: string): Promise<{ error?: string }> {
   await requireAdmin();
+  const before = await adminGetProduct(id);
   try {
     await adminDeleteProduct(id);
   } catch (err) {
     console.error("deleteProduct:", (err as Error).message);
     return { error: "Não foi possível apagar o produto." };
   }
+  await logAction({
+    action: "product.delete",
+    entity: "product",
+    entityId: id,
+    summary: `Apagou o produto "${before?.name ?? id}"`,
+  });
   revalidatePath("/admin/produtos");
   revalidatePath("/admin");
   revalidatePath("/");
@@ -129,33 +151,59 @@ export async function toggleProductActiveAction(
   active: boolean,
 ): Promise<{ error?: string }> {
   await requireAdmin();
+  const before = await adminGetProduct(id);
   try {
     await adminSetProductActive(id, active);
   } catch (err) {
     console.error("toggleProductActive:", (err as Error).message);
     return { error: "Não foi possível mudar o status." };
   }
+  await logAction({
+    action: "product.active",
+    entity: "product",
+    entityId: id,
+    summary: `${active ? "Ativou" : "Desativou"} o produto "${before?.name ?? id}"`,
+  });
   revalidatePath("/admin/produtos");
   revalidatePath("/");
   return {};
 }
 
+async function productName(id: string) {
+  return (await adminGetProduct(id))?.name ?? id;
+}
+
 export async function addImageUrlAction(formData: FormData) {
   await requireAdmin();
+  const productId = String(formData.get("productId"));
   const url = String(formData.get("url") ?? "").trim();
   const color = String(formData.get("color") ?? "").trim() || null;
   try {
-    if (url) await adminAddImageUrl(String(formData.get("productId")), url, color);
+    if (url) {
+      await adminAddImageUrl(productId, url, color);
+      await logAction({
+        action: "product.image.add",
+        entity: "product",
+        entityId: productId,
+        summary: `Adicionou uma foto ao produto "${await productName(productId)}"`,
+      });
+    }
   } catch (err) {
     console.error("addImageUrl:", (err as Error).message);
   }
-  revalidatePath(`/admin/produtos/${formData.get("productId")}`);
+  revalidatePath(`/admin/produtos/${productId}`);
 }
 
 export async function reorderImagesAction(productId: string, ids: string[]) {
   await requireAdmin();
   try {
     await adminReorderImages(productId, ids);
+    await logAction({
+      action: "product.image.reorder",
+      entity: "product",
+      entityId: productId,
+      summary: `Reordenou as fotos do produto "${await productName(productId)}"`,
+    });
   } catch (err) {
     console.error("reorderImages:", (err as Error).message);
   }
@@ -169,6 +217,12 @@ export async function setProductVideoAction(formData: FormData) {
   const value = String(formData.get("value") ?? "").trim() || null;
   try {
     await adminSetProductVideo(productId, value);
+    await logAction({
+      action: "product.video",
+      entity: "product",
+      entityId: productId,
+      summary: `${value ? "Definiu" : "Removeu"} o vídeo do produto "${await productName(productId)}"`,
+    });
   } catch (err) {
     console.error("setProductVideo:", (err as Error).message);
   }
@@ -178,23 +232,37 @@ export async function setProductVideoAction(formData: FormData) {
 
 export async function setImageColorAction(formData: FormData) {
   await requireAdmin();
+  const productId = String(formData.get("productId"));
   const color = String(formData.get("color") ?? "").trim() || null;
   try {
     await adminSetImageColor(String(formData.get("imageId")), color);
+    await logAction({
+      action: "product.image.color",
+      entity: "product",
+      entityId: productId,
+      summary: `Atribuiu uma foto à cor ${color ?? "(todas)"} — "${await productName(productId)}"`,
+    });
   } catch (err) {
     console.error("setImageColor:", (err as Error).message);
   }
-  revalidatePath(`/admin/produtos/${formData.get("productId")}`);
+  revalidatePath(`/admin/produtos/${productId}`);
 }
 
 export async function deleteImageAction(formData: FormData) {
   await requireAdmin();
+  const productId = String(formData.get("productId"));
   try {
     await adminDeleteImage(String(formData.get("imageId")));
+    await logAction({
+      action: "product.image.delete",
+      entity: "product",
+      entityId: productId,
+      summary: `Removeu uma foto do produto "${await productName(productId)}"`,
+    });
   } catch (err) {
     console.error("deleteImage:", (err as Error).message);
   }
-  revalidatePath(`/admin/produtos/${formData.get("productId")}`);
+  revalidatePath(`/admin/produtos/${productId}`);
 }
 
 export async function createCategoryAction(_prev: unknown, formData: FormData) {
@@ -206,6 +274,11 @@ export async function createCategoryAction(_prev: unknown, formData: FormData) {
   if (name.length < 2) return { error: "Nome muito curto" };
   try {
     await adminCreateCategory(name, kind);
+    await logAction({
+      action: "category.create",
+      entity: "category",
+      summary: `Criou a categoria "${name}" (${kind})`,
+    });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Falha ao criar" };
   }
@@ -216,8 +289,15 @@ export async function createCategoryAction(_prev: unknown, formData: FormData) {
 
 export async function deleteCategoryAction(formData: FormData) {
   await requireAdmin();
+  const id = String(formData.get("id"));
   try {
-    await adminDeleteCategory(String(formData.get("id")));
+    await adminDeleteCategory(id);
+    await logAction({
+      action: "category.delete",
+      entity: "category",
+      entityId: id,
+      summary: `Apagou uma categoria`,
+    });
   } catch (err) {
     console.error("deleteCategory:", (err as Error).message);
   }
@@ -250,6 +330,25 @@ export async function updateOrderStatusAction(formData: FormData) {
     await setOrderStatus(id, status, { trackingCode });
   }
 
+  if (current && current.status !== status) {
+    await logAction({
+      action: "order.status",
+      entity: "order",
+      entityId: id,
+      summary: `Mudou o pedido ${current.number} para "${ORDER_STATUS[status].label}"${
+        trackingCode ? ` (rastreio ${trackingCode})` : ""
+      }`,
+      meta: { from: current.status, to: status },
+    });
+  } else if (trackingCode) {
+    await logAction({
+      action: "order.tracking",
+      entity: "order",
+      entityId: id,
+      summary: `Adicionou o rastreio ${trackingCode} ao pedido ${current?.number ?? id}`,
+    });
+  }
+
   revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin");
@@ -258,7 +357,14 @@ export async function updateOrderStatusAction(formData: FormData) {
 export async function recheckPaymentAction(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id"));
+  const order = await getOrderById(id);
   await reconcileOrderPayment(id);
+  await logAction({
+    action: "order.recheck",
+    entity: "order",
+    entityId: id,
+    summary: `Rechecou o pagamento do pedido ${order?.number ?? id} no Mercado Pago`,
+  });
   revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/pedidos");
 }
@@ -267,11 +373,20 @@ export async function deleteOrderAction(
   id: string,
 ): Promise<{ ok: true } | { error: string }> {
   await requireMasterAdmin();
+  const before = await getOrderById(id);
   try {
     await adminDeleteOrder(id);
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Falha ao apagar" };
   }
+  await logAction({
+    action: "order.delete",
+    entity: "order",
+    entityId: id,
+    summary: `Apagou o pedido ${before?.number ?? id}${
+      before ? ` (${before.customer_name ?? before.email})` : ""
+    }`,
+  });
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin");
   // a navegação é feita no cliente (a página do pedido deixa de existir)
