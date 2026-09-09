@@ -14,6 +14,8 @@ const csp = [
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
+  // vídeos dos produtos hospedados no Supabase Storage
+  "media-src 'self' blob: https://*.supabase.co",
   "font-src 'self' data:",
   `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mercadopago.com https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com https://viacep.com.br`,
   "frame-src 'self' https://*.mercadopago.com https://*.mercadolibre.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
