@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { saveProductAction } from "@/app/admin/actions";
-import type { Category, Product } from "@/lib/types";
+import { isSimpleKind, type Category, type Product } from "@/lib/types";
 import { parseMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -45,10 +45,10 @@ export function ProductForm({
     () => categories.find((c) => c.id === categoryId)?.kind ?? null,
     [categories, categoryId],
   );
-  const isToy = kind === "brinquedos";
-  // brinquedo comum = sem tamanho/cor. Se o produto já tiver 2+ variações (raro),
-  // mantém a grade pra não perder dados.
-  const toySimple = isToy && (product?.variants.length ?? 0) <= 1;
+  // brinquedo/livro: campos Material+Medidas, sem tamanho/cor, idade em anos.
+  const isGoods = isSimpleKind(kind);
+  // se o produto já tiver 2+ variações (raro), mantém a grade pra não perder dados.
+  const goodsSimple = isGoods && (product?.variants.length ?? 0) <= 1;
 
   // faixa etária — guardada em meses no banco, editável em meses ou anos.
   // só mostra em "anos" quando os valores são múltiplos exatos de 12 (sem perder precisão).
@@ -106,11 +106,11 @@ export function ProductForm({
 
   // brinquedo comum = 1 "variação" só, sem tamanho/cor; roupa = grade de variações
   const variantsJson = JSON.stringify(
-    (toySimple ? rows.slice(0, 1) : rows).map((r) => ({
+    (goodsSimple ? rows.slice(0, 1) : rows).map((r) => ({
       id: r.id,
-      size: toySimple ? null : r.size.trim() || null,
-      color: toySimple ? null : r.color.trim() || null,
-      colorHex: toySimple ? null : r.colorHex.trim() || null,
+      size: goodsSimple ? null : r.size.trim() || null,
+      color: goodsSimple ? null : r.color.trim() || null,
+      colorHex: goodsSimple ? null : r.colorHex.trim() || null,
       price: parseMoney(r.price) ?? 0,
       stock: parseInt(r.stock || "0", 10),
       weightGrams: parseInt(r.weightGrams || "300", 10),
@@ -226,20 +226,34 @@ export function ProductForm({
         </Field>
 
         {/* Detalhes — variam por tipo de produto */}
-        {isToy ? (
+        {isGoods ? (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Material" hint="Ex.: Plástico ABS, madeira, pelúcia">
+            <Field
+              label="Material"
+              hint={
+                kind === "livros"
+                  ? "Ex.: capa dura, brochura, cartonado"
+                  : "Ex.: Plástico ABS, madeira, pelúcia"
+              }
+            >
               <Input
                 name="material"
                 defaultValue={product?.material ?? ""}
-                placeholder="Plástico ABS atóxico"
+                placeholder={kind === "livros" ? "Capa dura" : "Plástico ABS atóxico"}
               />
             </Field>
-            <Field label="Medidas" hint="Ex.: 30 cm de altura, 20×15×10 cm">
+            <Field
+              label="Medidas"
+              hint={
+                kind === "livros"
+                  ? "Ex.: 20 × 20 cm, 32 páginas"
+                  : "Ex.: 30 cm de altura, 20×15×10 cm"
+              }
+            >
               <Input
                 name="dimensions"
                 defaultValue={product?.dimensions ?? ""}
-                placeholder="30 cm de altura"
+                placeholder={kind === "livros" ? "21 × 27 cm · 40 páginas" : "30 cm de altura"}
               />
             </Field>
           </div>
@@ -253,7 +267,7 @@ export function ProductForm({
           </Field>
         )}
 
-        {!isToy && (
+        {!isGoods && (
           <Field label="Modelagem (acordeão)">
             <textarea
               name="fitNotes"
@@ -263,13 +277,13 @@ export function ProductForm({
             />
           </Field>
         )}
-        <Field label={isToy ? "Cuidados / segurança (acordeão)" : "Cuidados (acordeão)"}>
+        <Field label={isGoods ? "Cuidados / segurança (acordeão)" : "Cuidados (acordeão)"}>
           <textarea
             name="careNotes"
             rows={2}
             defaultValue={product?.care_notes ?? ""}
             placeholder={
-              isToy ? "Limpar com pano úmido. Não imergir em água." : undefined
+              isGoods ? "Limpar com pano úmido. Não imergir em água." : undefined
             }
             className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm outline-none focus:border-primary"
           />
@@ -286,11 +300,12 @@ export function ProductForm({
         </label>
       </div>
 
-      {toySimple ? (
+      {goodsSimple ? (
         <div className="rounded-2xl border border-border bg-surface p-5">
           <Label>Preço e estoque</Label>
           <p className="mb-3 mt-1 text-xs text-muted">
-            Brinquedo não tem tamanho nem cor — é só o preço, o estoque e o peso.
+            {kind === "livros" ? "Livro" : "Brinquedo"} não tem tamanho nem cor —
+            é só o preço, o estoque e o peso.
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Preço R$">

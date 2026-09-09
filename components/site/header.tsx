@@ -21,6 +21,7 @@ export function SiteHeader({
   const [q, setQ] = useState("");
   const roupas = categories.filter((c) => c.kind === "roupas");
   const brinquedos = categories.filter((c) => c.kind === "brinquedos");
+  const livros = categories.filter((c) => c.kind === "livros");
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -43,6 +44,7 @@ export function SiteHeader({
             <nav className="flex flex-col p-2">
               <MenuGroup label="Roupas" items={roupas} basePath="roupas" />
               <MenuGroup label="Brinquedos" items={brinquedos} basePath="brinquedos" />
+              <MenuGroup label="Livros" items={livros} basePath="livros" />
               <SheetClose asChild>
                 <Link href="/conta" className="rounded-lg px-3 py-2.5 font-semibold hover:bg-black/5">
                   Minha conta

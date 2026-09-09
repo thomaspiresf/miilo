@@ -35,12 +35,13 @@ export default async function LojaLayout({ children }: LayoutProps<"/">) {
         <div className="mx-auto w-full max-w-6xl px-4 py-10 text-sm text-muted sm:px-6">
           <Logo variant="horizontal" className="h-8 w-auto" />
           <p className="mt-3 max-w-md">
-            Roupas e brinquedos infantis escolhidos com carinho. Enviamos para
-            todo o Brasil.
+            Roupas, brinquedos e livros infantis escolhidos com carinho.
+            Enviamos para todo o Brasil.
           </p>
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
             <Link href="/c/roupas">Roupas</Link>
             <Link href="/c/brinquedos">Brinquedos</Link>
+            <Link href="/c/livros">Livros</Link>
             <Link href="/conta">Minha conta</Link>
             <Link href="/conta/pedidos">Meus pedidos</Link>
           </div>

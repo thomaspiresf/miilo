@@ -27,6 +27,7 @@ export function CategoryForm() {
         >
           <option value="roupas">roupas</option>
           <option value="brinquedos">brinquedos</option>
+          <option value="livros">livros</option>
         </select>
       </Field>
       <Button type="submit" disabled={pending}>

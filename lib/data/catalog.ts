@@ -169,7 +169,12 @@ function applyClientFilters(list: Product[], f: CatalogFilters): Product[] {
     case "preco-desc":
       out.sort((a, b) => b.price_from - a.price_from);
       break;
+    case "novidades":
+      // ordem já vem do banco (created_at desc); no mock, mantém a ordem do seed
+      break;
     default:
+      // padrão em todas as listagens: ordem alfabética por nome
+      out.sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
       break;
   }
   return out;
@@ -185,6 +190,7 @@ export async function listProducts(f: CatalogFilters = {}): Promise<Product[]> {
       if (f.kind) query = query.eq("category.kind", f.kind);
       if (f.q) query = query.ilike("name", `%${f.q}%`);
       if (f.sort === "novidades") query = query.order("created_at", { ascending: false });
+      else query = query.order("name", { ascending: true });
 
       const { data, error } = await query.limit(200);
       if (error) throw error;

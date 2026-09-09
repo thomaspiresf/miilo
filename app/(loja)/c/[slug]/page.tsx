@@ -11,13 +11,15 @@ import { CategoryPills, SubcategoryPills } from "@/components/site/category-pill
 import { Filters } from "@/components/site/filters";
 import { MobileFilters } from "@/components/site/mobile-filters";
 import { EmptyState } from "@/components/ui/misc";
-import type { CategoryKind } from "@/lib/types";
-
-const KINDS: CategoryKind[] = ["roupas", "brinquedos"];
+import { CATEGORY_KINDS, KIND_LABELS, type CategoryKind } from "@/lib/types";
 
 async function resolve(slug: string) {
-  if (KINDS.includes(slug as CategoryKind)) {
-    return { kind: slug as CategoryKind, title: slug === "roupas" ? "Roupas" : "Brinquedos", categorySlug: undefined };
+  if (CATEGORY_KINDS.includes(slug as CategoryKind)) {
+    return {
+      kind: slug as CategoryKind,
+      title: KIND_LABELS[slug as CategoryKind],
+      categorySlug: undefined,
+    };
   }
   const categories = await getCategories();
   const cat = categories.find((c) => c.slug === slug);

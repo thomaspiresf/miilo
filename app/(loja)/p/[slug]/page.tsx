@@ -88,7 +88,11 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
       {/* Sobre o produto */}
       <section className="max-w-2xl">
         <h2 className="mb-3 text-lg font-black">
-          {product.category.kind === "brinquedos" ? "Sobre o brinquedo" : "Sobre a peça"}
+          {product.category.kind === "brinquedos"
+            ? "Sobre o brinquedo"
+            : product.category.kind === "livros"
+              ? "Sobre o livro"
+              : "Sobre a peça"}
         </h2>
         {product.composition && (
           <p className="mb-2 text-sm">

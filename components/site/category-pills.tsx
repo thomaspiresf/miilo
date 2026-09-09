@@ -8,6 +8,7 @@ const LEVEL1 = [
   { slug: "tudo", label: "Tudo", href: "/" },
   { slug: "roupas", label: "Roupas", href: "/c/roupas" },
   { slug: "brinquedos", label: "Brinquedos", href: "/c/brinquedos" },
+  { slug: "livros", label: "Livros", href: "/c/livros" },
 ] as const;
 
 /** Filtro principal: Tudo · Roupas · Brinquedos (a ativa em rosa). */

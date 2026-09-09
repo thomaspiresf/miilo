@@ -1,4 +1,18 @@
-export type CategoryKind = "roupas" | "brinquedos";
+export type CategoryKind = "roupas" | "brinquedos" | "livros";
+
+/** Categorias principais (nível 1), na ordem em que aparecem na loja. */
+export const CATEGORY_KINDS: CategoryKind[] = ["roupas", "brinquedos", "livros"];
+
+export const KIND_LABELS: Record<CategoryKind, string> = {
+  roupas: "Roupas",
+  brinquedos: "Brinquedos",
+  livros: "Livros",
+};
+
+/** Produtos que não são roupa: preço/estoque simples + Material/Medidas. */
+export function isSimpleKind(kind: CategoryKind | null | undefined) {
+  return kind === "brinquedos" || kind === "livros";
+}
 
 export type Category = {
   id: string;

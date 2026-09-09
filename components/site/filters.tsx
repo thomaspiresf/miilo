@@ -5,7 +5,7 @@ import { useCallback } from "react";
 import { cn } from "@/lib/utils";
 
 const SORTS = [
-  { value: "relevancia", label: "Relevância" },
+  { value: "relevancia", label: "Nome (A–Z)" },
   { value: "preco-asc", label: "Menor preço" },
   { value: "preco-desc", label: "Maior preço" },
   { value: "novidades", label: "Novidades" },

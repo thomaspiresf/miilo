@@ -7,6 +7,7 @@ import { notifyRestockForProduct } from "@/lib/data/restock-notify";
 import { slugify } from "@/lib/utils";
 import type {
   Category,
+  CategoryKind,
   Product,
   StockMovement,
   VariantStockRow,
@@ -514,7 +515,7 @@ export async function adminUploadVideo(
 //  Categorias
 // --------------------------------------------------------------------------
 // slugs reservados para as rotas de nível 1 (kind) e "todos"
-const RESERVED_SLUGS = ["tudo", "roupas", "brinquedos"];
+const RESERVED_SLUGS = ["tudo", "roupas", "brinquedos", "livros"];
 
 /** Gera um slug único que não colide com os reservados nem com categorias existentes. */
 function uniqueCategorySlug(name: string, taken: Set<string>) {
@@ -525,7 +526,7 @@ function uniqueCategorySlug(name: string, taken: Set<string>) {
   return slug;
 }
 
-export async function adminCreateCategory(name: string, kind: "roupas" | "brinquedos"): Promise<void> {
+export async function adminCreateCategory(name: string, kind: CategoryKind): Promise<void> {
   assertPersistable();
 
   if (!hasSupabaseAdmin()) {

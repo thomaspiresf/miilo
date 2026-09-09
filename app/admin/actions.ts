@@ -19,7 +19,7 @@ import {
 } from "@/lib/data/admin";
 import { setOrderStatus } from "@/lib/data/orders";
 import { parseMoney } from "@/lib/format";
-import type { OrderStatus } from "@/lib/types";
+import type { CategoryKind, OrderStatus } from "@/lib/types";
 
 const variantSchema = z.object({
   id: z.string().optional(),
@@ -189,7 +189,9 @@ export async function deleteImageAction(formData: FormData) {
 export async function createCategoryAction(_prev: unknown, formData: FormData) {
   await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
-  const kind = formData.get("kind") === "brinquedos" ? "brinquedos" : "roupas";
+  const rawKind = String(formData.get("kind") ?? "");
+  const kind: CategoryKind =
+    rawKind === "brinquedos" || rawKind === "livros" ? rawKind : "roupas";
   if (name.length < 2) return { error: "Nome muito curto" };
   try {
     await adminCreateCategory(name, kind);

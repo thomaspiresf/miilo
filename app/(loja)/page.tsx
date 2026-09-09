@@ -5,7 +5,7 @@ import { CategoryPills } from "@/components/site/category-pills";
 import { EmptyState } from "@/components/ui/misc";
 
 export default async function HomePage() {
-  const products = await listProducts({ sort: "novidades" });
+  const products = await listProducts(); // padrão: ordem alfabética
 
   return (
     <div className="space-y-6">

@@ -30,16 +30,17 @@ export type PosProduct = {
   id: string;
   name: string;
   image: string | null;
-  kind: "roupas" | "brinquedos";
+  kind: "roupas" | "brinquedos" | "livros";
   variants: { id: string; label: string; price: number; stock: number }[];
 };
 
-type KindFilter = "all" | "roupas" | "brinquedos";
+type KindFilter = "all" | "roupas" | "brinquedos" | "livros";
 
 const KIND_TABS: { id: KindFilter; label: string }[] = [
   { id: "all", label: "Tudo" },
   { id: "roupas", label: "Roupas" },
   { id: "brinquedos", label: "Brinquedos" },
+  { id: "livros", label: "Livros" },
 ];
 
 type RecentSale = {

@@ -20,6 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: base, priority: 1 },
     { url: `${base}/c/roupas` },
     { url: `${base}/c/brinquedos` },
+    { url: `${base}/c/livros` },
     ...categorySlugs.map((s) => ({ url: `${base}/c/${s}` })),
     ...productSlugs.map((s) => ({ url: `${base}/p/${s}` })),
   ];
