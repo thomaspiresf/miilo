@@ -99,66 +99,80 @@ function HealthCard({ h }: { h: BusinessHealth }) {
 //  Estoque + o que vendeu (gráficos)
 // =======================================================================
 
-function Bars({
-  items,
-  money,
-  color = "bg-accent",
-  empty = "Sem dados ainda.",
-}: {
-  items: { name: string; value: number }[];
-  money?: boolean;
-  color?: string;
-  empty?: string;
-}) {
-  if (items.length === 0)
-    return <p className="py-3 text-center text-xs text-muted">{empty}</p>;
-  const max = Math.max(1, ...items.map((i) => i.value));
-  return (
-    <div className="space-y-2.5">
-      {items.map((i, idx) => (
-        <div key={idx} className="text-xs">
-          <div className="mb-1 flex items-baseline justify-between gap-2">
-            <span className="min-w-0 truncate font-medium" title={i.name}>
-              {i.name}
-            </span>
-            <span className="shrink-0 font-bold tabular-nums">
-              {money ? formatBRL(i.value) : i.value}
-            </span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
-            <div
-              className={cn("h-full rounded-full", color)}
-              style={{ width: `${Math.max(3, (i.value / max) * 100)}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+type InsightView = "contrib" | "sold" | "stock" | "idle";
+
+const INSIGHT_VIEWS: { id: InsightView; label: string }[] = [
+  { id: "contrib", label: "Mais contribuíram" },
+  { id: "sold", label: "Mais venderam" },
+  { id: "stock", label: "Valor em estoque" },
+  { id: "idle", label: "Estoque parado" },
+];
 
 function InsightsSection({ x }: { x: PricingInsights }) {
+  const [view, setView] = useState<InsightView>("contrib");
+
+  const list = useMemo(() => {
+    const key =
+      view === "sold" ? "unitsSold" : view === "contrib" ? "contrib" : "stockCost";
+    let arr = x.products;
+    if (view === "idle") {
+      arr = arr.filter((p) => p.stockUnits > 0 && p.unitsSold === 0);
+    } else {
+      arr = arr.filter((p) => (p[key as keyof typeof p] as number) > 0);
+    }
+    return [...arr]
+      .sort(
+        (a, b) =>
+          (b[key as keyof typeof b] as number) -
+          (a[key as keyof typeof a] as number),
+      )
+      .slice(0, 8)
+      .map((p) => ({
+        p,
+        metric: p[key as keyof typeof p] as number,
+      }));
+  }, [x.products, view]);
+
+  const max = Math.max(1, ...list.map((r) => r.metric));
+  const isStockView = view === "stock" || view === "idle";
+  const barColor =
+    view === "contrib"
+      ? "bg-success"
+      : view === "idle"
+        ? "bg-warning"
+        : "bg-accent";
+
+  const kpis = [
+    {
+      value: formatBRL(x.stockCost),
+      label: `Parado em estoque · ${x.stockUnits} un.`,
+      tone: undefined as string | undefined,
+    },
+    {
+      value: formatBRL(x.stockContribPotential),
+      label: "Contribuição se vender tudo",
+      tone: "text-success",
+    },
+    {
+      value: formatBRL(x.stockRetail),
+      label: "Receita se vender tudo",
+      tone: undefined,
+    },
+  ];
+
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
       <h2 className="mb-3 font-black">Estoque e vendas</h2>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div>
-          <p className="text-lg font-black leading-none">{formatBRL(x.stockCost)}</p>
-          <p className="mt-1 text-[11px] text-muted">
-            Parado em estoque (a custo) · {x.stockUnits} un.
-          </p>
-        </div>
-        <div>
-          <p className="text-lg font-black leading-none text-success">
-            {formatBRL(x.stockContribPotential)}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">Contribuição se vender tudo</p>
-        </div>
-        <div>
-          <p className="text-lg font-black leading-none">{formatBRL(x.stockRetail)}</p>
-          <p className="mt-1 text-[11px] text-muted">Receita se vender tudo</p>
-        </div>
+        {kpis.map((k) => (
+          <div key={k.label}>
+            <p className={cn("text-lg font-black leading-none", k.tone)}>
+              {k.value}
+            </p>
+            <p className="mt-1 text-[11px] text-muted">{k.label}</p>
+          </div>
+        ))}
       </div>
 
       {x.noCostStock > 0 && (
@@ -168,41 +182,67 @@ function InsightsSection({ x }: { x: PricingInsights }) {
         </p>
       )}
 
-      <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
-        <div>
-          <p className="mb-2 text-xs font-bold text-muted">
-            Quem carrega a operação · contribuição acumulada
-          </p>
-          <Bars items={x.topContrib} money color="bg-success" empty="Nenhuma venda com custo ainda." />
-        </div>
-        <div>
-          <p className="mb-2 text-xs font-bold text-muted">O que mais vendeu · unidades</p>
-          <Bars items={x.topSold} color="bg-accent" empty="Nenhuma venda ainda." />
-        </div>
-        <div>
-          <p className="mb-2 text-xs font-bold text-muted">
-            Dinheiro parado por produto · a custo
-          </p>
-          <Bars items={x.topStock} money color="bg-accent" empty="Sem estoque com custo." />
-        </div>
-        {x.idle.length > 0 && (
-          <div className="rounded-xl bg-warning/10 p-3">
-            <p className="text-xs font-bold text-warning">
-              Estoque parado — {x.idle.length} produto(s) com estoque e zero vendas
-            </p>
-            <ul className="mt-1.5 space-y-1 text-xs text-muted">
-              {x.idle.map((p, i) => (
-                <li key={i} className="flex justify-between gap-2">
-                  <span className="min-w-0 truncate">{p.name}</span>
-                  <span className="shrink-0 tabular-nums">
-                    {p.units} un. · {formatBRL(p.value)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {INSIGHT_VIEWS.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            onClick={() => setView(v.id)}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+              view === v.id
+                ? "bg-foreground text-background"
+                : "border border-border text-muted hover:text-foreground",
+            )}
+          >
+            {v.label}
+            {v.id === "idle" && x.idleCount > 0 ? ` (${x.idleCount})` : ""}
+          </button>
+        ))}
       </div>
+
+      {list.length === 0 ? (
+        <p className="mt-4 py-6 text-center text-xs text-muted">
+          {view === "idle"
+            ? "Nenhum produto parado — tudo que tem estoque já vendeu."
+            : "Sem dados ainda."}
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-border/60">
+          {list.map(({ p, metric }, i) => (
+            <li key={i} className="py-2.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate text-sm font-medium" title={p.name}>
+                  {p.name}
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-muted">
+                  {isStockView ? (
+                    <>
+                      {p.stockUnits} un ·{" "}
+                      <span className="font-bold text-foreground">
+                        {formatBRL(p.stockCost)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      {p.unitsSold} vend ·{" "}
+                      <span className="font-bold text-foreground">
+                        {formatBRL(p.contrib)}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
+                <div
+                  className={cn("h-full rounded-full", barColor)}
+                  style={{ width: `${Math.max(3, (metric / max) * 100)}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
