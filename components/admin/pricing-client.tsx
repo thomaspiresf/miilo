@@ -26,8 +26,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalContent } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/misc";
+import { PeriodPicker } from "@/components/admin/period-picker";
 import { computeMargins, suggestForContribution } from "@/lib/pricing-math";
 import {
+  loadBusinessHealthAction,
   savePricingSettingsAction,
   setProductPricingAction,
 } from "@/app/admin/precificacao/actions";
@@ -51,12 +53,33 @@ const fmt1 = (n: number) => n.toFixed(1).replace(".", ",");
 
 // =======================================================================
 
-function HealthCard({ h }: { h: BusinessHealth }) {
+function HealthCard({ initial }: { initial: BusinessHealth }) {
+  const [h, setH] = useState(initial);
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [label, setLabel] = useState("Últimos 30 dias");
+
+  async function onPeriod(
+    range: { days?: 7 | 15 | 30 | 90; from?: string; to?: string },
+    labels: { long: string },
+  ) {
+    setErr(null);
+    setPending(true);
+    const res = await loadBusinessHealthAction(range);
+    setPending(false);
+    if (res && "error" in res) {
+      setErr(res.error);
+      return;
+    }
+    setH(res);
+    setLabel(labels.long);
+  }
+
   const cells = [
-    { label: `Margem de contribuição (${h.periodDays}d)`, value: brl(h.contributionMargin) },
+    { label: "Margem de contribuição", value: brl(h.contributionMargin) },
     { label: "Custo fixo / mês", value: brl(h.monthlyFixed) },
     {
-      label: `Lucro real (${h.periodDays}d)`,
+      label: "Lucro real no período",
       value: brl(h.realProfit),
       tone: h.realProfit < 0 ? "text-danger" : "text-success",
     },
@@ -67,8 +90,16 @@ function HealthCard({ h }: { h: BusinessHealth }) {
   ];
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="mb-3 font-black">Saúde do negócio</h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
+          <h2 className="font-black">Saúde do negócio</h2>
+          <p className="mt-1 text-xs text-muted">
+            <strong>{label}</strong> · custo fixo do mês.
+          </p>
+        </div>
+        <PeriodPicker onChange={onPeriod} pending={pending} error={err} />
+      </div>
+      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-4", pending && "opacity-50")}>
         {cells.map((c) => (
           <div key={c.label}>
             <p className={cn("text-lg font-black leading-none", c.tone)}>{c.value}</p>
@@ -1715,7 +1746,7 @@ export function PricingClient({
 
   return (
     <div className="space-y-4">
-      <HealthCard h={health} />
+      <HealthCard initial={health} />
       <StockSummaryCard rows={rows} />
       <PriceSimulator settings={settings} />
       <SettingsPanel initial={settings} />

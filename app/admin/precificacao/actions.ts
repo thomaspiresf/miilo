@@ -7,6 +7,8 @@ import {
   savePricingSettings,
   setProductCostPrice,
   getPricingSettings,
+  getBusinessHealth,
+  type BusinessHealth,
 } from "@/lib/data/pricing";
 import { adminGetProduct } from "@/lib/data/admin";
 import { logAction } from "@/lib/data/audit";
@@ -111,4 +113,29 @@ export async function setProductPricingAction(
 export async function getPricingSettingsAction() {
   await requireAdmin();
   return getPricingSettings();
+}
+
+const healthDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const healthRangeSchema = z.object({
+  days: z
+    .union([z.literal(7), z.literal(15), z.literal(30), z.literal(90)])
+    .optional(),
+  from: healthDate.optional(),
+  to: healthDate.optional(),
+});
+
+export async function loadBusinessHealthAction(
+  input: unknown,
+): Promise<BusinessHealth | { error: string }> {
+  await requireAdmin();
+  const parsed = healthRangeSchema.safeParse(input ?? {});
+  if (!parsed.success) return { error: "Período inválido." };
+  const { days, from, to } = parsed.data;
+  if ((from && !to) || (to && !from)) {
+    return { error: "Escolha as duas datas do período." };
+  }
+  if (from && to && from > to) {
+    return { error: "A data inicial vem antes da final." };
+  }
+  return getBusinessHealth(from && to ? { from, to } : { days });
 }

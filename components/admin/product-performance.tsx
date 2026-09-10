@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import type { InsightProduct, PricingInsights } from "@/lib/data/pricing";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Spinner } from "@/components/ui/misc";
 import { loadProductPerformanceAction } from "@/app/admin/actions";
+import { PeriodPicker } from "@/components/admin/period-picker";
 
 type InsightSort = "contrib" | "revenue" | "unitsSold" | "stockUnits" | "total";
 
@@ -27,33 +27,17 @@ const INSIGHT_CAPTION: { key: InsightSort; text: (p: InsightProduct) => string }
     { key: "contrib", text: (p) => `${formatBRL(p.contrib)} contribuição` },
   ];
 
-type InsightPeriod = "7" | "15" | "30" | "90" | "all" | "custom";
-
-const PERIOD_CHIPS: { key: InsightPeriod; label: string }[] = [
-  { key: "7", label: "7 dias" },
-  { key: "15", label: "15 dias" },
-  { key: "30", label: "30 dias" },
-  { key: "90", label: "90 dias" },
-  { key: "all", label: "Tudo" },
-  { key: "custom", label: "Personalizado" },
-];
-
 const FIRST_SHOWN = 5;
 const PAGE_SIZE = 25;
-
-const brDate = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
 
 export function ProductPerformance({ x }: { x: PricingInsights }) {
   const [data, setData] = useState(x);
   const [sort, setSort] = useState<InsightSort>("contrib");
   const [limit, setLimit] = useState(FIRST_SHOWN);
-  const [period, setPeriod] = useState<InsightPeriod>("30");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [label, setLabel] = useState("Últimos 30 dias");
   const [query, setQuery] = useState("");
-  const [calOpen, setCalOpen] = useState(false);
 
   const sorted = useMemo(
     () => [...data.products].sort((a, b) => b[sort] - a[sort]),
@@ -67,11 +51,10 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
   const shown = filtered.slice(0, limit);
   const hero = INSIGHT_SORTS.find((s) => s.key === sort)!;
 
-  async function apply(
-    next: InsightPeriod,
+  async function handlePeriod(
     range: { days?: 7 | 15 | 30 | 90; from?: string; to?: string },
+    labels: { long: string },
   ) {
-    setPeriod(next);
     setErr(null);
     setPending(true);
     const res = await loadProductPerformanceAction(range);
@@ -82,57 +65,8 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
     }
     setData(res);
     setLimit(FIRST_SHOWN);
-    if (next !== "custom") setCalOpen(false);
+    setLabel(labels.long);
   }
-
-  function pickPeriod(key: InsightPeriod) {
-    if (key === "custom") {
-      setPeriod("custom");
-      if (!from || !to) {
-        const iso = (d: Date) => d.toISOString().slice(0, 10);
-        const past = new Date();
-        past.setDate(past.getDate() - 30);
-        setFrom(iso(past));
-        setTo(iso(new Date()));
-      }
-      return;
-    }
-    if (key === "all") {
-      apply("all", {});
-      return;
-    }
-    apply(key, { days: Number(key) as 7 | 15 | 30 | 90 });
-  }
-
-  const periodLabel =
-    period === "all"
-      ? "desde o começo"
-      : period === "custom"
-        ? from && to
-          ? `${brDate(from)} a ${brDate(to)}`
-          : "período personalizado"
-        : `últimos ${period} dias`;
-  const periodShort =
-    period === "all"
-      ? "Tudo"
-      : period === "custom"
-        ? from && to
-          ? `${brDate(from)}–${brDate(to)}`
-          : "Personalizado"
-        : `${period}d`;
-
-  const kpis = [
-    {
-      value: formatBRL(data.stockContribPotential),
-      label: "Contribuição parada no estoque",
-      tone: "text-success",
-    },
-    { value: formatBRL(data.stockRetail), label: "Receita parada no estoque" },
-    {
-      value: `${data.stockUnits}`,
-      label: `Peças em estoque · ${formatBRL(data.stockCost)} a custo`,
-    },
-  ];
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
@@ -140,7 +74,7 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
         <div className="min-w-0">
           <h2 className="font-black">Desempenho por produto</h2>
           <p className="mt-1 text-xs text-muted">
-            Vendas de <strong>{periodLabel}</strong> · estoque de agora.
+            <strong>{label}</strong> · estoque de agora.
           </p>
         </div>
 
@@ -168,99 +102,33 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
             )}
           </div>
 
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setCalOpen((v) => !v)}
-              className={cn(
-                "flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors",
-                calOpen
-                  ? "border-foreground text-foreground"
-                  : "border-border text-muted hover:text-foreground",
-              )}
-            >
-              <CalendarDays className="h-4 w-4" />
-              <span>{periodShort}</span>
-              {pending && <Spinner className="h-3 w-3" />}
-            </button>
-            {calOpen && (
-              <>
-                <button
-                  aria-hidden
-                  tabIndex={-1}
-                  onClick={() => setCalOpen(false)}
-                  className="fixed inset-0 z-40 cursor-default"
-                />
-                <div className="absolute right-0 z-50 mt-1.5 w-60 rounded-xl border border-border bg-surface p-3 shadow-lg">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Período das vendas
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PERIOD_CHIPS.map((c) => (
-                      <button
-                        key={c.key}
-                        type="button"
-                        onClick={() => pickPeriod(c.key)}
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
-                          period === c.key
-                            ? "bg-foreground text-background"
-                            : "border border-border text-muted hover:text-foreground",
-                        )}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
-                  {period === "custom" && (
-                    <div className="mt-3 space-y-2">
-                      <label className="block text-[11px] text-muted">
-                        De
-                        <input
-                          type="date"
-                          value={from}
-                          max={to || undefined}
-                          onChange={(e) => setFrom(e.target.value)}
-                          className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                        />
-                      </label>
-                      <label className="block text-[11px] text-muted">
-                        Até
-                        <input
-                          type="date"
-                          value={to}
-                          min={from || undefined}
-                          onChange={(e) => setTo(e.target.value)}
-                          className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        disabled={!from || !to || pending}
-                        onClick={() => apply("custom", { from, to })}
-                        className="w-full rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-50"
-                      >
-                        Aplicar
-                      </button>
-                    </div>
-                  )}
-                  {err && <p className="mt-2 text-xs text-danger">{err}</p>}
-                </div>
-              </>
-            )}
-          </div>
+          <PeriodPicker onChange={handlePeriod} pending={pending} error={err} />
         </div>
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-3">
-        {kpis.map((k) => (
-          <div key={k.label}>
-            <p className={cn("text-lg font-black leading-none", k.tone)}>
-              {k.value}
-            </p>
-            <p className="mt-1 text-[11px] leading-tight text-muted">{k.label}</p>
-          </div>
-        ))}
+        <div>
+          <p className="text-lg font-black leading-none text-success">
+            {formatBRL(data.stockContribPotential)}
+          </p>
+          <p className="mt-1 text-[11px] leading-tight text-muted">
+            Contribuição parada no estoque
+          </p>
+        </div>
+        <div>
+          <p className="text-lg font-black leading-none">
+            {formatBRL(data.stockRetail)}
+          </p>
+          <p className="mt-1 text-[11px] leading-tight text-muted">
+            Receita parada no estoque
+          </p>
+        </div>
+        <div>
+          <p className="text-lg font-black leading-none">{data.stockUnits}</p>
+          <p className="mt-1 text-[11px] leading-tight text-muted">
+            Peças em estoque · {formatBRL(data.stockCost)} a custo
+          </p>
+        </div>
       </div>
 
       {data.noCostStock > 0 && (

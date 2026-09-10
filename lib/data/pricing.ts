@@ -383,7 +383,10 @@ export type BusinessHealth = {
   missingCost: number; // vendas sem custo cadastrado (não entram no lucro)
 };
 
-export async function getBusinessHealth(days = 30): Promise<BusinessHealth> {
+export async function getBusinessHealth(
+  range: { days?: number; from?: string; to?: string } | number = 30,
+): Promise<BusinessHealth> {
+  const opts = typeof range === "number" ? { days: range } : range;
   const settings = await getPricingSettings();
   const monthlyFixed = settings.fixedCosts.reduce((s, f) => s + f.amount, 0);
 
@@ -396,12 +399,37 @@ export async function getBusinessHealth(days = 30): Promise<BusinessHealth> {
       priceByVariant.set(v.id, v.price);
     }
 
-  const cutoff = Date.now() - days * 86400000;
-  const orders = (await listAllOrders()).filter(
-    (o) =>
-      ["paid", "shipped", "delivered"].includes(o.status) &&
-      new Date(o.created_at).getTime() >= cutoff,
+  let fromT = -Infinity;
+  let toT = Infinity;
+  if (opts.from || opts.to) {
+    if (opts.from) fromT = Date.parse(`${opts.from}T00:00:00`);
+    if (opts.to) toT = Date.parse(`${opts.to}T23:59:59.999`);
+  } else if (opts.days && opts.days > 0) {
+    fromT = Date.now() - opts.days * 86_400_000;
+  }
+
+  const allPaid = (await listAllOrders()).filter((o) =>
+    ["paid", "shipped", "delivered"].includes(o.status),
   );
+  const orders = allPaid.filter((o) => {
+    const t = new Date(o.created_at).getTime();
+    return Number.isFinite(t) ? t >= fromT && t <= toT : true;
+  });
+
+  // dias do período (pra ratear o custo fixo): janela fixa, intervalo, ou
+  // "desde sempre" = do pedido mais antigo até hoje
+  let days: number;
+  if (opts.from && opts.to) {
+    days = Math.max(1, Math.round((toT - fromT) / 86_400_000));
+  } else if (opts.days && opts.days > 0) {
+    days = opts.days;
+  } else {
+    const oldest = allPaid.reduce(
+      (min, o) => Math.min(min, new Date(o.created_at).getTime() || min),
+      Date.now(),
+    );
+    days = Math.max(30, Math.round((Date.now() - oldest) / 86_400_000));
+  }
 
   const drain = (settings.mpCreditPercent + settings.taxPercent) / 100;
   let contribution = 0;
