@@ -80,8 +80,6 @@ type ProductGroup = {
   colors: {
     color: string | null;
     hex: string | null;
-    image: string | null;
-    distinctImage: boolean;
     items: VariantStockRow[];
   }[];
 };
@@ -100,7 +98,9 @@ export function StockTable({
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>(initialFilter);
-  const [open, setOpen] = useState<Set<string>>(new Set());
+  // ids que o usuário abriu / fechou à mão (o padrão depende de estar filtrando)
+  const [userOpen, setUserOpen] = useState<Set<string>>(new Set());
+  const [userClosed, setUserClosed] = useState<Set<string>>(new Set());
 
   const term = q.trim().toLowerCase();
   const browsing = term !== "" || filter !== "all";
@@ -153,13 +153,10 @@ export function StockTable({
       const key = (r.color ?? "").toLowerCase();
       let c = g.colors.find((x) => (x.color ?? "").toLowerCase() === key);
       if (!c) {
-        c = { color: r.color, hex: r.colorHex, image: r.imageUrl, distinctImage: false, items: [] };
+        c = { color: r.color, hex: r.colorHex, items: [] };
         g.colors.push(c);
       }
       c.items.push(r);
-    }
-    for (const g of map.values()) {
-      for (const c of g.colors) c.distinctImage = !!c.image && c.image !== g.image;
     }
     return [...map.values()];
   }, [filtered]);
@@ -171,11 +168,28 @@ export function StockTable({
     setDrafts((d) => ({ ...d, [id]: Math.max(0, Math.round(v || 0)) }));
     setSaved((s) => ({ ...s, [id]: false }));
   }
+  // padrão: aberto quando está filtrando/buscando, fechado quando não
+  function isGroupOpen(id: string) {
+    if (userOpen.has(id)) return true;
+    if (userClosed.has(id)) return false;
+    return browsing;
+  }
+  function resetToggles() {
+    setUserOpen(new Set());
+    setUserClosed(new Set());
+  }
   function toggle(id: string) {
-    setOpen((o) => {
-      const n = new Set(o);
-      if (n.has(id)) n.delete(id);
+    const open = isGroupOpen(id);
+    setUserOpen((s) => {
+      const n = new Set(s);
+      if (open) n.delete(id);
       else n.add(id);
+      return n;
+    });
+    setUserClosed((s) => {
+      const n = new Set(s);
+      if (open) n.add(id);
+      else n.delete(id);
       return n;
     });
   }
@@ -289,7 +303,10 @@ export function StockTable({
           <Search className="h-4 w-4 text-muted" />
           <input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              setQ(e.target.value);
+              resetToggles();
+            }}
             placeholder="Buscar produto, cor ou SKU"
             className="h-10 w-full bg-transparent px-2 text-sm outline-none"
           />
@@ -299,7 +316,10 @@ export function StockTable({
             <button
               key={t.id}
               type="button"
-              onClick={() => setFilter(t.id)}
+              onClick={() => {
+                setFilter(t.id);
+                resetToggles();
+              }}
               className={cn(
                 "rounded-full px-3 py-1.5 text-xs font-semibold",
                 filter === t.id
@@ -326,8 +346,8 @@ export function StockTable({
       <div className="space-y-2.5">
         {groups.map((g) => {
           const single = g.variantCount === 1;
-          const collapsible = !single && !browsing;
-          const isOpen = !collapsible || open.has(g.productId);
+          const collapsible = !single;
+          const isOpen = !collapsible || isGroupOpen(g.productId);
           const only = single ? g.colors[0].items[0] : null;
 
           return (
@@ -410,21 +430,14 @@ export function StockTable({
                 <div className="divide-y divide-border border-t border-border">
                   {g.colors.map((c, ci) => (
                     <div key={ci} className="flex gap-3 p-3">
-                      {c.distinctImage ? (
-                        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border">
-                          <Image
-                            src={c.image!}
-                            alt={c.color ?? ""}
-                            fill
-                            sizes="40px"
-                            className="object-cover"
-                          />
-                        </div>
-                      ) : c.color && c.hex ? (
+                      {c.color ? (
                         <div className="grid h-10 w-10 shrink-0 place-items-center">
                           <span
-                            className="h-6 w-6 rounded-full border border-black/10"
-                            style={{ background: c.hex }}
+                            className={cn(
+                              "h-6 w-6 rounded-full border",
+                              c.hex ? "border-black/10" : "border-dashed border-border",
+                            )}
+                            style={c.hex ? { background: c.hex } : undefined}
                           />
                         </div>
                       ) : (
