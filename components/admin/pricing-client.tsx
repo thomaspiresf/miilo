@@ -33,6 +33,7 @@ import { Modal, ModalContent } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/misc";
 import { computeMargins, suggestForContribution } from "@/lib/pricing-math";
 import {
+  loadPricingInsightsAction,
   savePricingSettingsAction,
   setProductPricingAction,
 } from "@/app/admin/precificacao/actions";
@@ -119,28 +120,96 @@ const INSIGHT_CAPTION: { key: InsightSort; text: (p: InsightProduct) => string }
     { key: "contrib", text: (p) => `${formatBRL(p.contrib)} contribuição` },
   ];
 
+type InsightPeriod = "7" | "15" | "30" | "90" | "all" | "custom";
+
+const PERIOD_CHIPS: { key: InsightPeriod; label: string }[] = [
+  { key: "7", label: "7 dias" },
+  { key: "15", label: "15 dias" },
+  { key: "30", label: "30 dias" },
+  { key: "90", label: "90 dias" },
+  { key: "all", label: "Tudo" },
+  { key: "custom", label: "Personalizado" },
+];
+
+const FIRST_SHOWN = 5;
+const PAGE_SIZE = 25;
+
+const brDate = (iso: string) =>
+  iso.split("-").reverse().slice(0, 2).join("/");
+
 function InsightsSection({ x }: { x: PricingInsights }) {
+  const [data, setData] = useState(x);
   const [sort, setSort] = useState<InsightSort>("contrib");
-  const [showAll, setShowAll] = useState(false);
+  const [limit, setLimit] = useState(FIRST_SHOWN);
+  const [period, setPeriod] = useState<InsightPeriod>("30");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const sorted = useMemo(
-    () => [...x.products].sort((a, b) => b[sort] - a[sort]),
-    [x.products, sort],
+    () => [...data.products].sort((a, b) => b[sort] - a[sort]),
+    [data.products, sort],
   );
   const max = Math.max(1, ...sorted.map((p) => Math.abs(p[sort])));
-  const shown = showAll ? sorted : sorted.slice(0, 12);
+  const shown = sorted.slice(0, limit);
   const hero = INSIGHT_SORTS.find((s) => s.key === sort)!;
+
+  async function apply(
+    next: InsightPeriod,
+    range: { days?: 7 | 15 | 30 | 90; from?: string; to?: string },
+  ) {
+    setPeriod(next);
+    setErr(null);
+    setPending(true);
+    const res = await loadPricingInsightsAction(range);
+    setPending(false);
+    if (res && "error" in res) {
+      setErr(res.error);
+      return;
+    }
+    setData(res);
+    setLimit(FIRST_SHOWN);
+  }
+
+  function pickPeriod(key: InsightPeriod) {
+    if (key === "custom") {
+      setPeriod("custom");
+      if (!from || !to) {
+        const iso = (d: Date) => d.toISOString().slice(0, 10);
+        const past = new Date();
+        past.setDate(past.getDate() - 30);
+        setFrom(iso(past));
+        setTo(iso(new Date()));
+      }
+      return;
+    }
+    if (key === "all") {
+      apply("all", {});
+      return;
+    }
+    apply(key, { days: Number(key) as 7 | 15 | 30 | 90 });
+  }
+
+  const periodLabel =
+    period === "all"
+      ? "desde o começo"
+      : period === "custom"
+        ? from && to
+          ? `${brDate(from)} a ${brDate(to)}`
+          : "período personalizado"
+        : `últimos ${period} dias`;
 
   const kpis = [
     {
-      value: formatBRL(x.stockContribPotential),
+      value: formatBRL(data.stockContribPotential),
       label: "Contribuição parada no estoque",
       tone: "text-success",
     },
-    { value: formatBRL(x.stockRetail), label: "Receita parada no estoque" },
+    { value: formatBRL(data.stockRetail), label: "Receita parada no estoque" },
     {
-      value: `${x.stockUnits}`,
-      label: `Peças em estoque · ${formatBRL(x.stockCost)} a custo`,
+      value: `${data.stockUnits}`,
+      label: `Peças em estoque · ${formatBRL(data.stockCost)} a custo`,
     },
   ];
 
@@ -148,8 +217,8 @@ function InsightsSection({ x }: { x: PricingInsights }) {
     <div className="rounded-2xl border border-border bg-surface p-4">
       <h2 className="mb-1 font-black">Estoque e vendas</h2>
       <p className="mb-3 text-xs text-muted">
-        Ranking dos produtos — escolha por qual número ordenar. O valor aparece
-        grande à direita, com barra pra comparar de relance.
+        Ranking dos produtos: vendas de <strong>{periodLabel}</strong>, estoque de
+        agora. Escolha por qual número ordenar.
       </p>
 
       <div className="grid grid-cols-3 gap-3">
@@ -163,23 +232,70 @@ function InsightsSection({ x }: { x: PricingInsights }) {
         ))}
       </div>
 
-      {x.noCostStock > 0 && (
+      {data.noCostStock > 0 && (
         <p className="mt-2 text-xs text-warning">
-          {x.noCostStock} produto(s) em estoque sem custo cadastrado — a
+          {data.noCostStock} produto(s) em estoque sem custo cadastrado — a
           contribuição deles não conta.
         </p>
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs font-semibold text-muted">Período</span>
+        {PERIOD_CHIPS.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => pickPeriod(c.key)}
+            className={cn(
+              "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+              period === c.key
+                ? "bg-foreground text-background"
+                : "border border-border text-muted hover:text-foreground",
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+        {pending && <Spinner className="h-3.5 w-3.5" />}
+      </div>
+
+      {period === "custom" && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+            className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
+          />
+          <span className="text-xs text-muted">até</span>
+          <input
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
+          />
+          <button
+            type="button"
+            disabled={!from || !to || pending}
+            onClick={() => apply("custom", { from, to })}
+            className="rounded-lg bg-foreground px-3 py-1 text-xs font-semibold text-background disabled:opacity-50"
+          >
+            Aplicar
+          </button>
+        </div>
+      )}
+
+      {err && <p className="mt-2 text-xs text-danger">{err}</p>}
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <span className="mr-1 text-xs font-semibold text-muted">Ordenar por</span>
         {INSIGHT_SORTS.map((s) => (
           <button
             key={s.key}
             type="button"
-            onClick={() => {
-              setSort(s.key);
-              setShowAll(false);
-            }}
+            onClick={() => setSort(s.key)}
             className={cn(
               "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
               sort === s.key
@@ -194,17 +310,15 @@ function InsightsSection({ x }: { x: PricingInsights }) {
 
       {sorted.length === 0 ? (
         <p className="mt-4 py-6 text-center text-xs text-muted">
-          Nenhum produto com venda ou estoque ainda.
+          Nenhum produto com venda no período ou estoque agora.
         </p>
       ) : (
         <>
-          <ol className="mt-3">
+          <ol className={cn("mt-3", pending && "opacity-50")}>
             {shown.map((p, i) => {
               const idle = p.unitsSold === 0 && p.stockUnits > 0;
               const heroVal = p[sort];
-              const heroText = hero.money
-                ? formatBRL(heroVal)
-                : String(heroVal);
+              const heroText = hero.money ? formatBRL(heroVal) : String(heroVal);
               const caption = INSIGHT_CAPTION.filter((c) => c.key !== sort)
                 .map((c) => c.text(p))
                 .join(" · ");
@@ -256,16 +370,29 @@ function InsightsSection({ x }: { x: PricingInsights }) {
               );
             })}
           </ol>
-          {sorted.length > 12 && (
-            <button
-              type="button"
-              onClick={() => setShowAll((v) => !v)}
-              className="mt-2 text-xs font-semibold text-primary"
-            >
-              {showAll
-                ? "Mostrar só o top 12"
-                : `Mostrar todos (${sorted.length})`}
-            </button>
+          {sorted.length > FIRST_SHOWN && (
+            <div className="mt-3 flex flex-wrap items-center gap-4">
+              {limit < sorted.length && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLimit((l) => (l < PAGE_SIZE ? PAGE_SIZE : l + PAGE_SIZE))
+                  }
+                  className="text-xs font-semibold text-primary"
+                >
+                  Mostrar mais ({sorted.length - limit} restantes)
+                </button>
+              )}
+              {limit > FIRST_SHOWN && (
+                <button
+                  type="button"
+                  onClick={() => setLimit(FIRST_SHOWN)}
+                  className="text-xs font-semibold text-muted hover:text-foreground"
+                >
+                  Recolher
+                </button>
+              )}
+            </div>
           )}
         </>
       )}

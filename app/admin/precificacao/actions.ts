@@ -7,6 +7,9 @@ import {
   savePricingSettings,
   setProductCostPrice,
   getPricingSettings,
+  listPricingRows,
+  getPricingInsights,
+  type PricingInsights,
 } from "@/lib/data/pricing";
 import { adminGetProduct } from "@/lib/data/admin";
 import { logAction } from "@/lib/data/audit";
@@ -111,4 +114,33 @@ export async function setProductPricingAction(
 export async function getPricingSettingsAction() {
   await requireAdmin();
   return getPricingSettings();
+}
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const insightsRangeSchema = z.object({
+  days: z.union([
+    z.literal(7),
+    z.literal(15),
+    z.literal(30),
+    z.literal(90),
+  ]).optional(),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+});
+
+export async function loadPricingInsightsAction(
+  input: unknown,
+): Promise<PricingInsights | { error: string }> {
+  await requireAdmin();
+  const parsed = insightsRangeSchema.safeParse(input ?? {});
+  if (!parsed.success) return { error: "Período inválido." };
+  const { days, from, to } = parsed.data;
+  if ((from && !to) || (to && !from)) {
+    return { error: "Escolha as duas datas do período." };
+  }
+  if (from && to && from > to) {
+    return { error: "A data inicial vem antes da final." };
+  }
+  const { rows } = await listPricingRows();
+  return getPricingInsights(rows, from && to ? { from, to } : { days });
 }

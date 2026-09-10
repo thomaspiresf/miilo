@@ -157,6 +157,8 @@ export type PricingRow = {
   /** receita paga real (Σ unit_price × qty dos pedidos pagos) */
   soldRevenue: number;
   profitToDate: number | null;
+  /** ids das variações — pra somar vendas por período no panorama */
+  variantIds: string[];
   /** unidades em estoque (soma das variações ativas) */
   stockUnits: number;
   /** valor em estoque a custo (Σ estoque × custo da variação) */
@@ -237,6 +239,7 @@ export async function listPricingRows(): Promise<{
       unitsSold,
       soldRevenue,
       profitToDate,
+      variantIds: p.variants.map((v) => v.id),
       stockUnits,
       stockCost,
     };
@@ -271,33 +274,85 @@ export type PricingInsights = {
   stockContribPotential: number; // contribuição se vender todo o estoque
   stockUnits: number;
   noCostStock: number; // qtd de produtos com estoque e sem custo cadastrado
-  idleCount: number; // produtos com estoque e zero vendas
-  products: InsightProduct[]; // tudo que vendeu ou tem estoque (o cliente ordena/filtra)
+  idleCount: number; // produtos com estoque e zero vendas no período
+  products: InsightProduct[]; // tudo que vendeu (no período) ou tem estoque
 };
 
-export function pricingInsights(rows: PricingRow[]): PricingInsights {
+/** `days` = janela a partir de hoje; `from`/`to` = intervalo (yyyy-mm-dd) e têm prioridade; nada = desde sempre. */
+export type InsightRange = { days?: number; from?: string; to?: string };
+
+export async function getPricingInsights(
+  rows: PricingRow[],
+  range: InsightRange = {},
+): Promise<PricingInsights> {
+  const orders = await listAllOrders();
+  const paid = orders.filter((o) =>
+    ["paid", "shipped", "delivered"].includes(o.status),
+  );
+
+  let fromT = -Infinity;
+  let toT = Infinity;
+  if (range.from || range.to) {
+    if (range.from) fromT = Date.parse(`${range.from}T00:00:00`);
+    if (range.to) toT = Date.parse(`${range.to}T23:59:59.999`);
+  } else if (range.days && range.days > 0) {
+    fromT = Date.now() - range.days * 86_400_000;
+  }
+
+  const soldByVariant = new Map<string, number>();
+  const revByVariant = new Map<string, number>();
+  for (const o of paid) {
+    const t = Date.parse(o.created_at);
+    if (Number.isFinite(t) && (t < fromT || t > toT)) continue;
+    for (const it of o.items)
+      if (it.variant_id) {
+        soldByVariant.set(
+          it.variant_id,
+          (soldByVariant.get(it.variant_id) ?? 0) + it.qty,
+        );
+        revByVariant.set(
+          it.variant_id,
+          (revByVariant.get(it.variant_id) ?? 0) + it.unit_price * it.qty,
+        );
+      }
+  }
+
   const active = rows.filter((r) => r.active);
 
   const stockCost = round2(active.reduce((s, r) => s + r.stockCost, 0));
-  const stockRetail = round2(active.reduce((s, r) => s + r.stockUnits * r.priceMin, 0));
+  const stockRetail = round2(
+    active.reduce((s, r) => s + r.stockUnits * r.priceMin, 0),
+  );
   const stockContribPotential = round2(
     active.reduce((s, r) => s + r.stockUnits * (r.margins?.contribValue ?? 0), 0),
   );
   const stockUnits = active.reduce((s, r) => s + r.stockUnits, 0);
-  const noCostStock = active.filter((r) => r.stockUnits > 0 && r.cost == null).length;
+  const noCostStock = active.filter(
+    (r) => r.stockUnits > 0 && r.cost == null,
+  ).length;
 
   const products: InsightProduct[] = active
-    .filter((r) => r.unitsSold > 0 || r.stockUnits > 0)
-    .map((r) => ({
-      name: r.name,
-      total: r.unitsSold + r.stockUnits,
-      unitsSold: r.unitsSold,
-      stockUnits: r.stockUnits,
-      revenue: r.soldRevenue,
-      contrib: round2(r.profitToDate ?? 0),
-      stockCost: r.stockCost,
-      hasCost: r.cost != null,
-    }));
+    .map((r) => {
+      const unitsSold = r.variantIds.reduce(
+        (s, id) => s + (soldByVariant.get(id) ?? 0),
+        0,
+      );
+      const revenue = round2(
+        r.variantIds.reduce((s, id) => s + (revByVariant.get(id) ?? 0), 0),
+      );
+      const contribUnit = r.margins?.contribValue ?? 0;
+      return {
+        name: r.name,
+        total: unitsSold + r.stockUnits,
+        unitsSold,
+        stockUnits: r.stockUnits,
+        revenue,
+        contrib: round2(contribUnit * unitsSold),
+        stockCost: r.stockCost,
+        hasCost: r.cost != null,
+      };
+    })
+    .filter((p) => p.unitsSold > 0 || p.stockUnits > 0);
 
   const idleCount = products.filter(
     (p) => p.stockUnits > 0 && p.unitsSold === 0,

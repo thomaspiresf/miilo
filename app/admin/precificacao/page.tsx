@@ -2,8 +2,10 @@ import { requireAdmin } from "@/lib/auth";
 import {
   listPricingRows,
   getBusinessHealth,
-  pricingInsights,
+  getPricingInsights,
 } from "@/lib/data/pricing";
+
+const INSIGHTS_DEFAULT_DAYS = 30;
 import { PricingClient } from "@/components/admin/pricing-client";
 
 export default async function PricingPage() {
@@ -12,7 +14,9 @@ export default async function PricingPage() {
     listPricingRows(),
     getBusinessHealth(30),
   ]);
-  const insights = pricingInsights(rows);
+  const insights = await getPricingInsights(rows, {
+    days: INSIGHTS_DEFAULT_DAYS,
+  });
 
   return (
     <div className="space-y-6">
