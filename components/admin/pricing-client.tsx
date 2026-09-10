@@ -937,35 +937,141 @@ function BumpLink({ p, ctx }: { p: ReturnType<typeof usePriceRow>; ctx: RowCtx }
 
 // ---- visão em cartões ----------------------------------------------
 
-function MiniStat({ label, children }: { label: string; children: ReactNode }) {
+function marginToneText(pct: number | null) {
+  if (pct == null) return "text-muted";
+  if (pct < 30) return "text-danger";
+  if (pct < 45) return "text-warning";
+  return "text-success";
+}
+
+/** input de dinheiro — bordado, prefixo R$, foco visível. */
+function MoneyInput({
+  value,
+  onChange,
+  onBlur,
+  placeholder = "0,00",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+  placeholder?: string;
+}) {
   return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
-      <div className="mt-0.5">{children}</div>
+    <div className="flex h-11 items-center rounded-xl border border-border bg-background px-3 transition focus-within:border-foreground/40 focus-within:ring-2 focus-within:ring-foreground/[0.06]">
+      <span className="text-sm text-muted">R$</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        inputMode="decimal"
+        placeholder={placeholder}
+        className="ml-1.5 w-full min-w-0 bg-transparent text-lg font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-muted/60"
+      />
     </div>
   );
 }
 
-function DetailsToggle({ open, onClick }: { open: boolean; onClick: () => void }) {
+/** custo de compra — input + opção de calcular pelo total do lote. */
+function LotField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [lot, setLot] = useState(false);
+  const [total, setTotal] = useState("");
+  const [qty, setQty] = useState("");
+  const t = num(total);
+  const q = Number(qty.replace(",", "."));
+  const unit = t != null && q > 0 ? t / q : null;
+
+  function apply(nt: string, nq: string) {
+    const tt = num(nt);
+    const qq = Number(nq.replace(",", "."));
+    if (tt != null && qq > 0) onChange(fmt2(tt / qq));
+  }
+
+  if (lot) {
+    return (
+      <div className="rounded-xl border border-border bg-background p-3">
+        <p className="text-[11px] font-medium text-muted">Total pago ÷ quantidade</p>
+        <div className="mt-2 flex items-center gap-2">
+          <div className="flex h-10 flex-1 items-center rounded-lg border border-border px-2">
+            <span className="text-xs text-muted">R$</span>
+            <input
+              value={total}
+              onChange={(e) => {
+                setTotal(e.target.value);
+                apply(e.target.value, qty);
+              }}
+              inputMode="decimal"
+              placeholder="404,00"
+              autoFocus
+              className="ml-1 w-full min-w-0 bg-transparent text-sm font-semibold tabular-nums outline-none"
+            />
+          </div>
+          <span className="text-muted">÷</span>
+          <input
+            value={qty}
+            onChange={(e) => {
+              setQty(e.target.value);
+              apply(total, e.target.value);
+            }}
+            inputMode="numeric"
+            placeholder="40"
+            className="h-10 w-14 rounded-lg border border-border px-2 text-center text-sm font-semibold tabular-nums outline-none"
+          />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-xs">
+          <span className="text-muted">
+            {unit != null ? (
+              <>
+                Custo unitário{" "}
+                <span className="font-semibold text-foreground">R$ {fmt2(unit)}</span>
+              </>
+            ) : (
+              "—"
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => setLot(false)}
+            className="font-semibold text-foreground hover:underline"
+          >
+            aplicar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-primary"
-    >
-      {open ? "ocultar detalhes" : "ver detalhes"}
-      <ChevronDown className={cn("h-3 w-3 transition", open && "rotate-180")} />
-    </button>
+    <>
+      <MoneyInput value={value} onChange={onChange} />
+      <button
+        type="button"
+        onClick={() => setLot(true)}
+        className="mt-1.5 text-[11px] font-medium text-muted hover:text-foreground"
+      >
+        calcular pelo total da compra
+      </button>
+    </>
   );
 }
 
-function PriceLine({ label, children }: { label: string; children: ReactNode }) {
+function Stat({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: string;
+}) {
   return (
-    <div className="flex items-baseline gap-2.5">
-      <span className="w-[3.75rem] shrink-0 text-[11px] uppercase tracking-wide text-muted">
-        {label}
-      </span>
-      {children}
+    <div className="min-w-0">
+      <p className="truncate text-[11px] font-medium text-muted">{label}</p>
+      <p className={cn("mt-1 text-sm font-bold tabular-nums", tone ?? "text-foreground")}>
+        {value}
+      </p>
+      {sub && <p className="text-[11px] tabular-nums text-muted">{sub}</p>}
     </div>
   );
 }
@@ -973,73 +1079,109 @@ function PriceLine({ label, children }: { label: string; children: ReactNode }) 
 function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
   const p = usePriceRow(r, ctx);
   const [details, setDetails] = useState(false);
+  const showSave = p.dirty || ctx.saved[r.productId];
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4">
-      {/* cabeçalho + salvar */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <Thumb url={r.imageUrl} size={44} />
-          <div className="min-w-0">
-            <Link
-              href={`/admin/produtos/${r.productId}`}
-              className="line-clamp-1 text-sm font-bold hover:text-primary"
-            >
-              {r.name}
-            </Link>
-            <SubLine r={r} />
-          </div>
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      {/* identidade */}
+      <div className="flex items-center gap-3">
+        <Thumb url={r.imageUrl} size={40} />
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/admin/produtos/${r.productId}`}
+            className="line-clamp-1 text-[15px] font-semibold leading-tight hover:text-primary"
+          >
+            {r.name}
+          </Link>
+          <p className="truncate text-xs text-muted">
+            {r.categoryName}
+            {r.unitsSold > 0 &&
+              ` · ${r.unitsSold} vendido${r.unitsSold > 1 ? "s" : ""}`}
+            {!r.active && " · inativo"}
+          </p>
         </div>
-        <SaveBtn r={r} p={p} ctx={ctx} className="w-[76px] shrink-0" />
       </div>
 
       {p.multi ? (
-        <p className="mt-3 border-t border-border/60 pt-3 text-[11px] text-muted">
+        <p className="mt-4 text-xs text-muted">
           Preços variam por variação —{" "}
-          <Link href={`/admin/produtos/${r.productId}`} className="text-primary">
+          <Link
+            href={`/admin/produtos/${r.productId}`}
+            className="font-medium text-foreground underline underline-offset-2"
+          >
             editar na tela do produto
           </Link>
         </p>
       ) : (
         <>
-          {/* compra → venda */}
-          <div className="mt-4 space-y-2">
-            <PriceLine label="Compra">
-              <CostField value={p.cur.cost} onChange={p.setCost} big />
-            </PriceLine>
-            <PriceLine label="Venda">
-              <span className="text-base font-bold">
-                <Ghost value={p.cur.price} onChange={p.setPrice} prefix="R$" ch={5.5} />
-              </span>
-              <BumpLink p={p} ctx={ctx} />
-            </PriceLine>
-          </div>
-
-          {/* margens */}
-          <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-border/60 pt-3 sm:grid-cols-4">
-            <MiniStat label="M. bruta">
-              <GrossCell p={p} />
-            </MiniStat>
-            <MiniStat label="M. contribuição">
-              <ContribCell p={p} showValue />
-            </MiniStat>
-            <MiniStat label="M. líquida">
-              <NetCell p={p} />
-            </MiniStat>
-            <MiniStat label="Markup">
-              <MarkupCell p={p} />
-            </MiniStat>
-          </div>
-
-          {/* detalhamento */}
-          {p.costN != null && (
-            <div className="mt-3 border-t border-border/60 pt-2.5">
-              <DetailsToggle open={details} onClick={() => setDetails((o) => !o)} />
-              {details && (
-                <div className="mt-3">
-                  <PriceBreakdown cost={p.costN} price={p.priceN} settings={ctx.settings} />
-                </div>
+          {/* inputs */}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-muted">Custo de compra</p>
+              <div className="mt-1.5">
+                <LotField value={p.cur.cost} onChange={p.setCost} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted">Preço de venda</p>
+              <div className="mt-1.5">
+                <MoneyInput value={p.cur.price} onChange={p.setPrice} />
+              </div>
+              {p.canBump && (
+                <button
+                  type="button"
+                  onClick={p.applyTarget}
+                  className="mt-1.5 text-[11px] font-medium text-warning hover:underline"
+                >
+                  sugerido {formatBRL(p.suggested!)} · {ctx.settings.targetMarginPercent}% de
+                  contribuição
+                </button>
               )}
+            </div>
+          </div>
+
+          {/* métricas */}
+          <div className="mt-5 grid grid-cols-2 gap-4 rounded-xl bg-black/[0.025] px-4 py-3.5 sm:grid-cols-4">
+            <Stat label="Margem bruta" value={pctStr(p.m.grossPct)} />
+            <Stat
+              label="Contribuição"
+              value={pctStr(p.m.contribPct)}
+              sub={p.m.contribValue == null ? undefined : brl(p.m.contribValue)}
+              tone={marginToneText(p.m.contribPct)}
+            />
+            <Stat
+              label="Margem líquida"
+              value={p.m.netPct == null ? "—" : pctStr(p.m.netPct)}
+              sub={p.m.netValue == null ? undefined : brl(p.m.netValue)}
+            />
+            <Stat
+              label="Markup"
+              value={p.m.markup == null ? "—" : `${fmt1(p.m.markup)}×`}
+            />
+          </div>
+
+          {/* rodapé */}
+          <div className="mt-4 flex items-center justify-between">
+            {p.costN != null ? (
+              <button
+                type="button"
+                onClick={() => setDetails((o) => !o)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-foreground"
+              >
+                {details ? "Ocultar detalhamento" : "Ver detalhamento"}
+                <ChevronDown
+                  className={cn("h-3.5 w-3.5 transition", details && "rotate-180")}
+                />
+              </button>
+            ) : (
+              <span />
+            )}
+            {showSave && <SaveBtn r={r} p={p} ctx={ctx} className="w-[88px]" />}
+          </div>
+
+          {details && p.costN != null && (
+            <div className="mt-3">
+              <PriceBreakdown cost={p.costN} price={p.priceN} settings={ctx.settings} />
             </div>
           )}
         </>
@@ -1105,9 +1247,6 @@ function TableRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
                 {r.name}
               </Link>
               <SubLine r={r} />
-              {p.costN != null && !p.multi && (
-                <DetailsToggle open={details} onClick={() => setDetails((o) => !o)} />
-              )}
             </div>
           </div>
         </td>
@@ -1151,7 +1290,19 @@ function TableRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
         </td>
 
         <td className="px-3 py-3">
-          <SaveBtn r={r} p={p} ctx={ctx} className="w-[68px]" />
+          <div className="flex items-center gap-1">
+            <SaveBtn r={r} p={p} ctx={ctx} className="w-[68px]" />
+            {p.costN != null && !p.multi && (
+              <button
+                type="button"
+                onClick={() => setDetails((o) => !o)}
+                title={details ? "Ocultar detalhamento" : "Ver detalhamento"}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-black/[0.04] hover:text-foreground"
+              >
+                <ChevronDown className={cn("h-4 w-4 transition", details && "rotate-180")} />
+              </button>
+            )}
+          </div>
         </td>
       </tr>
       {details && p.costN != null && !p.multi && (
