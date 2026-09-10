@@ -132,6 +132,11 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
             Cliente retira na loja — {site.storeAddress}
           </p>
         ) : null}
+        {order.notes && (
+          <p className="mt-3 rounded-xl bg-warning/10 px-3 py-2 text-warning">
+            <span className="font-bold">Observação:</span> {order.notes}
+          </p>
+        )}
       </section>
 
       <form

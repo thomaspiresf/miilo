@@ -30,6 +30,8 @@ export type NewOrderInput = {
   /** Desconto de cupom já validado no servidor (em reais). */
   discount?: number;
   couponCode?: string | null;
+  /** Observação livre do vendedor (venda na loja). */
+  notes?: string | null;
 };
 
 export type ResolvedLine = {
@@ -140,6 +142,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
     ? "Retirada na loja"
     : `${input.shipping.company} ${input.shipping.service}`.trim();
   const address = pickup ? null : input.address;
+  const notes = input.notes?.trim() ? input.notes.trim().slice(0, 500) : null;
 
   // ---- modo demonstração ----
   if (!hasSupabaseAdmin()) {
@@ -166,6 +169,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       mp_status: null,
       payment_method: null,
       tracking_code: null,
+      notes,
       stock_restored: false,
       stock_reserved: true,
       created_at: new Date().toISOString(),
@@ -202,6 +206,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
   // Tenta com todas as colunas; se alguma migração ainda não foi aplicada,
   // vai removendo campos até o insert passar (channel -> trio do checkout).
   const coupon = discount > 0 ? { discount, coupon_code: couponCode } : {};
+  const note = notes ? { notes } : {};
   const full = {
     ...baseRow,
     customer_name: input.name,
@@ -210,6 +215,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
     channel,
   };
   const rowAttempts = [
+    { ...full, ...coupon, ...note },
     { ...full, ...coupon },
     full,
     {
@@ -295,6 +301,7 @@ function mapOrder(row: any, items: any[]): Order {
     mp_status: row.mp_status ?? null,
     payment_method: row.payment_method ?? null,
     tracking_code: row.tracking_code ?? null,
+    notes: row.notes ?? null,
     stock_restored: row.stock_restored ?? false,
     stock_reserved: row.stock_reserved ?? false,
     created_at: row.created_at,

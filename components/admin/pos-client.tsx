@@ -77,6 +77,7 @@ type Created = {
   paid: boolean;
   payUrl: string | null;
   mode: PayMode;
+  notes: string | null;
 };
 
 const PAY_MODES: {
@@ -125,6 +126,7 @@ export function PosClient({
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [notes, setNotes] = useState("");
   const [discountInput, setDiscountInput] = useState("");
   const [payMode, setPayMode] = useState<PayMode | null>(null);
 
@@ -213,6 +215,7 @@ export function PosClient({
         email: email.trim() || null,
         payMode,
         discount,
+        notes: notes.trim() || null,
         lines: cart.map((l) => ({ variantId: l.variantId, qty: l.qty })),
       });
       if ("error" in res) {
@@ -226,6 +229,7 @@ export function PosClient({
         paid: res.paid,
         payUrl: res.payUrl,
         mode: payMode,
+        notes: notes.trim() || null,
       });
     } catch {
       setError("Não foi possível registrar a venda. Tente de novo.");
@@ -240,6 +244,7 @@ export function PosClient({
     setCustomerName("");
     setPhone("");
     setEmail("");
+    setNotes("");
     setDiscountInput("");
     setPayMode(null);
     setQuery("");
@@ -510,6 +515,16 @@ export function PosClient({
                   />
                 </Field>
               </div>
+              <Field label="Observação (opcional)">
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Ex.: paga dia 15 · combinou troca de tamanho · retira sexta"
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+              </Field>
             </div>
           </section>
 
@@ -800,6 +815,13 @@ function SaleResult({
               ? `${formatBRL(created.total)} a receber. O estoque já está reservado — confirme quando o cliente pagar, ou mande o link.`
               : "O estoque será baixado assim que o cliente pagar."}
         </p>
+
+        {created.notes && (
+          <p className="mx-auto mt-3 max-w-sm rounded-xl bg-black/[0.04] px-3 py-2 text-left text-xs text-muted">
+            <span className="font-semibold text-foreground">Obs.:</span>{" "}
+            {created.notes}
+          </p>
+        )}
 
         {!paid && (
           <button

@@ -208,6 +208,8 @@ export type Order = {
   mp_status: string | null;
   payment_method: string | null;
   tracking_code: string | null;
+  /** Observação livre (ex.: "paga dia 15"). */
+  notes: string | null;
   stock_restored: boolean;
   /** Estoque baixado na criação do pedido (reserva). */
   stock_reserved: boolean;

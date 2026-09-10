@@ -180,6 +180,7 @@ create table if not exists public.orders (
   mp_status        text,
   payment_method   text,
   tracking_code    text,
+  notes            text,                -- observação livre (venda na loja: "paga dia 15"…)
   stock_restored   boolean not null default false,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
@@ -190,6 +191,7 @@ alter table public.orders add column if not exists stock_reserved boolean not nu
 alter table public.orders add column if not exists customer_name  text;
 alter table public.orders add column if not exists phone          text;
 alter table public.orders add column if not exists delivery_mode  text not null default 'delivery';
+alter table public.orders add column if not exists notes          text;
 
 create index if not exists idx_orders_user on public.orders(user_id);
 create index if not exists idx_orders_created on public.orders(created_at desc);

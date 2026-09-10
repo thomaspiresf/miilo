@@ -36,6 +36,14 @@ export const posOrderSchema = z.object({
   payMode: z.enum(["link", "now", "cash", "later"]),
   /** desconto em reais aplicado na venda (o servidor limita ao subtotal) */
   discount: z.number().nonnegative().optional().default(0),
+  /** observação livre do vendedor (ex.: "paga dia 15") */
+  notes: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .nullable()
+    .transform((v) => (v ? v : null)),
   lines: z
     .array(
       z.object({
