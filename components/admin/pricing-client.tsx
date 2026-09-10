@@ -75,152 +75,72 @@ function HealthCard({ initial }: { initial: BusinessHealth }) {
     setLabel(labels.long);
   }
 
-  const cells = [
-    { label: "Margem de contribuição", value: brl(h.contributionMargin) },
-    { label: "Custo fixo / mês", value: brl(h.monthlyFixed) },
-    {
-      label: "Lucro real no período",
-      value: brl(h.realProfit),
-      tone: h.realProfit < 0 ? "text-danger" : "text-success",
-    },
-    {
-      label: "Ponto de equilíbrio / mês",
-      value: h.breakEven != null ? brl(h.breakEven) : "—",
-    },
-  ];
+  const hasFixed = h.monthlyFixed > 0;
+  const meta: string[] = [];
+  if (hasFixed) meta.push(`custo fixo ${brl(h.monthlyFixed)}/mês`);
+  if (h.avgMarginPct != null) meta.push(`margem média ${h.avgMarginPct.toFixed(0)}%`);
+  if (hasFixed && h.breakEven != null && h.breakEven > 0)
+    meta.push(`equilíbrio ${brl(h.breakEven)}/mês`);
+
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div className="min-w-0">
-          <h2 className="font-black">Saúde do negócio</h2>
-          <p className="mt-1 text-xs text-muted">
-            <strong>{label}</strong> · custo fixo do mês.
-          </p>
-        </div>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="font-black">Saúde do negócio</h2>
         <PeriodPicker onChange={onPeriod} pending={pending} error={err} />
       </div>
-      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-4", pending && "opacity-50")}>
-        {cells.map((c) => (
-          <div key={c.label}>
-            <p className={cn("text-lg font-black leading-none", c.tone)}>{c.value}</p>
-            <p className="mt-1 text-[11px] text-muted">{c.label}</p>
-          </div>
-        ))}
-      </div>
-      {h.missingCost > 0 && (
-        <p className="mt-3 text-xs text-warning">
-          {brl(h.missingCost)} em vendas de produtos sem custo cadastrado — não
-          entram no lucro. Cadastre o custo abaixo.
-        </p>
-      )}
-      {h.avgMarginPct != null && (
-        <p className="mt-1 text-xs text-muted">
-          Margem média das vendas com custo: {h.avgMarginPct.toFixed(0)}%
-        </p>
-      )}
-    </div>
-  );
-}
 
-// =======================================================================
-//  Estoque — resumo (o ranking de vendas foi pro Painel)
-// =======================================================================
-
-function StockSummaryCard({ rows }: { rows: PricingRow[] }) {
-  const s = useMemo(() => {
-    const active = rows.filter((r) => r.active);
-    const sum = (f: (r: PricingRow) => number) =>
-      active.reduce((a, r) => a + f(r), 0);
-    const lowContrib = active
-      .filter(
-        (r) =>
-          r.cost != null &&
-          r.margins?.contribValue != null &&
-          (r.unitsSold > 0 || r.stockUnits > 0),
-      )
-      .map((r) => ({
-        name: r.name,
-        value: r.margins!.contribValue as number,
-        pct: r.margins!.contribPct,
-      }))
-      .sort((a, b) => a.value - b.value)
-      .slice(0, 5);
-    return {
-      contribPotential: sum((r) => r.stockUnits * (r.margins?.contribValue ?? 0)),
-      retail: sum((r) => r.stockUnits * r.priceMin),
-      cost: sum((r) => r.stockCost),
-      units: sum((r) => r.stockUnits),
-      noCost: active.filter((r) => r.stockUnits > 0 && r.cost == null).length,
-      lowContrib,
-    };
-  }, [rows]);
-
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="font-black">Estoque</h2>
-      <p className="mt-1 text-xs text-muted">
-        Quanto o estoque parado ainda pode render. O que vendeu e quanto cada
-        produto contribui está no{" "}
-        <Link href="/admin" className="font-semibold text-primary">
-          Painel
-        </Link>
-        .
-      </p>
-
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <div>
-          <p className="text-lg font-black leading-none text-success">
-            {brl(s.contribPotential)}
-          </p>
-          <p className="mt-1 text-[11px] leading-tight text-muted">
-            Contribuição parada no estoque
-          </p>
-        </div>
-        <div>
-          <p className="text-lg font-black leading-none">{brl(s.retail)}</p>
-          <p className="mt-1 text-[11px] leading-tight text-muted">
-            Receita parada no estoque
-          </p>
-        </div>
-        <div>
-          <p className="text-lg font-black leading-none">{s.units}</p>
-          <p className="mt-1 text-[11px] leading-tight text-muted">
-            Peças em estoque · {brl(s.cost)} a custo
-          </p>
-        </div>
-      </div>
-
-      {s.noCost > 0 && (
-        <p className="mt-2 text-xs text-warning">
-          {s.noCost} produto(s) em estoque sem custo cadastrado — cadastre pra
-          entrar na conta.
-        </p>
-      )}
-
-      {s.lowContrib.length > 0 && (
-        <div className="mt-4">
-          <p className="mb-1.5 text-xs font-semibold text-muted">
-            Menor contribuição por venda — candidatos a rever o preço
-          </p>
-          <ul className="divide-y divide-border/50">
-            {s.lowContrib.map((p, i) => (
-              <li
-                key={i}
-                className="flex items-baseline justify-between gap-3 py-1.5 text-sm"
+      <div
+        className={cn(
+          "mt-3 flex flex-wrap items-end gap-x-10 gap-y-3",
+          pending && "opacity-50",
+        )}
+      >
+        {hasFixed ? (
+          <>
+            <div>
+              <p className="text-2xl font-black leading-none">
+                {brl(h.contributionMargin)}
+              </p>
+              <p className="mt-1 text-[11px] text-muted">
+                Contribuição · {label.toLowerCase()}
+              </p>
+            </div>
+            <div>
+              <p
+                className={cn(
+                  "text-2xl font-black leading-none",
+                  h.realProfit < 0 ? "text-danger" : "text-success",
+                )}
               >
-                <span className="min-w-0 truncate" title={p.name}>
-                  {p.name}
-                </span>
-                <span className="shrink-0 tabular-nums">
-                  <span className="font-bold">{brl(p.value)}</span>
-                  <span className="ml-1 text-[11px] text-muted">
-                    {pctStr(p.pct)}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+                {brl(h.realProfit)}
+              </p>
+              <p className="mt-1 text-[11px] text-muted">Lucro real no período</p>
+            </div>
+          </>
+        ) : (
+          <div>
+            <p
+              className={cn(
+                "text-2xl font-black leading-none",
+                h.contributionMargin < 0 ? "text-danger" : "text-success",
+              )}
+            >
+              {brl(h.contributionMargin)}
+            </p>
+            <p className="mt-1 text-[11px] text-muted">
+              Lucro · {label.toLowerCase()}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {meta.length > 0 && (
+        <p className="mt-2 text-xs text-muted">{meta.join(" · ")}</p>
+      )}
+      {h.missingCost > 0 && (
+        <p className="mt-1.5 text-xs text-warning">
+          {brl(h.missingCost)} em vendas sem custo cadastrado ficam de fora.
+        </p>
       )}
     </div>
   );
@@ -1747,7 +1667,6 @@ export function PricingClient({
   return (
     <div className="space-y-4">
       <HealthCard initial={health} />
-      <StockSummaryCard rows={rows} />
       <PriceSimulator settings={settings} />
       <SettingsPanel initial={settings} />
 
