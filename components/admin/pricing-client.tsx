@@ -30,11 +30,29 @@ function toneChip(pct: number | null) {
 }
 const brl = (n: number | null) => (n == null ? "—" : formatBRL(n));
 const num = (v: string) => {
-  const n = Number(String(v).replace(",", "."));
+  const t = String(v).trim().replace(",", ".");
+  if (t === "") return null;
+  const n = Number(t);
   return Number.isFinite(n) && n >= 0 ? n : null;
 };
 const fmt2 = (n: number) => n.toFixed(2).replace(".", ",");
 const fmt1 = (n: number) => n.toFixed(1).replace(".", ",");
+
+/** margem / markup / preço mínimo pra um par custo+preço. */
+function priceMath(cost: number, price: number, drain: number, pk: number) {
+  const margin = price * (1 - drain) - cost - pk;
+  return {
+    margin,
+    marginPct: price > 0 ? (margin / price) * 100 : 0,
+    markup: cost > 0 ? price / cost : 0,
+    min: drain < 1 ? (cost + pk) / (1 - drain) : 0,
+  };
+}
+/** preço de venda pra bater uma margem-alvo (arredondado pra ,90). */
+function suggestPrice(cost: number, drain: number, pk: number, targetPct: number) {
+  const tm = targetPct / 100;
+  return drain + tm < 1 ? niceUp((cost + pk) / (1 - drain - tm)) : null;
+}
 
 // =======================================================================
 
@@ -142,10 +160,18 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between p-4 text-left"
+        className="flex w-full items-center gap-3 p-4 text-left"
       >
-        <span className="font-black">Regras de precificação</span>
-        <ChevronDown className={cn("h-4 w-4 text-muted transition", open && "rotate-180")} />
+        <span className="shrink-0 font-black">Regras de precificação</span>
+        {!open && (
+          <span className="truncate text-[11px] text-muted">
+            imposto {s.taxPercent}% · margem-alvo {s.targetMarginPercent}% · embalagem{" "}
+            {formatBRL(s.packagingCost)}
+          </span>
+        )}
+        <ChevronDown
+          className={cn("ml-auto h-4 w-4 shrink-0 text-muted transition", open && "rotate-180")}
+        />
       </button>
       {open && (
         <div className="space-y-4 border-t border-border p-4">
@@ -218,6 +244,177 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
           <Button size="sm" onClick={save} disabled={saving}>
             {saving ? <Spinner /> : saved ? <Check className="h-4 w-4" /> : "Salvar regras"}
           </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =======================================================================
+//  Simulador — testar um produto antes de comprar
+// =======================================================================
+
+function SimResult({
+  label,
+  cost,
+  price,
+  drain,
+  pk,
+  target,
+  big,
+}: {
+  label: string;
+  cost: number;
+  price: number;
+  drain: number;
+  pk: number;
+  target: number;
+  big?: boolean;
+}) {
+  const m = priceMath(cost, price, drain, pk);
+  const tone =
+    m.marginPct <= 0
+      ? { c: "text-danger", i: "🔴", t: "Prejuízo — você paga pra vender." }
+      : m.marginPct < target
+        ? { c: "text-warning", i: "⚠️", t: `Abaixo da sua meta de ${target}%.` }
+        : { c: "text-success", i: "✅", t: "Dentro da meta." };
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
+      <p className={cn("font-black", big ? "text-2xl" : "text-lg")}>{formatBRL(price)}</p>
+      <p className={cn("mt-0.5 text-xs font-semibold", tone.c)}>
+        {tone.i} margem {brl(m.margin)} ({m.marginPct.toFixed(0)}%) · markup {fmt1(m.markup)}×
+      </p>
+      <p className="text-[11px] text-muted">{tone.t}</p>
+      {big && (
+        <p className="mt-1 text-[11px] text-muted">
+          preço mínimo (sem lucro): {brl(m.min)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PriceSimulator({ settings }: { settings: PricingSettings }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [cost, setCost] = useState("");
+  const [tm, setTm] = useState(String(settings.targetMarginPercent));
+  const [pk, setPk] = useState(fmt2(settings.packagingCost));
+  const [testPrice, setTestPrice] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const drain = (settings.mpCreditPercent + settings.taxPercent) / 100;
+  const costN = num(cost);
+  const tmN = num(tm) ?? settings.targetMarginPercent;
+  const pkN = num(pk) ?? 0;
+  const suggested = costN != null ? suggestPrice(costN, drain, pkN, tmN) : null;
+  const testN = num(testPrice);
+
+  const changed =
+    Math.abs(tmN - settings.targetMarginPercent) > 0.001 ||
+    Math.abs(pkN - settings.packagingCost) > 0.001;
+
+  async function saveDefaults() {
+    setSaving(true);
+    await savePricingSettingsAction({
+      ...settings,
+      targetMarginPercent: tmN,
+      packagingCost: pkN,
+    });
+    setSaving(false);
+    router.refresh();
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-3 p-4 text-left"
+      >
+        <span className="font-black">Simular preço</span>
+        <span className="hidden text-[11px] text-muted sm:inline">
+          testar um produto antes de comprar
+        </span>
+        <ChevronDown
+          className={cn("ml-auto h-4 w-4 shrink-0 text-muted transition", open && "rotate-180")}
+        />
+      </button>
+
+      {open && (
+        <div className="space-y-4 border-t border-border p-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted">
+              Comprei por (unidade)
+            </p>
+            <div className="mt-0.5">
+              <CostField value={cost} onChange={setCost} big />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
+            <span className="inline-flex items-center gap-1">
+              margem-alvo
+              <Ghost value={tm} onChange={setTm} suffix="%" ch={2.5} className="text-foreground" />
+            </span>
+            <span className="inline-flex items-center gap-1">
+              embalagem
+              <Ghost value={pk} onChange={setPk} prefix="R$" ch={3.5} className="text-foreground" />
+            </span>
+            <span>+ taxa crédito {settings.mpCreditPercent}% + imposto {settings.taxPercent}%</span>
+            {changed && (
+              <button
+                type="button"
+                onClick={saveDefaults}
+                disabled={saving}
+                className="font-semibold text-primary"
+              >
+                {saving ? "salvando…" : "salvar como padrão"}
+              </button>
+            )}
+          </div>
+
+          {costN == null || suggested == null ? (
+            <p className="text-xs text-muted">Digite o custo pra ver o preço sugerido.</p>
+          ) : (
+            <div className="space-y-3 rounded-xl bg-black/[0.03] p-4">
+              <SimResult
+                label={`Preço sugerido pra ${tmN}% de margem`}
+                cost={costN}
+                price={suggested}
+                drain={drain}
+                pk={pkN}
+                target={tmN}
+                big
+              />
+              <div className="border-t border-border pt-3">
+                <label className="text-xs text-muted">
+                  E se eu vender por{" "}
+                  <Ghost
+                    value={testPrice}
+                    onChange={setTestPrice}
+                    prefix="R$"
+                    ch={5}
+                    className="font-bold text-foreground"
+                    placeholder="…"
+                  />
+                </label>
+                {testN != null && (
+                  <div className="mt-1.5">
+                    <SimResult
+                      label="Nesse preço"
+                      cost={costN}
+                      price={testN}
+                      drain={drain}
+                      pk={pkN}
+                      target={tmN}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -912,6 +1109,7 @@ export function PricingClient({
   return (
     <div className="space-y-4">
       <HealthCard h={health} />
+      <PriceSimulator settings={settings} />
       <SettingsPanel initial={settings} />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
