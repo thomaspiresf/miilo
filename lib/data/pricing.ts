@@ -286,17 +286,31 @@ export async function getBusinessHealth(days = 30): Promise<BusinessHealth> {
   let revenueWithCost = 0;
   let missingCost = 0;
   for (const o of orders) {
+    let orderContrib = 0;
+    let orderRevenue = 0;
+    let costed = false;
     for (const it of o.items) {
       const cost = it.variant_id ? costByVariant.get(it.variant_id) : null;
-      const unit = it.unit_price;
+      const line = it.unit_price * it.qty;
       if (cost == null) {
-        missingCost += unit * it.qty;
+        missingCost += line;
         continue;
       }
-      const m = unit - (cost + unit * drain + settings.packagingCost / o.items.length);
-      contribution += m * it.qty;
-      revenueWithCost += unit * it.qty;
+      costed = true;
+      orderContrib += (it.unit_price - cost - it.unit_price * drain) * it.qty;
+      orderRevenue += line;
     }
+    if (!costed) continue;
+    // embalagem: uma vez por PEDIDO, não por unidade
+    orderContrib -= settings.packagingCost;
+    // cupom: sai do bolso da loja — rateia pra parte com custo cadastrado
+    if (o.discount > 0) {
+      const hit = o.discount * Math.min(1, orderRevenue / (o.subtotal || orderRevenue));
+      orderContrib -= hit;
+      orderRevenue -= hit;
+    }
+    contribution += orderContrib;
+    revenueWithCost += orderRevenue;
   }
 
   const fixedForPeriod = (monthlyFixed / 30) * days;
