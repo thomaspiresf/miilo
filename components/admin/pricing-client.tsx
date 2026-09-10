@@ -20,7 +20,11 @@ import {
   Wallet,
 } from "lucide-react";
 import type { PricingSettings } from "@/lib/types";
-import type { BusinessHealth, PricingRow } from "@/lib/data/pricing";
+import type {
+  BusinessHealth,
+  PricingInsights,
+  PricingRow,
+} from "@/lib/data/pricing";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -87,6 +91,118 @@ function HealthCard({ h }: { h: BusinessHealth }) {
           Margem média das vendas com custo: {h.avgMarginPct.toFixed(0)}%
         </p>
       )}
+    </div>
+  );
+}
+
+// =======================================================================
+//  Estoque + o que vendeu (gráficos)
+// =======================================================================
+
+function Bars({
+  items,
+  money,
+  color = "bg-accent",
+  empty = "Sem dados ainda.",
+}: {
+  items: { name: string; value: number }[];
+  money?: boolean;
+  color?: string;
+  empty?: string;
+}) {
+  if (items.length === 0)
+    return <p className="py-3 text-center text-xs text-muted">{empty}</p>;
+  const max = Math.max(1, ...items.map((i) => i.value));
+  return (
+    <div className="space-y-2.5">
+      {items.map((i, idx) => (
+        <div key={idx} className="text-xs">
+          <div className="mb-1 flex items-baseline justify-between gap-2">
+            <span className="min-w-0 truncate font-medium" title={i.name}>
+              {i.name}
+            </span>
+            <span className="shrink-0 font-bold tabular-nums">
+              {money ? formatBRL(i.value) : i.value}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
+            <div
+              className={cn("h-full rounded-full", color)}
+              style={{ width: `${Math.max(3, (i.value / max) * 100)}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function InsightsSection({ x }: { x: PricingInsights }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-4">
+      <h2 className="mb-3 font-black">Estoque e vendas</h2>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div>
+          <p className="text-lg font-black leading-none">{formatBRL(x.stockCost)}</p>
+          <p className="mt-1 text-[11px] text-muted">
+            Parado em estoque (a custo) · {x.stockUnits} un.
+          </p>
+        </div>
+        <div>
+          <p className="text-lg font-black leading-none text-success">
+            {formatBRL(x.stockContribPotential)}
+          </p>
+          <p className="mt-1 text-[11px] text-muted">Contribuição se vender tudo</p>
+        </div>
+        <div>
+          <p className="text-lg font-black leading-none">{formatBRL(x.stockRetail)}</p>
+          <p className="mt-1 text-[11px] text-muted">Receita se vender tudo</p>
+        </div>
+      </div>
+
+      {x.noCostStock > 0 && (
+        <p className="mt-2 text-xs text-warning">
+          {x.noCostStock} produto(s) com estoque e sem custo — não entram na conta
+          de contribuição.
+        </p>
+      )}
+
+      <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
+        <div>
+          <p className="mb-2 text-xs font-bold text-muted">
+            Quem carrega a operação · contribuição acumulada
+          </p>
+          <Bars items={x.topContrib} money color="bg-success" empty="Nenhuma venda com custo ainda." />
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-bold text-muted">O que mais vendeu · unidades</p>
+          <Bars items={x.topSold} color="bg-accent" empty="Nenhuma venda ainda." />
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-bold text-muted">
+            Dinheiro parado por produto · a custo
+          </p>
+          <Bars items={x.topStock} money color="bg-accent" empty="Sem estoque com custo." />
+        </div>
+        {x.idle.length > 0 && (
+          <div className="rounded-xl bg-warning/10 p-3">
+            <p className="text-xs font-bold text-warning">
+              Estoque parado — {x.idle.length} produto(s) com estoque e zero vendas
+            </p>
+            <ul className="mt-1.5 space-y-1 text-xs text-muted">
+              {x.idle.map((p, i) => (
+                <li key={i} className="flex justify-between gap-2">
+                  <span className="min-w-0 truncate">{p.name}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {p.units} un. · {formatBRL(p.value)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1475,10 +1591,12 @@ export function PricingClient({
   rows,
   settings,
   health,
+  insights,
 }: {
   rows: PricingRow[];
   settings: PricingSettings;
   health: BusinessHealth;
+  insights: PricingInsights;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -1612,6 +1730,7 @@ export function PricingClient({
   return (
     <div className="space-y-4">
       <HealthCard h={health} />
+      <InsightsSection x={insights} />
       <PriceSimulator settings={settings} />
       <SettingsPanel initial={settings} />
 

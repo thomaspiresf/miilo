@@ -155,6 +155,10 @@ export type PricingRow = {
   suggested: number | null;
   unitsSold: number;
   profitToDate: number | null;
+  /** unidades em estoque (soma das variações ativas) */
+  stockUnits: number;
+  /** valor em estoque a custo (Σ estoque × custo da variação) */
+  stockCost: number;
 };
 
 export async function listPricingRows(): Promise<{
@@ -189,6 +193,13 @@ export async function listPricingRows(): Promise<{
       (s, v) => s + (soldByVariant.get(v.id) ?? 0),
       0,
     );
+    const stockUnits = p.variants.reduce((s, v) => s + Math.max(0, v.stock), 0);
+    const stockCost = round2(
+      p.variants.reduce(
+        (s, v) => s + Math.max(0, v.stock) * (v.cost ?? cost ?? 0),
+        0,
+      ),
+    );
 
     const margins = computeMargins(cost, singlePrice ?? priceMin, settings, fixedShare);
     const suggested =
@@ -214,10 +225,79 @@ export async function listPricingRows(): Promise<{
       suggested,
       unitsSold,
       profitToDate,
+      stockUnits,
+      stockCost,
     };
   });
 
   return { rows, settings };
+}
+
+// -------------------------------------------------------------------------
+//  Panorama — estoque + contribuição por produto (pros gráficos)
+// -------------------------------------------------------------------------
+
+export type PricingInsights = {
+  stockCost: number; // R$ parados em estoque (a custo)
+  stockRetail: number; // se vender tudo pelo preço atual
+  stockContribPotential: number; // contribuição se vender todo o estoque
+  stockUnits: number;
+  noCostStock: number; // qtd de produtos com estoque e sem custo cadastrado
+  topContrib: { name: string; value: number }[]; // contribuição acumulada, desc
+  topStock: { name: string; value: number }[]; // valor em estoque, desc
+  topSold: { name: string; value: number }[]; // unidades vendidas, desc
+  idle: { name: string; units: number; value: number }[]; // estoque parado (0 vendas)
+};
+
+export function pricingInsights(rows: PricingRow[]): PricingInsights {
+  const active = rows.filter((r) => r.active);
+
+  const stockCost = round2(active.reduce((s, r) => s + r.stockCost, 0));
+  const stockRetail = round2(active.reduce((s, r) => s + r.stockUnits * r.priceMin, 0));
+  const stockContribPotential = round2(
+    active.reduce(
+      (s, r) => s + r.stockUnits * (r.margins?.contribValue ?? 0),
+      0,
+    ),
+  );
+  const stockUnits = active.reduce((s, r) => s + r.stockUnits, 0);
+  const noCostStock = active.filter((r) => r.stockUnits > 0 && r.cost == null).length;
+
+  const topContrib = [...rows]
+    .filter((r) => (r.profitToDate ?? 0) > 0)
+    .sort((a, b) => (b.profitToDate ?? 0) - (a.profitToDate ?? 0))
+    .slice(0, 8)
+    .map((r) => ({ name: r.name, value: r.profitToDate ?? 0 }));
+
+  const topStock = [...active]
+    .filter((r) => r.stockCost > 0)
+    .sort((a, b) => b.stockCost - a.stockCost)
+    .slice(0, 8)
+    .map((r) => ({ name: r.name, value: r.stockCost }));
+
+  const topSold = [...rows]
+    .filter((r) => r.unitsSold > 0)
+    .sort((a, b) => b.unitsSold - a.unitsSold)
+    .slice(0, 8)
+    .map((r) => ({ name: r.name, value: r.unitsSold }));
+
+  const idle = [...active]
+    .filter((r) => r.stockUnits > 0 && r.unitsSold === 0)
+    .sort((a, b) => b.stockCost - a.stockCost)
+    .slice(0, 6)
+    .map((r) => ({ name: r.name, units: r.stockUnits, value: r.stockCost }));
+
+  return {
+    stockCost,
+    stockRetail,
+    stockContribPotential,
+    stockUnits,
+    noCostStock,
+    topContrib,
+    topStock,
+    topSold,
+    idle,
+  };
 }
 
 // -------------------------------------------------------------------------
