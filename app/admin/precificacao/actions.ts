@@ -32,6 +32,7 @@ const settingsSchema = z.object({
       }),
     )
     .max(30),
+  monthlyOrders: z.coerce.number().int().min(0).max(1_000_000).default(0),
 });
 
 export async function savePricingSettingsAction(

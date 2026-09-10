@@ -6,6 +6,7 @@ import { listAllOrders } from "@/lib/data/orders";
 import { imagesForColor } from "@/lib/product-cards";
 import {
   computeMargins,
+  fixedPerOrder,
   suggestForContribution,
   type Margins,
 } from "@/lib/pricing-math";
@@ -25,6 +26,7 @@ export const DEFAULT_PRICING: PricingSettings = {
   freeShippingStoreShare: 100,
   targetMarginPercent: 45,
   fixedCosts: [],
+  monthlyOrders: 0,
 };
 
 function mapSettings(row: any): PricingSettings {
@@ -46,6 +48,7 @@ function mapSettings(row: any): PricingSettings {
           }))
           .filter((f: FixedCost) => f.label)
       : [],
+    monthlyOrders: Math.max(0, Math.round(Number(row.monthly_orders ?? 0)) || 0),
   };
 }
 
@@ -76,10 +79,33 @@ export async function savePricingSettings(s: PricingSettings): Promise<void> {
       free_shipping_store_share: s.freeShippingStoreShare,
       target_margin_percent: s.targetMarginPercent,
       fixed_costs: s.fixedCosts,
+      monthly_orders: s.monthlyOrders,
       updated_at: new Date().toISOString(),
     })
     .eq("id", 1);
-  if (error && !MISSING.test(error.message)) throw error;
+  if (error && !MISSING.test(error.message)) {
+    // coluna monthly_orders ainda não existe -> tenta sem ela
+    if (/monthly_orders/.test(error.message)) {
+      const retry = await admin
+        .from("pricing_settings")
+        .update({
+          tax_percent: s.taxPercent,
+          mp_credit_percent: s.mpCreditPercent,
+          mp_pix_percent: s.mpPixPercent,
+          mp_debit_percent: s.mpDebitPercent,
+          packaging_cost: s.packagingCost,
+          free_shipping_threshold: s.freeShippingThreshold,
+          free_shipping_store_share: s.freeShippingStoreShare,
+          target_margin_percent: s.targetMarginPercent,
+          fixed_costs: s.fixedCosts,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", 1);
+      if (retry.error && !MISSING.test(retry.error.message)) throw retry.error;
+      return;
+    }
+    throw error;
+  }
 }
 
 /** Grava o custo (e opcionalmente o preço) de TODAS as variações de um produto. */
@@ -149,6 +175,8 @@ export async function listPricingRows(): Promise<{
       if (it.variant_id)
         soldByVariant.set(it.variant_id, (soldByVariant.get(it.variant_id) ?? 0) + it.qty);
 
+  const fixedShare = fixedPerOrder(settings);
+
   const rows: PricingRow[] = products.map((p: Product) => {
     const prices = p.variants.map((v) => v.price).filter((x) => x > 0);
     const priceMin = prices.length ? Math.min(...prices) : p.base_price;
@@ -162,7 +190,7 @@ export async function listPricingRows(): Promise<{
       0,
     );
 
-    const margins = computeMargins(cost, singlePrice ?? priceMin, settings);
+    const margins = computeMargins(cost, singlePrice ?? priceMin, settings, fixedShare);
     const suggested =
       cost != null
         ? suggestForContribution(cost, settings, settings.targetMarginPercent)

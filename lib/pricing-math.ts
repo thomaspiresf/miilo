@@ -29,11 +29,25 @@ export function fixedVariablePerUnit(s: PricingSettings): number {
   return s.packagingCost;
 }
 
+/** Custo fixo mensal rateado por pedido (0 se não há estimativa de pedidos/mês). */
+export function fixedPerOrder(s: PricingSettings): number {
+  const monthly = s.fixedCosts.reduce((a, f) => a + (f.amount || 0), 0);
+  return s.monthlyOrders > 0 ? monthly / s.monthlyOrders : 0;
+}
+
 export type Margins = {
   cost: number | null;
   price: number;
   /** custo variável total por unidade (produto + embalagem + taxa + imposto) */
   variableCost: number | null;
+
+  /** partes da conta, pra mostrar o detalhamento */
+  packaging: number;
+  feePct: number;
+  taxPct: number;
+  feeValue: number | null;
+  taxValue: number | null;
+  fixedShare: number;
 
   /** BRUTA — só o produto: (preço − custo) ÷ preço */
   grossValue: number | null;
@@ -58,9 +72,11 @@ export function computeMargins(
   cost: number | null,
   price: number,
   s: PricingSettings,
-  /** custo fixo mensal ÷ pedidos/mês. 0 ou undefined = não calcula a líquida. */
-  fixedPerOrder = 0,
+  /** custo fixo mensal ÷ pedidos/mês. 0 = não calcula a líquida. */
+  fixedShare = 0,
 ): Margins {
+  const feePct = s.mpCreditPercent;
+  const taxPct = s.taxPercent;
   const drain = priceDrain(s);
   const pv = fixedVariablePerUnit(s);
 
@@ -69,6 +85,12 @@ export function computeMargins(
       cost,
       price,
       variableCost: null,
+      packaging: pv,
+      feePct,
+      taxPct,
+      feeValue: null,
+      taxValue: null,
+      fixedShare,
       grossValue: null,
       grossPct: null,
       contribValue: null,
@@ -80,15 +102,23 @@ export function computeMargins(
     };
   }
 
-  const variableCost = cost + price * drain + pv;
+  const feeValue = price * (feePct / 100);
+  const taxValue = price * (taxPct / 100);
+  const variableCost = cost + pv + feeValue + taxValue;
   const grossValue = price - cost;
   const contribValue = price - variableCost;
-  const netValue = fixedPerOrder > 0 ? contribValue - fixedPerOrder : null;
+  const netValue = fixedShare > 0 ? contribValue - fixedShare : null;
 
   return {
     cost,
     price,
     variableCost,
+    packaging: pv,
+    feePct,
+    taxPct,
+    feeValue,
+    taxValue,
+    fixedShare,
     grossValue,
     grossPct: (grossValue / price) * 100,
     contribValue,

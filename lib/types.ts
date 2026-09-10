@@ -57,6 +57,8 @@ export type PricingSettings = {
   freeShippingStoreShare: number;
   targetMarginPercent: number;
   fixedCosts: FixedCost[];
+  /** pedidos/mês estimados — pra ratear o custo fixo (0 = não calcula a margem líquida) */
+  monthlyOrders: number;
 };
 
 /**

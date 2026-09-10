@@ -4,14 +4,34 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, ChevronDown, ImageOff, Plus, Search, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  Box,
+  Building2,
+  Check,
+  ChevronDown,
+  CircleDollarSign,
+  CreditCard,
+  ImageOff,
+  Package,
+  Plus,
+  Receipt,
+  Search,
+  Store,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import type { PricingSettings } from "@/lib/types";
 import type { BusinessHealth, PricingRow } from "@/lib/data/pricing";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
-import { computeMargins, suggestForContribution } from "@/lib/pricing-math";
+import {
+  computeMargins,
+  fixedPerOrder,
+  suggestForContribution,
+} from "@/lib/pricing-math";
 import {
   savePricingSettingsAction,
   setProductPricingAction,
@@ -22,6 +42,12 @@ function toneChip(pct: number | null) {
   if (pct < 30) return "bg-danger/10 text-danger";
   if (pct < 45) return "bg-warning/15 text-warning";
   return "bg-success/10 text-success";
+}
+function toneText(pct: number | null) {
+  if (pct == null) return "text-muted";
+  if (pct < 0) return "text-danger";
+  if (pct < 20) return "text-warning";
+  return "text-accent";
 }
 const brl = (n: number | null) => (n == null ? "—" : formatBRL(n));
 const pctStr = (n: number | null) => (n == null ? "—" : `${Math.round(n)}%`);
@@ -78,29 +104,73 @@ function HealthCard({ h }: { h: BusinessHealth }) {
 
 // =======================================================================
 
+/** input numérico que aceita vírgula enquanto digita (guarda o texto cru localmente). */
+function LooseNum({
+  value,
+  onNumber,
+  prefix,
+  suffix,
+  integer,
+  className,
+  placeholder = "",
+}: {
+  value: number;
+  onNumber: (n: number) => void;
+  prefix?: string;
+  suffix?: string;
+  integer?: boolean;
+  className?: string;
+  placeholder?: string;
+}) {
+  const [t, setT] = useState(() => (value ? String(value).replace(".", ",") : ""));
+  return (
+    <div
+      className={cn(
+        "flex items-center rounded-lg border border-border bg-background",
+        className,
+      )}
+    >
+      {prefix && <span className="pl-2 text-xs text-muted">{prefix}</span>}
+      <input
+        value={t}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setT(raw);
+          const n = Number(raw.replace(",", "."));
+          if (Number.isFinite(n) && n >= 0) onNumber(integer ? Math.round(n) : n);
+          else if (raw.trim() === "") onNumber(0);
+        }}
+        inputMode={integer ? "numeric" : "decimal"}
+        placeholder={placeholder}
+        className="h-9 w-full bg-transparent px-2 text-sm outline-none"
+      />
+      {suffix && <span className="px-2 text-xs text-muted">{suffix}</span>}
+    </div>
+  );
+}
+
 function NumField({
   label,
   value,
   onChange,
   suffix,
+  integer,
+  hint,
 }: {
   label: string;
   value: number;
-  onChange: (v: string) => void;
+  onChange: (n: number) => void;
   suffix: string;
+  integer?: boolean;
+  hint?: string;
 }) {
   return (
     <label className="text-xs">
       <span className="text-muted">{label}</span>
-      <div className="mt-1 flex items-center rounded-lg border border-border bg-background">
-        <input
-          value={String(value ?? "")}
-          onChange={(e) => onChange(e.target.value)}
-          inputMode="decimal"
-          className="h-9 w-full bg-transparent px-2 text-sm outline-none"
-        />
-        <span className="px-2 text-xs text-muted">{suffix}</span>
+      <div className="mt-1">
+        <LooseNum value={value} onNumber={onChange} suffix={suffix} integer={integer} />
       </div>
+      {hint && <span className="mt-0.5 block text-[10px] text-muted">{hint}</span>}
     </label>
   );
 }
@@ -113,9 +183,8 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function set(key: keyof PricingSettings, v: string) {
-    const n = Number(v.replace(",", "."));
-    setS((p) => ({ ...p, [key]: Number.isFinite(n) ? n : 0 }));
+  function setNum(key: keyof PricingSettings, n: number) {
+    setS((p) => ({ ...p, [key]: n }));
     setSaved(false);
   }
 
@@ -157,21 +226,27 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
       </button>
       {open && (
         <div className="space-y-4 border-t border-border p-4">
+          <p className="text-xs font-bold text-muted">Custos variáveis (entram na contribuição)</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <NumField label="Imposto sobre a venda" value={s.taxPercent} onChange={(v) => set("taxPercent", v)} suffix="%" />
-            <NumField label="Margem-alvo (preço sugerido)" value={s.targetMarginPercent} onChange={(v) => set("targetMarginPercent", v)} suffix="%" />
-            <NumField label="Embalagem por pedido" value={s.packagingCost} onChange={(v) => set("packagingCost", v)} suffix="R$" />
-            <NumField label="Taxa MP — crédito" value={s.mpCreditPercent} onChange={(v) => set("mpCreditPercent", v)} suffix="%" />
-            <NumField label="Taxa MP — Pix" value={s.mpPixPercent} onChange={(v) => set("mpPixPercent", v)} suffix="%" />
-            <NumField label="Taxa MP — débito" value={s.mpDebitPercent} onChange={(v) => set("mpDebitPercent", v)} suffix="%" />
+            <NumField label="Imposto sobre a venda" value={s.taxPercent} onChange={(n) => setNum("taxPercent", n)} suffix="%" />
+            <NumField label="Embalagem por pedido" value={s.packagingCost} onChange={(n) => setNum("packagingCost", n)} suffix="R$" />
+            <NumField label="Margem-alvo (contribuição)" value={s.targetMarginPercent} onChange={(n) => setNum("targetMarginPercent", n)} suffix="%" hint="usada no preço sugerido" />
+            <NumField label="Taxa MP — crédito" value={s.mpCreditPercent} onChange={(n) => setNum("mpCreditPercent", n)} suffix="%" hint="usada na conta (pior caso)" />
+            <NumField label="Taxa MP — Pix" value={s.mpPixPercent} onChange={(n) => setNum("mpPixPercent", n)} suffix="%" />
+            <NumField label="Taxa MP — débito" value={s.mpDebitPercent} onChange={(n) => setNum("mpDebitPercent", n)} suffix="%" />
           </div>
-          <p className="text-[11px] text-muted">
-            A margem na tabela usa a taxa de <strong>crédito</strong> (pior caso comum).
-          </p>
 
           <div>
-            <p className="mb-2 text-xs font-semibold text-muted">
-              Custos fixos mensais {totalFixed > 0 && `· ${formatBRL(totalFixed)}/mês`}
+            <p className="text-xs font-bold text-muted">Custos fixos (entram só na margem líquida)</p>
+            <p className="mb-2 mt-1 text-[11px] text-muted">
+              {s.monthlyOrders > 0 && totalFixed > 0 ? (
+                <>
+                  {formatBRL(totalFixed)}/mês ÷ {s.monthlyOrders} pedidos ={" "}
+                  <strong>{formatBRL(totalFixed / s.monthlyOrders)} por pedido</strong>
+                </>
+              ) : (
+                "Preencha os custos fixos e os pedidos/mês pra calcular a margem líquida."
+              )}
             </p>
             <div className="space-y-2">
               {s.fixedCosts.map((f, i) => (
@@ -186,25 +261,22 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
                     placeholder="Ex.: aluguel, funcionário, plataformas"
                     className="h-9 flex-1 rounded-lg border border-border bg-background px-2 text-sm outline-none"
                   />
-                  <div className="flex w-28 items-center rounded-lg border border-border bg-background">
-                    <span className="pl-2 text-xs text-muted">R$</span>
-                    <input
-                      value={String(f.amount ?? "")}
-                      onChange={(e) => {
-                        const next = [...s.fixedCosts];
-                        next[i] = { ...f, amount: Number(e.target.value.replace(",", ".")) || 0 };
-                        setS((p) => ({ ...p, fixedCosts: next }));
-                      }}
-                      inputMode="decimal"
-                      className="h-9 w-full bg-transparent px-1 text-sm outline-none"
-                    />
-                  </div>
+                  <LooseNum
+                    className="w-28"
+                    prefix="R$"
+                    value={f.amount}
+                    onNumber={(n) => {
+                      const next = [...s.fixedCosts];
+                      next[i] = { ...f, amount: n };
+                      setS((p) => ({ ...p, fixedCosts: next }));
+                    }}
+                  />
                   <button
                     type="button"
                     onClick={() =>
                       setS((p) => ({ ...p, fixedCosts: p.fixedCosts.filter((_, j) => j !== i) }))
                     }
-                    className="grid h-9 w-9 place-items-center rounded-lg border border-border text-danger"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border text-danger"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -220,6 +292,17 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
                 <Plus className="h-3.5 w-3.5" /> adicionar custo fixo
               </button>
             </div>
+
+            <div className="mt-3 max-w-[16rem]">
+              <NumField
+                label="Pedidos por mês (estimado)"
+                value={s.monthlyOrders}
+                onChange={(n) => setNum("monthlyOrders", n)}
+                suffix="ped."
+                integer
+                hint="deixe 0 enquanto não tiver ideia — a margem líquida fica oculta"
+              />
+            </div>
           </div>
 
           {error && <p className="text-xs text-danger">{error}</p>}
@@ -233,55 +316,126 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
 }
 
 // =======================================================================
-//  Simulador — testar um produto antes de comprar
+//  Detalhamento — pra onde vai o dinheiro da venda
 // =======================================================================
 
-function SimResult({
+const signed = (n: number) => (n < 0 ? `− ${formatBRL(-n)}` : formatBRL(n));
+
+function BreakLine({
+  icon,
   label,
+  value,
+  strong,
+  sub,
+  valueClass,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: number | null;
+  strong?: boolean;
+  sub?: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 px-3 py-2">
+      <span className={cn("flex items-center gap-2", strong ? "font-bold" : "text-foreground")}>
+        <span className="text-muted [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
+        {label}
+      </span>
+      <span className="shrink-0 text-right">
+        <span className={cn(strong ? "text-base font-black" : "font-semibold", valueClass)}>
+          {value == null ? "—" : signed(value)}
+        </span>
+        {sub && <span className="block text-[11px] text-muted">{sub}</span>}
+      </span>
+    </div>
+  );
+}
+
+/** Cascata da venda: quanto sobra depois de cada custo (estilo extrato). */
+function PriceBreakdown({
   cost,
   price,
   settings,
-  target,
-  big,
 }: {
-  label: string;
   cost: number;
   price: number;
   settings: PricingSettings;
-  target: number;
-  big?: boolean;
 }) {
-  const m = computeMargins(cost, price, settings);
-  const cp = m.contribPct ?? 0;
-  const tone =
-    cp <= 0
-      ? { c: "text-danger", i: "🔴", t: "Prejuízo — você paga pra vender." }
-      : cp < target
-        ? { c: "text-warning", i: "⚠️", t: `Contribuição abaixo da meta de ${target}%.` }
-        : { c: "text-success", i: "✅", t: "Contribuição dentro da meta." };
+  const m = computeMargins(cost, price, settings, fixedPerOrder(settings));
+  const hr = <div className="mx-3 border-t border-border/70" />;
+
   return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
-      <p className={cn("font-black", big ? "text-2xl" : "text-lg")}>{formatBRL(price)}</p>
-      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-        <span className="text-muted">
-          bruta <span className="font-semibold text-foreground">{pctStr(m.grossPct)}</span>
-        </span>
-        <span className={cn("font-semibold", tone.c)}>
-          {tone.i} contribuição {pctStr(m.contribPct)} ({brl(m.contribValue)})
-        </span>
-        <span className="text-muted">
-          markup <span className="font-semibold text-foreground">{fmt1(m.markup ?? 0)}×</span>
-        </span>
+    <div className="rounded-2xl border border-border bg-surface p-4">
+      <div className="flex items-center gap-3">
+        <Store className="h-6 w-6 text-success" />
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-muted">Venda do produto</p>
+          <p className="text-2xl font-black text-success">{formatBRL(price)}</p>
+        </div>
       </div>
-      <p className="text-[11px] text-muted">{tone.t}</p>
-      {big && (
-        <p className="mt-1 text-[11px] text-muted">
-          preço mínimo (contribuição zero): {brl(m.minPrice)}
-        </p>
-      )}
+
+      <div className="mt-3 overflow-hidden rounded-xl bg-black/[0.03] text-sm">
+        <BreakLine icon={<Package />} label="Custo do produto" value={-cost} />
+        {hr}
+        {m.packaging > 0 && (
+          <BreakLine icon={<Box />} label="Embalagem" value={-m.packaging} />
+        )}
+        <BreakLine
+          icon={<CreditCard />}
+          label={`Taxa do cartão (${m.feePct}%)`}
+          value={m.feeValue == null ? null : -m.feeValue}
+        />
+        <BreakLine
+          icon={<Receipt />}
+          label={`Imposto (${m.taxPct}%)`}
+          value={m.taxValue == null ? null : -m.taxValue}
+        />
+        {hr}
+        <BreakLine
+          icon={<Wallet className="text-success" />}
+          label="Margem de contribuição"
+          value={m.contribValue}
+          strong
+          valueClass={cn(m.contribValue != null && m.contribValue < 0 ? "text-danger" : "text-success")}
+          sub={m.contribPct != null ? `${fmt1(m.contribPct)}% da venda` : undefined}
+        />
+
+        {m.netPct != null ? (
+          <>
+            {hr}
+            <BreakLine
+              icon={<Building2 />}
+              label="Custos fixos da empresa"
+              value={-m.fixedShare}
+              sub="rateado por pedido"
+            />
+            {hr}
+            <BreakLine
+              icon={<CircleDollarSign className="text-accent" />}
+              label="Margem líquida"
+              value={m.netValue}
+              strong
+              valueClass={m.netValue != null && m.netValue < 0 ? "text-danger" : "text-accent"}
+              sub={`${fmt1(m.netPct)}% da venda`}
+            />
+          </>
+        ) : (
+          <p className="px-3 py-2 text-[11px] text-muted">
+            Defina custos fixos e pedidos/mês nas regras pra ver a margem líquida.
+          </p>
+        )}
+      </div>
     </div>
   );
+}
+
+function verdict(contribPct: number | null, target: number) {
+  const cp = contribPct ?? 0;
+  if (cp <= 0) return { c: "text-danger", i: "🔴", t: "Prejuízo — você paga pra vender." };
+  if (cp < target)
+    return { c: "text-warning", i: "⚠️", t: `Contribuição abaixo da meta de ${target}%.` };
+  return { c: "text-success", i: "✅", t: "Contribuição dentro da meta." };
 }
 
 function PriceSimulator({ settings }: { settings: PricingSettings }) {
@@ -373,40 +527,44 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
           {costN == null || suggested == null ? (
             <p className="text-xs text-muted">Digite o custo pra ver o preço sugerido.</p>
           ) : (
-            <div className="space-y-3 rounded-xl bg-black/[0.03] p-4">
-              <SimResult
-                label={`Preço sugerido pra ${tmN}% de contribuição`}
-                cost={costN}
-                price={suggested}
-                settings={simSettings}
-                target={tmN}
-                big
-              />
-              <div className="border-t border-border pt-3">
-                <label className="text-xs text-muted">
-                  E se eu vender por{" "}
-                  <Ghost
-                    value={testPrice}
-                    onChange={setTestPrice}
-                    prefix="R$"
-                    ch={5}
-                    className="font-bold text-foreground"
-                    placeholder="…"
-                  />
-                </label>
-                {testN != null && (
-                  <div className="mt-1.5">
-                    <SimResult
-                      label="Nesse preço"
-                      cost={costN}
-                      price={testN}
-                      settings={simSettings}
-                      target={tmN}
+            (() => {
+              const usedPrice = testN ?? suggested;
+              const v = verdict(computeMargins(costN, usedPrice, simSettings).contribPct, tmN);
+              return (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                    <span className="text-muted">Vender por</span>
+                    <Ghost
+                      value={testPrice}
+                      onChange={setTestPrice}
+                      prefix="R$"
+                      ch={5}
+                      className="text-lg font-black text-foreground"
+                      placeholder={fmt2(suggested)}
                     />
+                    {testN == null ? (
+                      <span className="text-[11px] text-muted">
+                        (sugerido pra {tmN}% de contribuição)
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setTestPrice("")}
+                        className="text-[11px] font-semibold text-primary"
+                      >
+                        voltar pro sugerido
+                      </button>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+
+                  <p className={cn("text-sm font-semibold", v.c)}>
+                    {v.i} {v.t}
+                  </p>
+
+                  <PriceBreakdown cost={costN} price={usedPrice} settings={simSettings} />
+                </div>
+              );
+            })()
           )}
         </div>
       )}
@@ -439,7 +597,7 @@ function usePriceRow(r: PricingRow, ctx: RowCtx) {
   const costN = cur.cost === "" ? null : num(cur.cost);
   const priceN = num(cur.price) ?? r.priceMin;
 
-  const m = computeMargins(costN, priceN, s);
+  const m = computeMargins(costN, priceN, s, fixedPerOrder(s));
   const suggested = costN != null ? suggestForContribution(costN, s, s.targetMarginPercent) : null;
   const canBump = !multi && suggested != null && suggested > priceN + 0.01;
 
@@ -668,6 +826,25 @@ function ContribCell({ p, showValue }: { p: ReturnType<typeof usePriceRow>; show
   );
 }
 
+/** Margem líquida — só leitura (contribuição − custo fixo rateado). "—" se sem pedidos/mês. */
+function NetCell({ p }: { p: ReturnType<typeof usePriceRow> }) {
+  if (p.m.netPct == null) {
+    return (
+      <span className="text-xs text-muted" title="Defina custos fixos e pedidos/mês nas regras">
+        —
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      <span className={cn("text-sm font-bold tabular-nums", toneText(p.m.netPct))}>
+        {pctStr(p.m.netPct)}
+      </span>
+      <span className="text-[11px] text-muted">{brl(p.m.netValue)}</span>
+    </span>
+  );
+}
+
 /** Markup (preço ÷ custo) — editável, mexe no preço. */
 function MarkupCell({ p }: { p: ReturnType<typeof usePriceRow> }) {
   if (p.m.markup == null) return <span className="text-xs text-muted">—</span>;
@@ -740,6 +917,8 @@ function MarginLegend() {
       <span className="font-semibold text-foreground">Bruta</span> = só o produto ·{" "}
       <span className="font-semibold text-foreground">Contribuição</span> = produto +
       embalagem + taxa MP + imposto ·{" "}
+      <span className="font-semibold text-foreground">Líquida</span> = contribuição − custos
+      fixos rateados ·{" "}
       <span className="font-semibold text-foreground">Markup</span> = preço ÷ custo (não é
       margem)
     </div>
@@ -770,8 +949,22 @@ function MiniStat({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function DetailsToggle({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-primary"
+    >
+      {open ? "ocultar detalhes" : "ver detalhes"}
+      <ChevronDown className={cn("h-3 w-3 transition", open && "rotate-180")} />
+    </button>
+  );
+}
+
 function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
   const p = usePriceRow(r, ctx);
+  const [details, setDetails] = useState(false);
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
@@ -829,16 +1022,24 @@ function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
               <MiniStat label="M. contribuição">
                 <ContribCell p={p} showValue />
               </MiniStat>
+              <MiniStat label="M. líquida">
+                <NetCell p={p} />
+              </MiniStat>
               <MiniStat label="Markup">
                 <MarkupCell p={p} />
               </MiniStat>
-              <MiniStat label="Preço mínimo">
-                <span className="text-sm font-semibold">{brl(p.m.minPrice)}</span>
-              </MiniStat>
             </div>
-            <div className="mt-1.5">
+            <div className="mt-2 flex flex-wrap items-center gap-3">
               <BumpLink p={p} ctx={ctx} />
+              {p.costN != null && (
+                <DetailsToggle open={details} onClick={() => setDetails((o) => !o)} />
+              )}
             </div>
+            {details && p.costN != null && (
+              <div className="mt-3">
+                <PriceBreakdown cost={p.costN} price={p.priceN} settings={ctx.settings} />
+              </div>
+            )}
           </>
         )}
       </div>
@@ -887,62 +1088,81 @@ function SortTh({
 
 function TableRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
   const p = usePriceRow(r, ctx);
+  const [details, setDetails] = useState(false);
 
   return (
-    <tr className="border-b border-border/60 align-middle last:border-0">
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-2.5">
-          <Thumb url={r.imageUrl} size={36} />
-          <div className="w-[9.5rem] min-w-0 sm:w-52">
-            <Link
-              href={`/admin/produtos/${r.productId}`}
-              className="line-clamp-1 font-semibold hover:text-primary"
-            >
-              {r.name}
-            </Link>
-            <SubLine r={r} />
+    <>
+      <tr className="border-b border-border/60 align-middle last:border-0">
+        <td className="px-3 py-3">
+          <div className="flex items-center gap-2.5">
+            <Thumb url={r.imageUrl} size={36} />
+            <div className="w-[9.5rem] min-w-0 sm:w-52">
+              <Link
+                href={`/admin/produtos/${r.productId}`}
+                className="line-clamp-1 font-semibold hover:text-primary"
+              >
+                {r.name}
+              </Link>
+              <SubLine r={r} />
+              {p.costN != null && !p.multi && (
+                <DetailsToggle open={details} onClick={() => setDetails((o) => !o)} />
+              )}
+            </div>
           </div>
-        </div>
-      </td>
+        </td>
 
-      <td className="px-3 py-3">
-        <CostField value={p.cur.cost} onChange={p.setCost} />
-      </td>
+        <td className="px-3 py-3">
+          <CostField value={p.cur.cost} onChange={p.setCost} />
+        </td>
 
-      <td className="whitespace-nowrap px-3 py-3">
-        {p.multi ? (
-          <span className="text-xs text-muted">
-            {formatBRL(r.priceMin)}–{formatBRL(r.priceMax)}
-          </span>
-        ) : (
-          <span className="text-sm font-semibold">
-            <Ghost value={p.cur.price} onChange={p.setPrice} prefix="R$" ch={5} />
-          </span>
-        )}
-        {p.canBump && (
-          <div className="mt-0.5">
-            <BumpLink p={p} ctx={ctx} />
-          </div>
-        )}
-      </td>
+        <td className="whitespace-nowrap px-3 py-3">
+          {p.multi ? (
+            <span className="text-xs text-muted">
+              {formatBRL(r.priceMin)}–{formatBRL(r.priceMax)}
+            </span>
+          ) : (
+            <span className="text-sm font-semibold">
+              <Ghost value={p.cur.price} onChange={p.setPrice} prefix="R$" ch={5} />
+            </span>
+          )}
+          {p.canBump && (
+            <div className="mt-0.5">
+              <BumpLink p={p} ctx={ctx} />
+            </div>
+          )}
+        </td>
 
-      <td className="whitespace-nowrap px-3 py-3">
-        <GrossCell p={p} />
-      </td>
+        <td className="whitespace-nowrap px-3 py-3">
+          <GrossCell p={p} />
+        </td>
 
-      <td className="px-3 py-3">
-        <ContribCell p={p} showValue />
-      </td>
+        <td className="px-3 py-3">
+          <ContribCell p={p} showValue />
+        </td>
 
-      <td className="whitespace-nowrap px-3 py-3">
-        <MarkupCell p={p} />
-        <div className="mt-0.5 text-[11px] text-muted">mín {brl(p.m.minPrice)}</div>
-      </td>
+        <td className="px-3 py-3">
+          <NetCell p={p} />
+        </td>
 
-      <td className="px-3 py-3">
-        <SaveBtn r={r} p={p} ctx={ctx} className="w-[68px]" />
-      </td>
-    </tr>
+        <td className="whitespace-nowrap px-3 py-3">
+          <MarkupCell p={p} />
+          <div className="mt-0.5 text-[11px] text-muted">mín {brl(p.m.minPrice)}</div>
+        </td>
+
+        <td className="px-3 py-3">
+          <SaveBtn r={r} p={p} ctx={ctx} className="w-[68px]" />
+        </td>
+      </tr>
+      {details && p.costN != null && !p.multi && (
+        <tr className="border-b border-border/60">
+          <td colSpan={8} className="bg-black/[0.02] px-3 py-3">
+            <div className="max-w-md">
+              <PriceBreakdown cost={p.costN} price={p.priceN} settings={ctx.settings} />
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -959,7 +1179,7 @@ function TableView({
 }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
-      <table className="w-full min-w-[720px] border-collapse text-sm">
+      <table className="w-full min-w-[800px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted">
             <SortTh k="name" sort={sort} onSort={onSort}>Produto</SortTh>
@@ -967,6 +1187,7 @@ function TableView({
             <SortTh k="price" sort={sort} onSort={onSort}>Venda</SortTh>
             <th className="px-3 py-2.5 font-semibold">M. bruta</th>
             <SortTh k="margin" sort={sort} onSort={onSort}>M. contrib.</SortTh>
+            <th className="px-3 py-2.5 font-semibold">M. líquida</th>
             <th className="px-3 py-2.5 font-semibold">Markup</th>
             <th className="px-3 py-2.5" />
           </tr>
