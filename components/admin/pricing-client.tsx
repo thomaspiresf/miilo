@@ -11,17 +11,12 @@ import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
+import { computeMargins, suggestForContribution } from "@/lib/pricing-math";
 import {
   savePricingSettingsAction,
   setProductPricingAction,
 } from "@/app/admin/precificacao/actions";
 
-// ---- conta (espelha lib/data/pricing.ts computePrice) -----------------
-function niceUp(n: number) {
-  if (n <= 0) return 0;
-  const base = Math.ceil(n);
-  return base - 0.1 < n ? base + 0.9 : base - 0.1;
-}
 function toneChip(pct: number | null) {
   if (pct == null) return "bg-black/[0.06] text-muted";
   if (pct < 30) return "bg-danger/10 text-danger";
@@ -29,6 +24,7 @@ function toneChip(pct: number | null) {
   return "bg-success/10 text-success";
 }
 const brl = (n: number | null) => (n == null ? "—" : formatBRL(n));
+const pctStr = (n: number | null) => (n == null ? "—" : `${Math.round(n)}%`);
 const num = (v: string) => {
   const t = String(v).trim().replace(",", ".");
   if (t === "") return null;
@@ -37,22 +33,6 @@ const num = (v: string) => {
 };
 const fmt2 = (n: number) => n.toFixed(2).replace(".", ",");
 const fmt1 = (n: number) => n.toFixed(1).replace(".", ",");
-
-/** margem / markup / preço mínimo pra um par custo+preço. */
-function priceMath(cost: number, price: number, drain: number, pk: number) {
-  const margin = price * (1 - drain) - cost - pk;
-  return {
-    margin,
-    marginPct: price > 0 ? (margin / price) * 100 : 0,
-    markup: cost > 0 ? price / cost : 0,
-    min: drain < 1 ? (cost + pk) / (1 - drain) : 0,
-  };
-}
-/** preço de venda pra bater uma margem-alvo (arredondado pra ,90). */
-function suggestPrice(cost: number, drain: number, pk: number, targetPct: number) {
-  const tm = targetPct / 100;
-  return drain + tm < 1 ? niceUp((cost + pk) / (1 - drain - tm)) : null;
-}
 
 // =======================================================================
 
@@ -126,6 +106,7 @@ function NumField({
 }
 
 function SettingsPanel({ initial }: { initial: PricingSettings }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [s, setS] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -150,6 +131,7 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
     else {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      router.refresh(); // recalcula a tabela com as regras novas
     }
   }
 
@@ -258,37 +240,44 @@ function SimResult({
   label,
   cost,
   price,
-  drain,
-  pk,
+  settings,
   target,
   big,
 }: {
   label: string;
   cost: number;
   price: number;
-  drain: number;
-  pk: number;
+  settings: PricingSettings;
   target: number;
   big?: boolean;
 }) {
-  const m = priceMath(cost, price, drain, pk);
+  const m = computeMargins(cost, price, settings);
+  const cp = m.contribPct ?? 0;
   const tone =
-    m.marginPct <= 0
+    cp <= 0
       ? { c: "text-danger", i: "🔴", t: "Prejuízo — você paga pra vender." }
-      : m.marginPct < target
-        ? { c: "text-warning", i: "⚠️", t: `Abaixo da sua meta de ${target}%.` }
-        : { c: "text-success", i: "✅", t: "Dentro da meta." };
+      : cp < target
+        ? { c: "text-warning", i: "⚠️", t: `Contribuição abaixo da meta de ${target}%.` }
+        : { c: "text-success", i: "✅", t: "Contribuição dentro da meta." };
   return (
     <div>
       <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
       <p className={cn("font-black", big ? "text-2xl" : "text-lg")}>{formatBRL(price)}</p>
-      <p className={cn("mt-0.5 text-xs font-semibold", tone.c)}>
-        {tone.i} margem {brl(m.margin)} ({m.marginPct.toFixed(0)}%) · markup {fmt1(m.markup)}×
-      </p>
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+        <span className="text-muted">
+          bruta <span className="font-semibold text-foreground">{pctStr(m.grossPct)}</span>
+        </span>
+        <span className={cn("font-semibold", tone.c)}>
+          {tone.i} contribuição {pctStr(m.contribPct)} ({brl(m.contribValue)})
+        </span>
+        <span className="text-muted">
+          markup <span className="font-semibold text-foreground">{fmt1(m.markup ?? 0)}×</span>
+        </span>
+      </div>
       <p className="text-[11px] text-muted">{tone.t}</p>
       {big && (
         <p className="mt-1 text-[11px] text-muted">
-          preço mínimo (sem lucro): {brl(m.min)}
+          preço mínimo (contribuição zero): {brl(m.minPrice)}
         </p>
       )}
     </div>
@@ -304,11 +293,17 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
   const [testPrice, setTestPrice] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const drain = (settings.mpCreditPercent + settings.taxPercent) / 100;
   const costN = num(cost);
   const tmN = num(tm) ?? settings.targetMarginPercent;
   const pkN = num(pk) ?? 0;
-  const suggested = costN != null ? suggestPrice(costN, drain, pkN, tmN) : null;
+  // regras "de teste" — sobrepõe margem-alvo e embalagem sem salvar
+  const simSettings: PricingSettings = {
+    ...settings,
+    targetMarginPercent: tmN,
+    packagingCost: pkN,
+  };
+  const suggested =
+    costN != null ? suggestForContribution(costN, simSettings, tmN) : null;
   const testN = num(testPrice);
 
   const changed =
@@ -362,7 +357,7 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
               embalagem
               <Ghost value={pk} onChange={setPk} prefix="R$" ch={3.5} className="text-foreground" />
             </span>
-            <span>+ taxa crédito {settings.mpCreditPercent}% + imposto {settings.taxPercent}%</span>
+            <span>+ taxa crédito {settings.mpCreditPercent}% + imposto {settings.taxPercent}% (= margem de contribuição)</span>
             {changed && (
               <button
                 type="button"
@@ -380,11 +375,10 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
           ) : (
             <div className="space-y-3 rounded-xl bg-black/[0.03] p-4">
               <SimResult
-                label={`Preço sugerido pra ${tmN}% de margem`}
+                label={`Preço sugerido pra ${tmN}% de contribuição`}
                 cost={costN}
                 price={suggested}
-                drain={drain}
-                pk={pkN}
+                settings={simSettings}
                 target={tmN}
                 big
               />
@@ -406,8 +400,7 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
                       label="Nesse preço"
                       cost={costN}
                       price={testN}
-                      drain={drain}
-                      pk={pkN}
+                      settings={simSettings}
                       target={tmN}
                     />
                   </div>
@@ -437,25 +430,17 @@ type RowCtx = {
 
 function usePriceRow(r: PricingRow, ctx: RowCtx) {
   const s = ctx.settings;
-  const drain = (s.mpCreditPercent + s.taxPercent) / 100;
-  const pk = s.packagingCost;
   const cur = ctx.d(r);
   const b = ctx.base(r);
   const multi = r.price == null;
 
-  const [edit, setEdit] = useState<{ field: "margin" | "markup"; raw: string } | null>(null);
+  const [edit, setEdit] = useState<{ field: "contrib" | "markup"; raw: string } | null>(null);
 
   const costN = cur.cost === "" ? null : num(cur.cost);
   const priceN = num(cur.price) ?? r.priceMin;
 
-  const margin = costN != null ? priceN * (1 - drain) - costN - pk : null;
-  const marginPct = margin != null && priceN > 0 ? (margin / priceN) * 100 : null;
-  const mult = costN != null && costN > 0 ? priceN / costN : null; // preço ÷ custo
-  const min = costN != null && drain < 1 ? (costN + pk) / (1 - drain) : null;
-
-  const tm = s.targetMarginPercent / 100;
-  const suggested =
-    costN != null && drain + tm < 1 ? niceUp((costN + pk) / (1 - drain - tm)) : null;
+  const m = computeMargins(costN, priceN, s);
+  const suggested = costN != null ? suggestForContribution(costN, s, s.targetMarginPercent) : null;
   const canBump = !multi && suggested != null && suggested > priceN + 0.01;
 
   function setCost(v: string) {
@@ -466,18 +451,20 @@ function usePriceRow(r: PricingRow, ctx: RowCtx) {
     setEdit(null);
     ctx.setD(r, { price: v });
   }
-  function driveMargin(v: string) {
-    setEdit({ field: "margin", raw: v });
+  /** digitar a margem de contribuição → preço que a atinge */
+  function driveContrib(v: string) {
+    setEdit({ field: "contrib", raw: v });
     const mp = num(v);
-    if (mp != null && costN != null && drain + mp / 100 < 1) {
-      ctx.setD(r, { price: fmt2(niceUp((costN + pk) / (1 - drain - mp / 100))) });
+    if (mp != null && costN != null) {
+      const p = suggestForContribution(costN, s, mp);
+      if (p != null) ctx.setD(r, { price: fmt2(p) });
     }
   }
   function driveMarkup(v: string) {
     setEdit({ field: "markup", raw: v });
     const mk = num(v);
     if (mk != null && mk > 0 && costN != null) {
-      ctx.setD(r, { price: fmt2(niceUp(costN * mk)) });
+      ctx.setD(r, { price: fmt2(Math.round(costN * mk * 100) / 100) });
     }
   }
   function applyTarget() {
@@ -488,23 +475,22 @@ function usePriceRow(r: PricingRow, ctx: RowCtx) {
   }
   const stopEditing = () => setEdit(null);
 
-  const marginField =
-    edit?.field === "margin"
+  const contribField =
+    edit?.field === "contrib"
       ? edit.raw
-      : marginPct != null
-        ? String(Math.round(marginPct))
+      : m.contribPct != null
+        ? String(Math.round(m.contribPct))
         : "";
   const markupField =
-    edit?.field === "markup" ? edit.raw : mult != null ? fmt1(mult) : "";
+    edit?.field === "markup" ? edit.raw : m.markup != null ? fmt1(m.markup) : "";
 
   const dirty = cur.cost !== b.cost || (!multi && cur.price !== b.price);
   const editable = !multi && costN != null;
 
   return {
-    cur, multi, editable, costN, priceN,
-    margin, marginPct, mult, min, suggested, canBump, dirty,
-    marginField, markupField,
-    setCost, setPrice, driveMargin, driveMarkup, applyTarget, stopEditing,
+    cur, multi, editable, costN, priceN, m, suggested, canBump, dirty,
+    contribField, markupField,
+    setCost, setPrice, driveContrib, driveMarkup, applyTarget, stopEditing,
   };
 }
 
@@ -638,10 +624,18 @@ function CostField({
   );
 }
 
-// ---- margem (chip colorido, editável) + markup (discreto) -----------
+// ---- células de margem/markup --------------------------------------
 
-function MarginChip({ p }: { p: ReturnType<typeof usePriceRow> }) {
-  if (p.marginPct == null) {
+/** Margem bruta — só leitura (só o produto). */
+function GrossCell({ p }: { p: ReturnType<typeof usePriceRow> }) {
+  return (
+    <span className="text-sm font-semibold tabular-nums">{pctStr(p.m.grossPct)}</span>
+  );
+}
+
+/** Margem de contribuição — editável, colorida pelo nível, mexe no preço. */
+function ContribCell({ p, showValue }: { p: ReturnType<typeof usePriceRow>; showValue?: boolean }) {
+  if (p.m.contribPct == null) {
     return (
       <span className="rounded-md bg-black/[0.06] px-2 py-1 text-xs font-bold text-muted">
         sem custo
@@ -649,45 +643,45 @@ function MarginChip({ p }: { p: ReturnType<typeof usePriceRow> }) {
     );
   }
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-1.5 py-1 text-xs font-bold transition focus-within:ring-2 focus-within:ring-foreground/25",
-        toneChip(p.marginPct),
+    <span className="inline-flex flex-col items-start gap-0.5">
+      <span
+        className={cn(
+          "inline-flex items-center rounded-md px-1.5 py-1 text-xs font-bold transition focus-within:ring-2 focus-within:ring-foreground/25",
+          toneChip(p.m.contribPct),
+        )}
+      >
+        <input
+          value={p.contribField}
+          onChange={(e) => p.driveContrib(e.target.value)}
+          onBlur={p.stopEditing}
+          disabled={!p.editable}
+          inputMode="decimal"
+          style={{ width: "2.3ch" }}
+          className="bg-transparent text-right tabular-nums outline-none disabled:cursor-default"
+        />
+        %
+      </span>
+      {showValue && p.m.contribValue != null && (
+        <span className="text-[11px] text-muted">{brl(p.m.contribValue)}</span>
       )}
-      title="Margem — edite pra ajustar o preço"
-    >
-      <input
-        value={p.marginField}
-        onChange={(e) => p.driveMargin(e.target.value)}
-        onBlur={p.stopEditing}
-        disabled={!p.editable}
-        inputMode="decimal"
-        style={{ width: "2.3ch" }}
-        className="bg-transparent text-right tabular-nums outline-none disabled:cursor-default"
-      />
-      %
     </span>
   );
 }
 
-function Extras({ p }: { p: ReturnType<typeof usePriceRow> }) {
+/** Markup (preço ÷ custo) — editável, mexe no preço. */
+function MarkupCell({ p }: { p: ReturnType<typeof usePriceRow> }) {
+  if (p.m.markup == null) return <span className="text-xs text-muted">—</span>;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
-      <span>margem {brl(p.margin)}</span>
-      <span className="inline-flex items-center gap-0.5">
-        markup{" "}
-        <Ghost
-          value={p.markupField}
-          onChange={p.driveMarkup}
-          onBlur={p.stopEditing}
-          suffix="×"
-          ch={2.6}
-          disabled={!p.editable}
-          className="text-foreground"
-        />
-      </span>
-      <span>mín {brl(p.min)}</span>
-    </div>
+    <span className="inline-flex items-center text-sm font-semibold text-foreground">
+      <Ghost
+        value={p.markupField}
+        onChange={p.driveMarkup}
+        onBlur={p.stopEditing}
+        suffix="×"
+        ch={2.6}
+        disabled={!p.editable}
+      />
+    </span>
   );
 }
 
@@ -733,9 +727,22 @@ function SubLine({ r }: { r: PricingRow }) {
     <p className="truncate text-[11px] text-muted">
       {r.categoryName}
       {r.unitsSold > 0 && ` · vendeu ${r.unitsSold}`}
-      {r.profitToDate != null && ` · lucro ${brl(r.profitToDate)}`}
+      {r.profitToDate != null && ` · contrib. ${brl(r.profitToDate)}`}
       {!r.active && " · inativo"}
     </p>
+  );
+}
+
+/** legenda fixa — o que cada margem inclui */
+function MarginLegend() {
+  return (
+    <div className="rounded-xl border border-border bg-surface px-4 py-2.5 text-[11px] leading-relaxed text-muted">
+      <span className="font-semibold text-foreground">Bruta</span> = só o produto ·{" "}
+      <span className="font-semibold text-foreground">Contribuição</span> = produto +
+      embalagem + taxa MP + imposto ·{" "}
+      <span className="font-semibold text-foreground">Markup</span> = preço ÷ custo (não é
+      margem)
+    </div>
   );
 }
 
@@ -754,6 +761,15 @@ function BumpLink({ p, ctx }: { p: ReturnType<typeof usePriceRow>; ctx: RowCtx }
 
 // ---- visão em cartões ----------------------------------------------
 
+function MiniStat({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
+      <div className="mt-0.5">{children}</div>
+    </div>
+  );
+}
+
 function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
   const p = usePriceRow(r, ctx);
 
@@ -770,23 +786,18 @@ function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
           </Link>
           <SubLine r={r} />
         </div>
-        <MarginChip p={p} />
       </div>
 
       <div className="mt-3 flex items-start justify-between gap-4">
         <div className="flex items-start gap-4 sm:gap-5">
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-muted">Compra</p>
-            <div className="mt-0.5">
-              <CostField value={p.cur.cost} onChange={p.setCost} big />
-            </div>
-          </div>
+          <MiniStat label="Compra">
+            <CostField value={p.cur.cost} onChange={p.setCost} big />
+          </MiniStat>
 
           <ArrowRight className="mt-6 h-4 w-4 shrink-0 text-muted" />
 
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-muted">Venda</p>
-            <div className="mt-0.5 text-base font-bold">
+          <MiniStat label="Venda">
+            <div className="text-base font-bold">
               {p.multi ? (
                 <span>
                   {formatBRL(r.priceMin)}–{formatBRL(r.priceMax)}
@@ -795,13 +806,13 @@ function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
                 <Ghost value={p.cur.price} onChange={p.setPrice} prefix="R$" ch={5.5} />
               )}
             </div>
-          </div>
+          </MiniStat>
         </div>
 
         <SaveBtn r={r} p={p} ctx={ctx} className="w-[72px]" />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+      <div className="mt-3 border-t border-border/60 pt-3">
         {p.multi ? (
           <p className="text-[11px] text-muted">
             Preços variam por variação —{" "}
@@ -810,9 +821,26 @@ function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
             </Link>
           </p>
         ) : (
-          <Extras p={p} />
+          <>
+            <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
+              <MiniStat label="M. bruta">
+                <GrossCell p={p} />
+              </MiniStat>
+              <MiniStat label="M. contribuição">
+                <ContribCell p={p} showValue />
+              </MiniStat>
+              <MiniStat label="Markup">
+                <MarkupCell p={p} />
+              </MiniStat>
+              <MiniStat label="Preço mínimo">
+                <span className="text-sm font-semibold">{brl(p.m.minPrice)}</span>
+              </MiniStat>
+            </div>
+            <div className="mt-1.5">
+              <BumpLink p={p} ctx={ctx} />
+            </div>
+          </>
         )}
-        <BumpLink p={p} ctx={ctx} />
       </div>
     </div>
   );
@@ -898,28 +926,17 @@ function TableRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
         )}
       </td>
 
-      <td className="px-3 py-3">
-        <MarginChip p={p} />
+      <td className="whitespace-nowrap px-3 py-3">
+        <GrossCell p={p} />
       </td>
 
-      <td className="whitespace-nowrap px-3 py-3 text-xs text-muted">
-        {p.mult == null ? (
-          "—"
-        ) : (
-          <span className="text-foreground">
-            <Ghost
-              value={p.markupField}
-              onChange={p.driveMarkup}
-              onBlur={p.stopEditing}
-              suffix="×"
-              ch={2.6}
-              disabled={!p.editable}
-            />
-          </span>
-        )}
-        <div className="mt-0.5 text-[11px] text-muted">
-          {brl(p.margin)} · mín {brl(p.min)}
-        </div>
+      <td className="px-3 py-3">
+        <ContribCell p={p} showValue />
+      </td>
+
+      <td className="whitespace-nowrap px-3 py-3">
+        <MarkupCell p={p} />
+        <div className="mt-0.5 text-[11px] text-muted">mín {brl(p.m.minPrice)}</div>
       </td>
 
       <td className="px-3 py-3">
@@ -942,14 +959,15 @@ function TableView({
 }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
-      <table className="w-full min-w-[640px] border-collapse text-sm">
+      <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted">
             <SortTh k="name" sort={sort} onSort={onSort}>Produto</SortTh>
-            <th className="px-3 py-2.5 font-semibold">Compra</th>
+            <th className="px-3 py-2.5 font-semibold">Custo</th>
             <SortTh k="price" sort={sort} onSort={onSort}>Venda</SortTh>
-            <SortTh k="margin" sort={sort} onSort={onSort}>Margem</SortTh>
-            <th className="px-3 py-2.5 font-semibold">Markup · resultado</th>
+            <th className="px-3 py-2.5 font-semibold">M. bruta</th>
+            <SortTh k="margin" sort={sort} onSort={onSort}>M. contrib.</SortTh>
+            <th className="px-3 py-2.5 font-semibold">Markup</th>
             <th className="px-3 py-2.5" />
           </tr>
         </thead>
@@ -1011,7 +1029,7 @@ export function PricingClient({
       )
         return false;
       if (filter === "nocost") return r.cost == null;
-      if (filter === "low") return (r.math?.marginPct ?? 100) < 30;
+      if (filter === "low") return (r.margins?.contribPct ?? 100) < 30;
       if (filter === "promo") return r.compareAt != null;
       return true;
     });
@@ -1026,7 +1044,7 @@ export function PricingClient({
         : k === "price"
           ? r.priceMin
           : k === "margin"
-            ? r.math?.marginPct ?? 9999
+            ? r.margins?.contribPct ?? 9999
             : r.unitsSold;
     return [...filtered].sort((a, b) => {
       const av = val(a);
@@ -1045,7 +1063,7 @@ export function PricingClient({
 
   const counts = {
     nocost: rows.filter((r) => r.cost == null).length,
-    low: rows.filter((r) => (r.math?.marginPct ?? 100) < 30).length,
+    low: rows.filter((r) => (r.margins?.contribPct ?? 100) < 30).length,
   };
 
   function base(r: PricingRow) {
@@ -1162,6 +1180,8 @@ export function PricingClient({
       {error && (
         <p className="rounded-xl bg-danger/10 px-4 py-2 text-sm text-danger">{error}</p>
       )}
+
+      <MarginLegend />
 
       {view === "table" ? (
         <TableView rows={list} ctx={ctx} sort={sort} onSort={toggleSort} />

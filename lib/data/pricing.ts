@@ -4,6 +4,11 @@ import { hasSupabaseAdmin } from "@/lib/env";
 import { adminListProducts } from "@/lib/data/admin";
 import { listAllOrders } from "@/lib/data/orders";
 import { imagesForColor } from "@/lib/product-cards";
+import {
+  computeMargins,
+  suggestForContribution,
+  type Margins,
+} from "@/lib/pricing-math";
 import type { FixedCost, PricingSettings, Product } from "@/lib/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -98,75 +103,8 @@ export async function setProductCostPrice(
   }
 }
 
-// -------------------------------------------------------------------------
-//  Cálculo — margem de CONTRIBUIÇÃO (só custos variáveis)
-// -------------------------------------------------------------------------
-
-export type PriceMath = {
-  cost: number | null;
-  price: number;
-  /** taxa de pagamento assumida (crédito — pior caso comum) */
-  feePct: number;
-  taxPct: number;
-  packaging: number;
-  /** custo variável total por unidade */
-  variableCost: number | null;
-  marginValue: number | null;
-  marginPct: number | null;
-  markup: number | null;
-  minPrice: number | null;
-  suggestedPrice: number | null;
-};
-
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-/** Arredonda pra cima terminando em ,90 (padrão da loja). */
-function niceUp(n: number) {
-  if (n <= 0) return 0;
-  const base = Math.ceil(n);
-  return base - 0.1 < n ? base + 0.9 : base - 0.1;
-}
-
-export function computePrice(
-  price: number,
-  cost: number | null,
-  s: PricingSettings,
-): PriceMath {
-  const feePct = s.mpCreditPercent / 100;
-  const taxPct = s.taxPercent / 100;
-  const packaging = s.packagingCost;
-  const drain = feePct + taxPct; // fração do preço que some em taxa+imposto
-
-  const feeTax = price * drain;
-  const variableCost = cost != null ? round2(cost + feeTax + packaging) : null;
-  const marginValue = variableCost != null ? round2(price - variableCost) : null;
-  const marginPct =
-    marginValue != null && price > 0 ? round2((marginValue / price) * 100) : null;
-  const markup = cost != null && cost > 0 ? round2((price - cost) / cost) : null;
-
-  const minPrice =
-    cost != null && drain < 1 ? round2((cost + packaging) / (1 - drain)) : null;
-
-  const tm = s.targetMarginPercent / 100;
-  const suggestedPrice =
-    cost != null && drain + tm < 1
-      ? niceUp((cost + packaging) / (1 - drain - tm))
-      : null;
-
-  return {
-    cost,
-    price,
-    feePct: s.mpCreditPercent,
-    taxPct: s.taxPercent,
-    packaging,
-    variableCost,
-    marginValue,
-    marginPct,
-    markup,
-    minPrice,
-    suggestedPrice,
-  };
 }
 
 // -------------------------------------------------------------------------
@@ -186,7 +124,9 @@ export type PricingRow = {
   priceMin: number;
   priceMax: number;
   compareAt: number | null;
-  math: PriceMath | null;
+  margins: Margins | null;
+  /** preço sugerido pra bater a margem-alvo (de contribuição) */
+  suggested: number | null;
   unitsSold: number;
   profitToDate: number | null;
 };
@@ -222,9 +162,13 @@ export async function listPricingRows(): Promise<{
       0,
     );
 
-    const math = computePrice(singlePrice ?? priceMin, cost, settings);
+    const margins = computeMargins(cost, singlePrice ?? priceMin, settings);
+    const suggested =
+      cost != null
+        ? suggestForContribution(cost, settings, settings.targetMarginPercent)
+        : null;
     const profitToDate =
-      math.marginValue != null ? round2(math.marginValue * unitsSold) : null;
+      margins.contribValue != null ? round2(margins.contribValue * unitsSold) : null;
 
     return {
       productId: p.id,
@@ -238,7 +182,8 @@ export async function listPricingRows(): Promise<{
       priceMin,
       priceMax,
       compareAt: p.compare_at_from ?? null,
-      math,
+      margins,
+      suggested,
       unitsSold,
       profitToDate,
     };

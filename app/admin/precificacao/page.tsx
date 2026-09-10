@@ -14,8 +14,9 @@ export default async function PricingPage() {
       <div>
         <h1 className="text-2xl font-black">Precificação</h1>
         <p className="text-sm text-muted">
-          Cadastre o custo de cada produto e veja a margem de contribuição (o que
-          sobra de cada venda depois de custo, taxa do Mercado Pago e imposto).
+          Cadastre o custo de cada produto e acompanhe as margens: bruta (só o
+          produto), de contribuição (produto + embalagem + taxa MP + imposto) e o
+          markup (preço ÷ custo).
         </p>
       </div>
       <PricingClient rows={rows} settings={settings} health={health} />
