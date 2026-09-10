@@ -2,21 +2,38 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  Activity,
+  Boxes,
+  Calculator,
+  FolderTree,
+  LayoutDashboard,
+  Package,
+  Receipt,
+  Store,
+  TicketPercent,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const LINKS = [
-  { href: "/admin", label: "Painel" },
-  { href: "/admin/pdv", label: "Venda na loja" },
-  { href: "/admin/produtos", label: "Produtos" },
-  { href: "/admin/estoque", label: "Estoque" },
-  { href: "/admin/precificacao", label: "Precificação" },
-  { href: "/admin/categorias", label: "Categorias" },
-  { href: "/admin/cupons", label: "Cupons" },
-  { href: "/admin/pedidos", label: "Pedidos" },
-  { href: "/admin/atividade", label: "Atividade" },
+type NavLink = { href: string; label: string; icon: LucideIcon };
+
+const LINKS: NavLink[] = [
+  { href: "/admin", label: "Painel", icon: LayoutDashboard },
+  { href: "/admin/pdv", label: "Venda na loja", icon: Store },
+  { href: "/admin/produtos", label: "Produtos", icon: Package },
+  { href: "/admin/estoque", label: "Estoque", icon: Boxes },
+  { href: "/admin/precificacao", label: "Precificação", icon: Calculator },
+  { href: "/admin/categorias", label: "Categorias", icon: FolderTree },
+  { href: "/admin/cupons", label: "Cupons", icon: TicketPercent },
+  { href: "/admin/pedidos", label: "Pedidos", icon: Receipt },
+  { href: "/admin/atividade", label: "Atividade", icon: Activity },
 ];
 
-const MASTER_LINKS = [{ href: "/admin/usuarios", label: "Usuários" }];
+const MASTER_LINKS: NavLink[] = [
+  { href: "/admin/usuarios", label: "Usuários", icon: Users },
+];
 
 export function AdminNav({ master = false }: { master?: boolean }) {
   const pathname = usePathname();
@@ -26,15 +43,17 @@ export function AdminNav({ master = false }: { master?: boolean }) {
       {links.map((l) => {
         const active =
           l.href === "/admin" ? pathname === "/admin" : pathname.startsWith(l.href);
+        const Icon = l.icon;
         return (
           <Link
             key={l.href}
             href={l.href}
             className={cn(
-              "shrink-0 rounded-lg px-3 py-2 text-sm font-semibold",
+              "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold",
               active ? "bg-primary/10 text-primary" : "text-muted hover:bg-black/5",
             )}
           >
+            <Icon className="h-4 w-4 shrink-0" />
             {l.label}
           </Link>
         );
