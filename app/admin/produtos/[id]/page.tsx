@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminGetProduct, adminListCategories } from "@/lib/data/admin";
 import { listStockAlerts } from "@/lib/data/stock-alerts";
+import { getPricingSettings } from "@/lib/data/pricing";
 import { ProductForm } from "@/components/admin/product-form";
+import { PriceSimulator } from "@/components/admin/pricing-client";
 import { ImageUploader } from "@/components/admin/image-uploader";
 import { VideoUploader } from "@/components/admin/video-uploader";
 import { addImageUrlAction } from "@/app/admin/actions";
@@ -17,9 +19,10 @@ export default async function AdminProductEditPage(
   const isNew = id === "novo";
   const justCreated = sp?.criado === "1";
 
-  const [product, categories] = await Promise.all([
+  const [product, categories, pricing] = await Promise.all([
     isNew ? Promise.resolve(null) : adminGetProduct(id),
     adminListCategories(),
+    getPricingSettings(),
   ]);
 
   if (!isNew && !product) notFound();
@@ -62,6 +65,14 @@ export default async function AdminProductEditPage(
       )}
 
       <ProductForm product={product} categories={categories} />
+
+      <section className="rounded-2xl border border-border bg-surface p-5">
+        <h2 className="font-bold">Ajuda pra decidir o preço</h2>
+        <p className="mb-3 mt-1 text-xs text-muted">
+          Simule por custo, margem ou markup antes de definir o preço de venda.
+        </p>
+        <PriceSimulator settings={pricing} />
+      </section>
 
       {product && (
         <section className="rounded-2xl border border-border bg-surface p-5">

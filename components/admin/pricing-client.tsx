@@ -455,7 +455,7 @@ function MarginSlider({
   );
 }
 
-function PriceSimulator({ settings }: { settings: PricingSettings }) {
+export function PriceSimulator({ settings }: { settings: PricingSettings }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [cost, setCost] = useState("");
