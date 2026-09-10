@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -41,7 +42,7 @@ function toSessionUser(user: User): SessionUser {
 }
 
 /** Usuário logado, ou null. Em modo demonstração retorna null. */
-export async function getUser(): Promise<SessionUser | null> {
+export const getUser = cache(async (): Promise<SessionUser | null> => {
   if (!hasSupabase()) return null;
   const supabase = await createClient();
   const {
@@ -49,7 +50,7 @@ export async function getUser(): Promise<SessionUser | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
   return toSessionUser(user);
-}
+});
 
 /** Quem está executando a ação agora (pro log de atividade). */
 export async function currentActor(): Promise<{ email: string; name: string | null }> {

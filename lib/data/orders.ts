@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseAdmin, hasSupabase } from "@/lib/env";
@@ -339,6 +340,25 @@ export async function getOrderById(id: string): Promise<Order | null> {
   return mapOrder(row, items ?? []);
 }
 
+/** Junta as linhas de vários pedidos numa consulta só (evita N+1). */
+async function fetchOrders(db: any, rows: any[]): Promise<Order[]> {
+  if (rows.length === 0) return [];
+  const { data: allItems } = await db
+    .from("order_items")
+    .select("*")
+    .in(
+      "order_id",
+      rows.map((r: any) => r.id),
+    );
+  const byOrder = new Map<string, any[]>();
+  for (const it of allItems ?? []) {
+    const arr = byOrder.get(it.order_id);
+    if (arr) arr.push(it);
+    else byOrder.set(it.order_id, [it]);
+  }
+  return rows.map((row) => mapOrder(row, byOrder.get(row.id) ?? []));
+}
+
 export async function listOrdersForUser(userId: string): Promise<Order[]> {
   if (!hasSupabase()) return mockDB().orders;
   const supabase = await createClient();
@@ -347,36 +367,25 @@ export async function listOrdersForUser(userId: string): Promise<Order[]> {
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
-  const orders: Order[] = [];
-  for (const row of rows ?? []) {
-    const { data: items } = await supabase
-      .from("order_items")
-      .select("*")
-      .eq("order_id", row.id);
-    orders.push(mapOrder(row, items ?? []));
-  }
-  return orders;
+  return fetchOrders(supabase, rows ?? []);
 }
 
-export async function listAllOrders(status?: OrderStatus): Promise<Order[]> {
-  if (!hasSupabaseAdmin()) {
-    const all = mockDB().orders;
-    return status ? all.filter((o) => o.status === status) : all;
-  }
-  const admin = createAdminClient();
-  let q = admin.from("orders").select("*").order("created_at", { ascending: false });
-  if (status) q = q.eq("status", status);
-  const { data: rows } = await q;
-  const orders: Order[] = [];
-  for (const row of rows ?? []) {
-    const { data: items } = await admin
-      .from("order_items")
+export const listAllOrders = cache(
+  async (status?: OrderStatus): Promise<Order[]> => {
+    if (!hasSupabaseAdmin()) {
+      const all = mockDB().orders;
+      return status ? all.filter((o) => o.status === status) : all;
+    }
+    const admin = createAdminClient();
+    let q = admin
+      .from("orders")
       .select("*")
-      .eq("order_id", row.id);
-    orders.push(mapOrder(row, items ?? []));
-  }
-  return orders;
-}
+      .order("created_at", { ascending: false });
+    if (status) q = q.eq("status", status);
+    const { data: rows } = await q;
+    return fetchOrders(admin, rows ?? []);
+  },
+);
 
 // --------------------------------------------------------------------------
 //  Mutação de status

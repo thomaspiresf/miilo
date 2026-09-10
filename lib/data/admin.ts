@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabase, hasSupabaseAdmin } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
@@ -68,7 +69,7 @@ const ADMIN_PRODUCT_SELECT = `
 // --------------------------------------------------------------------------
 //  Listagens (incluem inativos — visão do admin)
 // --------------------------------------------------------------------------
-export async function adminListProducts(): Promise<Product[]> {
+export const adminListProducts = cache(async (): Promise<Product[]> => {
   if (hasSupabaseAdmin()) {
     const admin = createAdminClient();
     const { data } = await admin
@@ -80,7 +81,7 @@ export async function adminListProducts(): Promise<Product[]> {
   // Supabase só de leitura (sem a chave secret): mostra o catálogo real (ativos)
   if (hasSupabase()) return listProducts({});
   return mockDB().products;
-}
+});
 
 export async function adminGetProduct(id: string): Promise<Product | null> {
   if (hasSupabaseAdmin() || !hasSupabase()) {
@@ -92,7 +93,7 @@ export async function adminGetProduct(id: string): Promise<Product | null> {
   return all.find((p) => p.id === id) ?? null;
 }
 
-export async function adminListCategories(): Promise<Category[]> {
+export const adminListCategories = cache(async (): Promise<Category[]> => {
   if (hasSupabaseAdmin()) {
     const admin = createAdminClient();
     const { data } = await admin
@@ -103,7 +104,7 @@ export async function adminListCategories(): Promise<Category[]> {
   }
   if (hasSupabase()) return getCategories();
   return mockDB().categories;
-}
+});
 
 // --------------------------------------------------------------------------
 //  Produtos — criar / editar

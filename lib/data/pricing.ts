@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseAdmin } from "@/lib/env";
 import { adminListProducts } from "@/lib/data/admin";
@@ -61,7 +62,7 @@ function mapSettings(row: any): PricingSettings {
   };
 }
 
-export async function getPricingSettings(): Promise<PricingSettings> {
+export const getPricingSettings = cache(async (): Promise<PricingSettings> => {
   if (!hasSupabaseAdmin()) return DEFAULT_PRICING;
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -71,7 +72,7 @@ export async function getPricingSettings(): Promise<PricingSettings> {
     .maybeSingle();
   if (error || !data) return DEFAULT_PRICING;
   return mapSettings(data);
-}
+});
 
 export async function savePricingSettings(s: PricingSettings): Promise<void> {
   if (!hasSupabaseAdmin()) return;
@@ -174,17 +175,17 @@ export type PricingRow = {
   stockCost: number;
 };
 
-export async function listPricingRows(): Promise<{
+export const listPricingRows = cache(async (): Promise<{
   rows: PricingRow[];
   settings: PricingSettings;
-}> {
-  const [products, settings] = await Promise.all([
+}> => {
+  const [products, settings, orders] = await Promise.all([
     adminListProducts(),
     getPricingSettings(),
+    listAllOrders(),
   ]);
 
   // vendas (pagas + a receber) -> unidades por produto (via variação)
-  const orders = await listAllOrders();
   const sold = orders.filter(isSold);
   const soldByVariant = new Map<string, number>();
   const revByVariant = new Map<string, number>();
@@ -255,7 +256,7 @@ export async function listPricingRows(): Promise<{
   });
 
   return { rows, settings };
-}
+});
 
 // -------------------------------------------------------------------------
 //  Panorama — estoque + contribuição por produto (pros gráficos)
@@ -396,17 +397,16 @@ export async function getBusinessHealth(
   range: { days?: number; from?: string; to?: string } | number = 30,
 ): Promise<BusinessHealth> {
   const opts = typeof range === "number" ? { days: range } : range;
-  const settings = await getPricingSettings();
+  const [settings, products, allOrders] = await Promise.all([
+    getPricingSettings(),
+    adminListProducts(),
+    listAllOrders(),
+  ]);
   const monthlyFixed = settings.fixedCosts.reduce((s, f) => s + f.amount, 0);
 
-  const products = await adminListProducts();
   const costByVariant = new Map<string, number | null>();
-  const priceByVariant = new Map<string, number>();
   for (const p of products)
-    for (const v of p.variants) {
-      costByVariant.set(v.id, v.cost);
-      priceByVariant.set(v.id, v.price);
-    }
+    for (const v of p.variants) costByVariant.set(v.id, v.cost);
 
   let fromT = -Infinity;
   let toT = Infinity;
@@ -417,7 +417,7 @@ export async function getBusinessHealth(
     fromT = Date.now() - opts.days * 86_400_000;
   }
 
-  const allSold = (await listAllOrders()).filter(isSold);
+  const allSold = allOrders.filter(isSold);
   const orders = allSold.filter((o) => {
     const t = new Date(o.created_at).getTime();
     return Number.isFinite(t) ? t >= fromT && t <= toT : true;
