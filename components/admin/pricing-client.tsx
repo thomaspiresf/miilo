@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   Box,
   Calculator,
+  CalendarDays,
   Check,
   ChevronDown,
   CreditCard,
@@ -18,6 +19,7 @@ import {
   Store,
   Trash2,
   Wallet,
+  X,
 } from "lucide-react";
 import type { PricingSettings } from "@/lib/types";
 import type {
@@ -146,13 +148,19 @@ function InsightsSection({ x }: { x: PricingInsights }) {
   const [to, setTo] = useState("");
   const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [calOpen, setCalOpen] = useState(false);
 
   const sorted = useMemo(
     () => [...data.products].sort((a, b) => b[sort] - a[sort]),
     [data.products, sort],
   );
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? sorted.filter((p) => p.name.toLowerCase().includes(q))
+    : sorted;
   const max = Math.max(1, ...sorted.map((p) => Math.abs(p[sort])));
-  const shown = sorted.slice(0, limit);
+  const shown = filtered.slice(0, limit);
   const hero = INSIGHT_SORTS.find((s) => s.key === sort)!;
 
   async function apply(
@@ -170,6 +178,7 @@ function InsightsSection({ x }: { x: PricingInsights }) {
     }
     setData(res);
     setLimit(FIRST_SHOWN);
+    if (next !== "custom") setCalOpen(false);
   }
 
   function pickPeriod(key: InsightPeriod) {
@@ -199,6 +208,14 @@ function InsightsSection({ x }: { x: PricingInsights }) {
           ? `${brDate(from)} a ${brDate(to)}`
           : "período personalizado"
         : `últimos ${period} dias`;
+  const periodShort =
+    period === "all"
+      ? "Tudo"
+      : period === "custom"
+        ? from && to
+          ? `${brDate(from)}–${brDate(to)}`
+          : "Personalizado"
+        : `${period}d`;
 
   const kpis = [
     {
@@ -215,13 +232,123 @@ function InsightsSection({ x }: { x: PricingInsights }) {
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="mb-1 font-black">Estoque e vendas</h2>
-      <p className="mb-3 text-xs text-muted">
-        Ranking dos produtos: vendas de <strong>{periodLabel}</strong>, estoque de
-        agora. Escolha por qual número ordenar.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
+          <h2 className="font-black">Estoque e vendas</h2>
+          <p className="mt-1 text-xs text-muted">
+            Vendas de <strong>{periodLabel}</strong> · estoque de agora.
+          </p>
+        </div>
 
-      <div className="grid grid-cols-3 gap-3">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setLimit(FIRST_SHOWN);
+              }}
+              placeholder="Buscar produto"
+              className="h-9 w-36 rounded-lg border border-border bg-background pl-7 pr-6 text-xs sm:w-48"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="limpar busca"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setCalOpen((v) => !v)}
+              className={cn(
+                "flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors",
+                calOpen
+                  ? "border-foreground text-foreground"
+                  : "border-border text-muted hover:text-foreground",
+              )}
+            >
+              <CalendarDays className="h-4 w-4" />
+              <span>{periodShort}</span>
+              {pending && <Spinner className="h-3 w-3" />}
+            </button>
+            {calOpen && (
+              <>
+                <button
+                  aria-hidden
+                  tabIndex={-1}
+                  onClick={() => setCalOpen(false)}
+                  className="fixed inset-0 z-40 cursor-default"
+                />
+                <div className="absolute right-0 z-50 mt-1.5 w-60 rounded-xl border border-border bg-surface p-3 shadow-lg">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Período das vendas
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PERIOD_CHIPS.map((c) => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => pickPeriod(c.key)}
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
+                          period === c.key
+                            ? "bg-foreground text-background"
+                            : "border border-border text-muted hover:text-foreground",
+                        )}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                  {period === "custom" && (
+                    <div className="mt-3 space-y-2">
+                      <label className="block text-[11px] text-muted">
+                        De
+                        <input
+                          type="date"
+                          value={from}
+                          max={to || undefined}
+                          onChange={(e) => setFrom(e.target.value)}
+                          className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                        />
+                      </label>
+                      <label className="block text-[11px] text-muted">
+                        Até
+                        <input
+                          type="date"
+                          value={to}
+                          min={from || undefined}
+                          onChange={(e) => setTo(e.target.value)}
+                          className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={!from || !to || pending}
+                        onClick={() => apply("custom", { from, to })}
+                        className="w-full rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-50"
+                      >
+                        Aplicar
+                      </button>
+                    </div>
+                  )}
+                  {err && <p className="mt-2 text-xs text-danger">{err}</p>}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-3">
         {kpis.map((k) => (
           <div key={k.label}>
             <p className={cn("text-lg font-black leading-none", k.tone)}>
@@ -240,56 +367,6 @@ function InsightsSection({ x }: { x: PricingInsights }) {
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs font-semibold text-muted">Período</span>
-        {PERIOD_CHIPS.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            onClick={() => pickPeriod(c.key)}
-            className={cn(
-              "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-              period === c.key
-                ? "bg-foreground text-background"
-                : "border border-border text-muted hover:text-foreground",
-            )}
-          >
-            {c.label}
-          </button>
-        ))}
-        {pending && <Spinner className="h-3.5 w-3.5" />}
-      </div>
-
-      {period === "custom" && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={from}
-            max={to || undefined}
-            onChange={(e) => setFrom(e.target.value)}
-            className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
-          />
-          <span className="text-xs text-muted">até</span>
-          <input
-            type="date"
-            value={to}
-            min={from || undefined}
-            onChange={(e) => setTo(e.target.value)}
-            className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
-          />
-          <button
-            type="button"
-            disabled={!from || !to || pending}
-            onClick={() => apply("custom", { from, to })}
-            className="rounded-lg bg-foreground px-3 py-1 text-xs font-semibold text-background disabled:opacity-50"
-          >
-            Aplicar
-          </button>
-        </div>
-      )}
-
-      {err && <p className="mt-2 text-xs text-danger">{err}</p>}
-
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <span className="mr-1 text-xs font-semibold text-muted">Ordenar por</span>
         {INSIGHT_SORTS.map((s) => (
           <button
@@ -308,9 +385,11 @@ function InsightsSection({ x }: { x: PricingInsights }) {
         ))}
       </div>
 
-      {sorted.length === 0 ? (
+      {filtered.length === 0 ? (
         <p className="mt-4 py-6 text-center text-xs text-muted">
-          Nenhum produto com venda no período ou estoque agora.
+          {q
+            ? `Nenhum produto encontrado para "${query.trim()}".`
+            : "Nenhum produto com venda no período ou estoque agora."}
         </p>
       ) : (
         <>
@@ -370,9 +449,9 @@ function InsightsSection({ x }: { x: PricingInsights }) {
               );
             })}
           </ol>
-          {sorted.length > FIRST_SHOWN && (
+          {filtered.length > FIRST_SHOWN && (
             <div className="mt-3 flex flex-wrap items-center gap-4">
-              {limit < sorted.length && (
+              {limit < filtered.length && (
                 <button
                   type="button"
                   onClick={() =>
@@ -380,7 +459,7 @@ function InsightsSection({ x }: { x: PricingInsights }) {
                   }
                   className="text-xs font-semibold text-primary"
                 >
-                  Mostrar mais ({sorted.length - limit} restantes)
+                  Mostrar mais ({filtered.length - limit} restantes)
                 </button>
               )}
               {limit > FIRST_SHOWN && (
