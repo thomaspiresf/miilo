@@ -13,6 +13,7 @@ import type {
   Product,
   StockMovement,
   VariantStockRow,
+  VideoAudio,
 } from "@/lib/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -182,7 +183,7 @@ function buildMockProduct(
     rating_count: 0,
     max_installments: 3,
     video_url: null,
-    video_muted: true,
+    video_audio: "optional",
     split_by_color: input.splitByColor,
     category: { id: category.id, slug: category.slug, name: category.name, kind: category.kind },
     images: [],
@@ -252,7 +253,7 @@ export async function adminUpdateProduct(
     rebuilt.rating_avg = p.rating_avg;
     rebuilt.rating_count = p.rating_count;
     rebuilt.video_url = p.video_url;
-    rebuilt.video_muted = p.video_muted;
+    rebuilt.video_audio = p.video_audio;
     Object.assign(p, rebuilt);
     await notifyRestockForProduct(id);
     return;
@@ -485,22 +486,22 @@ export async function adminSetProductVideo(
   if (error && !MISSING_COLUMN.test(error.message)) throw error;
 }
 
-/** Define se o vídeo do produto toca com áudio (false) ou mudo/prévia (true). */
-export async function adminSetProductVideoMuted(
+/** Define o comportamento do áudio do vídeo do produto (muted/optional/on). */
+export async function adminSetProductVideoAudio(
   productId: string,
-  muted: boolean,
+  audio: VideoAudio,
 ): Promise<void> {
   assertPersistable();
 
   if (!hasSupabaseAdmin()) {
     const p = mockDB().products.find((x) => x.id === productId);
-    if (p) p.video_muted = muted;
+    if (p) p.video_audio = audio;
     return;
   }
   const admin = createAdminClient();
   const { error } = await admin
     .from("products")
-    .update({ video_muted: muted })
+    .update({ video_audio: audio })
     .eq("id", productId);
   if (error && !MISSING_COLUMN.test(error.message)) throw error;
 }

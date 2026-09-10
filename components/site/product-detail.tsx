@@ -32,7 +32,7 @@ export function ProductDetail({
         images={gallery}
         name={product.name}
         video={product.video_url}
-        videoMuted={product.video_muted}
+        videoAudio={product.video_audio}
       />
       <div>
         {info}

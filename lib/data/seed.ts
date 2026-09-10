@@ -324,7 +324,7 @@ function buildProduct(input: SeedInput): Product {
     rating_count: input.rating?.[1] ?? 0,
     max_installments: 3,
     video_url: null,
-    video_muted: true,
+    video_audio: "optional",
     split_by_color: true,
     category: { id: category.id, slug: category.slug, name: category.name, kind: category.kind },
     images: Array.from({ length: input.images }, (_, i) => img(input.id, i)),

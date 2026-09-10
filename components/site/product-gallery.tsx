@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { Play } from "lucide-react";
-import type { ProductImage } from "@/lib/types";
+import type { ProductImage, VideoAudio } from "@/lib/types";
 import { parseVideo, embedSrc } from "@/lib/video";
 import { cn } from "@/lib/utils";
 
@@ -11,14 +11,18 @@ export function ProductGallery({
   images,
   name,
   video,
-  videoMuted = true,
+  videoAudio = "optional",
 }: {
   images: ProductImage[];
   name: string;
   video?: string | null;
-  videoMuted?: boolean;
+  videoAudio?: VideoAudio;
 }) {
   const parsedVideo = parseVideo(video);
+  const muted = videoAudio !== "on";
+  // "muted" (travado) e "optional" tocam sozinhos em loop; só "muted" esconde os controles
+  const autoPlayLoop = muted;
+  const hideControls = videoAudio === "muted";
   // slides: 1ª foto, depois o vídeo (se houver), depois as demais fotos
   const slides = [
     ...(images[0] ? [{ type: "image" as const, key: images[0].id, im: images[0] }] : []),
@@ -41,16 +45,18 @@ export function ProductGallery({
           parsedVideo.kind === "file" ? (
             <video
               src={parsedVideo.src}
-              controls
+              controls={!hideControls}
               playsInline
-              muted={videoMuted}
-              autoPlay={videoMuted}
-              loop={videoMuted}
+              muted={muted}
+              autoPlay={autoPlayLoop}
+              loop={autoPlayLoop}
+              disablePictureInPicture={hideControls}
+              controlsList={hideControls ? "nodownload noplaybackrate" : undefined}
               className="h-full w-full bg-black object-contain"
             />
           ) : (
             <iframe
-              src={embedSrc(parsedVideo, videoMuted)}
+              src={embedSrc(parsedVideo, videoAudio)}
               className="h-full w-full"
               allow="autoplay; fullscreen; picture-in-picture"
               title={`Vídeo — ${name}`}

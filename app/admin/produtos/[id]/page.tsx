@@ -114,7 +114,7 @@ export default async function AdminProductEditPage(
           <VideoUploader
             productId={product.id}
             video={product.video_url}
-            muted={product.video_muted}
+            audio={product.video_audio}
           />
         </section>
       )}

@@ -17,7 +17,7 @@ import {
   adminCreateCategory,
   adminDeleteCategory,
   adminSetProductVideo,
-  adminSetProductVideoMuted,
+  adminSetProductVideoAudio,
 } from "@/lib/data/admin";
 import {
   adminDeleteOrder,
@@ -29,7 +29,7 @@ import { reconcileOrderPayment } from "@/lib/mp-reconcile";
 import { logAction } from "@/lib/data/audit";
 import { ORDER_STATUS } from "@/lib/order-status";
 import { parseMoney } from "@/lib/format";
-import type { CategoryKind, OrderStatus } from "@/lib/types";
+import type { CategoryKind, OrderStatus, VideoAudio } from "@/lib/types";
 
 const variantSchema = z.object({
   id: z.string().optional(),
@@ -231,18 +231,27 @@ export async function setProductVideoAction(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function setProductVideoMutedAction(productId: string, muted: boolean) {
+const VIDEO_AUDIO_LABEL: Record<VideoAudio, string> = {
+  muted: "sem som (travado)",
+  optional: "sem som, com opção de ativar",
+  on: "com som",
+};
+
+export async function setProductVideoAudioAction(productId: string, audio: VideoAudio) {
   await requireAdmin();
+  if (!["muted", "optional", "on"].includes(audio)) {
+    return { error: "Opção inválida." };
+  }
   try {
-    await adminSetProductVideoMuted(productId, muted);
+    await adminSetProductVideoAudio(productId, audio);
     await logAction({
       action: "product.video",
       entity: "product",
       entityId: productId,
-      summary: `Vídeo de "${await productName(productId)}" agora toca ${muted ? "sem áudio" : "com áudio"}`,
+      summary: `Áudio do vídeo de "${await productName(productId)}": ${VIDEO_AUDIO_LABEL[audio]}`,
     });
   } catch (err) {
-    console.error("setProductVideoMuted:", (err as Error).message);
+    console.error("setProductVideoAudio:", (err as Error).message);
     return { error: "Não foi possível salvar. Tente de novo." };
   }
   revalidatePath(`/admin/produtos/${productId}`);

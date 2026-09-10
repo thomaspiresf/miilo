@@ -59,6 +59,13 @@ export type PricingSettings = {
   fixedCosts: FixedCost[];
 };
 
+/**
+ * `muted`    → sempre mudo, sem opção de ativar o som (prévia travada)
+ * `optional` → começa mudo com autoplay em loop; cliente pode ativar o som
+ * `on`       → toca com som quando o cliente dá play
+ */
+export type VideoAudio = "muted" | "optional" | "on";
+
 export type Product = {
   id: string;
   slug: string;
@@ -83,8 +90,8 @@ export type Product = {
   max_installments: number;
   /** vídeo do produto: URL pública de um MP4 hospedado OU link YouTube/Vimeo */
   video_url: string | null;
-  /** true = vídeo toca sem áudio (prévia silenciosa em loop); false = com áudio */
-  video_muted: boolean;
+  /** como o áudio do vídeo se comporta na página do produto */
+  video_audio: VideoAudio;
   /** true = cada cor vira um card na vitrine; false = um card só pro produto */
   split_by_color: boolean;
   category: Pick<Category, "id" | "slug" | "name" | "kind">;

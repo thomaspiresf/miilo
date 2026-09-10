@@ -76,7 +76,7 @@ export function mapProduct(row: any): Product {
     rating_count: Number(row.rating_count ?? 0),
     max_installments: Number(row.max_installments ?? 3),
     video_url: row.video_url ? imageUrl(row.video_url) : null,
-    video_muted: row.video_muted ?? true,
+    video_audio: row.video_audio ?? "optional",
     split_by_color: row.split_by_color ?? true,
     category: row.category,
     images,

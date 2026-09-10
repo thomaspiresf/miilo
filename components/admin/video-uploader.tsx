@@ -5,24 +5,43 @@ import { useRouter } from "next/navigation";
 import { Film, X } from "lucide-react";
 import {
   setProductVideoAction,
-  setProductVideoMutedAction,
+  setProductVideoAudioAction,
 } from "@/app/admin/actions";
 import { parseVideo } from "@/lib/video";
 import { uploadToStorage } from "@/lib/admin-upload";
 import { cn } from "@/lib/utils";
+import type { VideoAudio } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
 
 const MAX_MB = 50;
 
+const AUDIO_OPTIONS: { value: VideoAudio; label: string; help: string }[] = [
+  {
+    value: "muted",
+    label: "Sem som",
+    help: "Toca mudo em loop. O cliente não consegue ativar o som.",
+  },
+  {
+    value: "optional",
+    label: "Sem som, cliente ativa",
+    help: "Começa mudo em loop; o cliente pode ativar o som pelos controles.",
+  },
+  {
+    value: "on",
+    label: "Com som",
+    help: "O cliente dá play e ouve o áudio do vídeo desde o início.",
+  },
+];
+
 export function VideoUploader({
   productId,
   video,
-  muted: mutedInitial,
+  audio: audioInitial,
 }: {
   productId: string;
   video: string | null;
-  muted: boolean;
+  audio: VideoAudio;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -30,21 +49,24 @@ export function VideoUploader({
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState("");
 
-  const [muted, setMuted] = useState(mutedInitial);
-  const [savingMuted, startMuted] = useTransition();
+  const [audio, setAudio] = useState<VideoAudio>(audioInitial);
+  const [savingAudio, startAudio] = useTransition();
 
-  function toggleMuted() {
-    const next = !muted;
-    setMuted(next);
+  function chooseAudio(next: VideoAudio) {
+    if (next === audio) return;
+    const prev = audio;
+    setAudio(next);
     setError(null);
-    startMuted(async () => {
-      const res = await setProductVideoMutedAction(productId, next);
+    startAudio(async () => {
+      const res = await setProductVideoAudioAction(productId, next);
       if (res?.error) {
-        setMuted(!next);
+        setAudio(prev);
         setError(res.error);
       }
     });
   }
+
+  const muted = audio !== "on";
 
   const parsed = parseVideo(video);
 
@@ -104,38 +126,39 @@ export function VideoUploader({
         </p>
 
         {/* áudio do vídeo */}
-        <div className="flex items-start gap-3 rounded-xl border border-border bg-background p-3">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={!muted}
-            aria-label={muted ? "Sem áudio — clique para ativar o som" : "Com áudio — clique para silenciar"}
-            disabled={savingMuted}
-            onClick={toggleMuted}
-            className={cn(
-              "relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
-              !muted ? "bg-success" : "bg-black/20",
-              savingMuted && "opacity-60",
-            )}
-          >
-            <span
-              className={cn(
-                "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
-                !muted ? "translate-x-[18px]" : "translate-x-0.5",
-              )}
-            />
-          </button>
-          <div className="text-sm">
-            <p className="font-medium">
-              {muted ? "Sem áudio" : "Com áudio"}
-              {savingMuted && <Spinner className="ml-2 inline h-3 w-3" />}
-            </p>
-            <p className="text-xs text-muted">
-              {muted
-                ? "Toca como prévia silenciosa em loop na página. O cliente pode ativar o som."
-                : "O cliente dá play e ouve o áudio do vídeo."}
-            </p>
+        <div className="rounded-xl border border-border bg-background p-3">
+          <p className="mb-2 flex items-center gap-2 text-sm font-medium">
+            Áudio na página do produto
+            {savingAudio && <Spinner className="h-3 w-3" />}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {AUDIO_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={audio === opt.value}
+                disabled={savingAudio}
+                onClick={() => chooseAudio(opt.value)}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 text-sm font-semibold transition",
+                  audio === opt.value
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border hover:bg-black/5",
+                  savingAudio && "opacity-60",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
+          <p className="mt-2 text-xs text-muted">
+            {AUDIO_OPTIONS.find((o) => o.value === audio)?.help}
+          </p>
+          {parsed.kind !== "file" && (
+            <p className="mt-1 text-xs text-muted">
+              Em links do YouTube/Vimeo o controle de som depende do player deles.
+            </p>
+          )}
         </div>
         <Button
           type="button"

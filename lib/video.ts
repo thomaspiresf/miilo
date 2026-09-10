@@ -36,14 +36,28 @@ export function isVideoLink(url: string) {
 }
 
 /**
- * src do iframe para YouTube/Vimeo. Quando `muted`, liga autoplay silencioso
- * (prévia); caso contrário mantém o embed padrão (play manual, com áudio).
+ * src do iframe para YouTube/Vimeo conforme o modo de áudio:
+ *  - "on"       → embed padrão (play manual, com som)
+ *  - "optional" → autoplay mudo em loop, com controles (cliente pode ativar o som)
+ *  - "muted"    → autoplay mudo em loop, sem controles
  */
-export function embedSrc(video: ParsedVideo, muted: boolean): string {
-  if (video.kind === "file") return video.src;
-  if (!muted) return video.src;
+export function embedSrc(
+  video: ParsedVideo,
+  audio: "muted" | "optional" | "on",
+): string {
+  if (video.kind === "file" || audio === "on") return video.src;
+  const locked = audio === "muted";
   if (video.kind === "youtube") {
-    return `https://www.youtube.com/embed/${video.id}?rel=0&autoplay=1&mute=1&loop=1&playlist=${video.id}&controls=1`;
+    const params = [
+      "rel=0",
+      "autoplay=1",
+      "mute=1",
+      "loop=1",
+      `playlist=${video.id}`,
+      `controls=${locked ? 0 : 1}`,
+      ...(locked ? ["disablekb=1", "modestbranding=1"] : []),
+    ].join("&");
+    return `https://www.youtube.com/embed/${video.id}?${params}`;
   }
-  return `https://player.vimeo.com/video/${video.id}?autoplay=1&muted=1&loop=1`;
+  return `https://player.vimeo.com/video/${video.id}?autoplay=1&muted=1&loop=1&controls=${locked ? 0 : 1}`;
 }
