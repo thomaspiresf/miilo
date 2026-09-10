@@ -387,6 +387,31 @@ function verdict(contribPct: number | null, target: number) {
   return { c: "text-success", i: "✅", t: "Contribuição dentro da meta." };
 }
 
+function NumInput({
+  value,
+  onChange,
+  onBlur,
+  suffix,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+  suffix: string;
+}) {
+  return (
+    <span className="inline-flex items-center rounded-lg border border-border bg-background px-2 transition focus-within:border-foreground/40">
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        inputMode="decimal"
+        className="h-8 w-12 bg-transparent text-right text-sm font-bold tabular-nums outline-none"
+      />
+      <span className="pl-1 text-xs text-muted">{suffix}</span>
+    </span>
+  );
+}
+
 function MarginSlider({
   value,
   onChange,
@@ -434,23 +459,33 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [cost, setCost] = useState("");
-  const [testPrice, setTestPrice] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // regras editáveis só pra simulação — puxadas das regras de precificação
+  // custos das regras — editáveis só pra simular
   const [tax, setTax] = useState(settings.taxPercent);
   const [fee, setFee] = useState(settings.mpCreditPercent);
   const [pk, setPk] = useState(settings.packagingCost);
-  const [tm, setTm] = useState(settings.targetMarginPercent);
+
+  // critério do preço: o último campo mexido é quem manda
+  const [mode, setMode] = useState<"margin" | "price" | "markup">("margin");
+  const [marginTarget, setMarginTarget] = useState(settings.targetMarginPercent);
+  const [priceInput, setPriceInput] = useState("");
+  const [markupTarget, setMarkupTarget] = useState(2.5);
+  const [edit, setEdit] = useState<{ f: "margin" | "price" | "markup"; raw: string } | null>(
+    null,
+  );
 
   function onOpenChange(v: boolean) {
     if (v) {
       setTax(settings.taxPercent);
       setFee(settings.mpCreditPercent);
       setPk(settings.packagingCost);
-      setTm(settings.targetMarginPercent);
+      setMode("margin");
+      setMarginTarget(settings.targetMarginPercent);
+      setPriceInput("");
+      setMarkupTarget(2.5);
+      setEdit(null);
       setCost("");
-      setTestPrice("");
     }
     setOpen(v);
   }
@@ -460,24 +495,91 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
     taxPercent: tax,
     mpCreditPercent: fee,
     packagingCost: pk,
-    targetMarginPercent: tm,
   };
   const costN = num(cost);
-  const suggested = costN != null ? suggestForContribution(costN, simSettings, tm) : null;
-  const testN = num(testPrice);
+
+  // preço de trabalho conforme o critério escolhido
+  let priceN: number | null = null;
+  if (costN != null) {
+    if (mode === "margin") priceN = suggestForContribution(costN, simSettings, marginTarget);
+    else if (mode === "markup")
+      priceN = markupTarget > 0 ? Math.round(costN * markupTarget * 100) / 100 : null;
+    else priceN = num(priceInput);
+  }
+  const m =
+    costN != null && priceN != null && priceN > 0
+      ? computeMargins(costN, priceN, simSettings)
+      : null;
+
+  const marginNow = m?.contribPct ?? marginTarget;
+  const markupNow = m?.markup ?? markupTarget;
+
+  const marginField =
+    edit?.f === "margin"
+      ? edit.raw
+      : mode === "margin"
+        ? String(marginTarget)
+        : String(Math.round(marginNow));
+  const markupField =
+    edit?.f === "markup"
+      ? edit.raw
+      : mode === "markup"
+        ? fmt1(markupTarget)
+        : fmt1(markupNow);
+  const priceFieldVal =
+    edit?.f === "price"
+      ? edit.raw
+      : mode === "price"
+        ? priceInput
+        : priceN != null
+          ? fmt2(priceN)
+          : "";
+
+  function driveMargin(raw: string) {
+    setEdit({ f: "margin", raw });
+    const n = num(raw);
+    if (n != null) {
+      setMode("margin");
+      setMarginTarget(Math.min(89, n));
+    }
+  }
+  function driveMarkup(raw: string) {
+    setEdit({ f: "markup", raw });
+    const n = num(raw);
+    if (n != null && n > 0) {
+      setMode("markup");
+      setMarkupTarget(n);
+    }
+  }
+  function drivePrice(raw: string) {
+    setEdit({ f: "price", raw });
+    setMode("price");
+    setPriceInput(raw);
+  }
+  function sliderMargin(n: number) {
+    setEdit(null);
+    setMode("margin");
+    setMarginTarget(n);
+  }
+  const stopEdit = () => setEdit(null);
 
   const eq = (a: number, b: number) => Math.abs(a - b) < 0.001;
-  const changed =
+  const rulesChanged =
     !eq(tax, settings.taxPercent) ||
     !eq(fee, settings.mpCreditPercent) ||
-    !eq(pk, settings.packagingCost) ||
-    !eq(tm, settings.targetMarginPercent);
+    !eq(pk, settings.packagingCost);
+  const marginChanged =
+    mode === "margin" && !eq(Math.round(marginTarget), settings.targetMarginPercent);
+  const changed = rulesChanged || marginChanged;
 
   function restore() {
     setTax(settings.taxPercent);
     setFee(settings.mpCreditPercent);
     setPk(settings.packagingCost);
-    setTm(settings.targetMarginPercent);
+    setMode("margin");
+    setMarginTarget(settings.targetMarginPercent);
+    setPriceInput("");
+    setEdit(null);
   }
   async function saveDefaults() {
     setSaving(true);
@@ -486,11 +588,15 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
       taxPercent: tax,
       mpCreditPercent: fee,
       packagingCost: pk,
-      targetMarginPercent: tm,
+      targetMarginPercent:
+        mode === "margin" ? Math.round(marginTarget) : settings.targetMarginPercent,
     });
     setSaving(false);
     router.refresh();
   }
+
+  const sliderValue = mode === "margin" ? marginTarget : Math.round(marginNow);
+  const v = m ? verdict(m.contribPct, settings.targetMarginPercent) : null;
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
@@ -500,7 +606,7 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
 
       <ModalContent
         title="Simular preço"
-        description="Teste um produto antes de comprar. Os custos vêm das regras de precificação — mude o que quiser pra ver outros cenários."
+        description="Puxa as regras de precificação. Mude custo, preço, margem ou markup — tudo recalcula junto."
       >
         <div className="space-y-5">
           {/* custo */}
@@ -511,17 +617,17 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
             </div>
           </div>
 
-          {/* regras */}
+          {/* custos das regras */}
           <div className="rounded-xl border border-border bg-black/[0.02] p-3.5">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-muted">Custos e meta</p>
+              <p className="text-xs font-bold text-muted">Custos (das regras)</p>
               {changed && (
                 <button
                   type="button"
                   onClick={restore}
                   className="text-[11px] font-medium text-muted hover:text-foreground"
                 >
-                  restaurar padrão
+                  restaurar
                 </button>
               )}
             </div>
@@ -530,82 +636,71 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
               <NumField label="Taxa do cartão" value={fee} onChange={setFee} suffix="%" />
               <NumField label="Embalagem" value={pk} onChange={setPk} suffix="R$" />
             </div>
-            {changed && (
-              <button
-                type="button"
-                onClick={saveDefaults}
-                disabled={saving}
-                className="mt-2.5 text-xs font-semibold text-primary disabled:opacity-60"
-              >
-                {saving ? "salvando…" : "salvar esses valores nas regras"}
-              </button>
-            )}
           </div>
 
-          {/* resultado */}
-          {costN == null || suggested == null ? (
-            <p className="text-sm text-muted">Digite o custo pra ver o preço sugerido.</p>
+          {/* resultado — critérios conectados */}
+          {costN == null ? (
+            <p className="text-sm text-muted">Digite o custo pra começar.</p>
+          ) : m == null ? (
+            <p className="text-sm text-muted">Digite um preço ou escolha uma margem.</p>
           ) : (
-            (() => {
-              const usedPrice = testN ?? suggested;
-              const usedMargin = computeMargins(costN, usedPrice, simSettings).contribPct ?? tm;
-              const v = verdict(usedMargin, tm);
-              return (
-                <div className="space-y-4 border-t border-border pt-4">
-                  {/* barra da margem */}
-                  <div>
-                    <div className="flex items-baseline justify-between">
-                      <p className="text-xs font-medium text-muted">
-                        Margem de contribuição
-                      </p>
-                      <p className="text-sm font-bold tabular-nums">
-                        {Math.round(usedMargin)}%
-                      </p>
-                    </div>
-                    <div className="mt-2">
-                      <MarginSlider
-                        value={Math.round(usedMargin)}
-                        onChange={(n) => {
-                          setTm(n);
-                          setTestPrice("");
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* preço */}
-                  <div>
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="text-xs text-muted">Vender por</span>
-                      <span className="text-3xl font-black">
-                        <Ghost
-                          value={testPrice}
-                          onChange={setTestPrice}
-                          prefix="R$"
-                          ch={5.5}
-                          placeholder={fmt2(suggested)}
-                          className="text-foreground"
-                        />
-                      </span>
-                      {testN != null && (
-                        <button
-                          type="button"
-                          onClick={() => setTestPrice("")}
-                          className="text-[11px] font-semibold text-primary"
-                        >
-                          voltar pro sugerido
-                        </button>
-                      )}
-                    </div>
-                    <p className={cn("mt-1.5 text-sm font-semibold", v.c)}>
-                      {v.i} {v.t}
-                    </p>
-                  </div>
-
-                  <PriceBreakdown cost={costN} price={usedPrice} settings={simSettings} />
+            <div className="space-y-4 border-t border-border pt-4">
+              {/* preço */}
+              <div>
+                <p className="text-xs font-medium text-muted">Preço de venda</p>
+                <div className="mt-1.5">
+                  <MoneyInput value={priceFieldVal} onChange={drivePrice} onBlur={stopEdit} />
                 </div>
-              );
-            })()
+                {v && (
+                  <p className={cn("mt-1.5 text-sm font-semibold", v.c)}>
+                    {v.i} {v.t}
+                  </p>
+                )}
+              </div>
+
+              {/* margem + barra */}
+              <div>
+                <div className="flex items-baseline justify-between">
+                  <p className="text-xs font-medium text-muted">Margem de contribuição</p>
+                  <NumInput
+                    value={marginField}
+                    onChange={driveMargin}
+                    onBlur={stopEdit}
+                    suffix="%"
+                  />
+                </div>
+                <div className="mt-2">
+                  <MarginSlider value={sliderValue} onChange={sliderMargin} />
+                </div>
+              </div>
+
+              {/* markup */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted">Markup</p>
+                  <p className="text-[11px] text-muted">preço ÷ custo</p>
+                </div>
+                <NumInput
+                  value={markupField}
+                  onChange={driveMarkup}
+                  onBlur={stopEdit}
+                  suffix="×"
+                />
+              </div>
+
+              {changed && (
+                <button
+                  type="button"
+                  onClick={saveDefaults}
+                  disabled={saving}
+                  className="text-xs font-semibold text-primary disabled:opacity-60"
+                >
+                  {saving ? "salvando…" : "salvar esses valores nas regras"}
+                </button>
+              )}
+
+              <PriceBreakdown cost={costN} price={priceN ?? 0} settings={simSettings} />
+            </div>
           )}
         </div>
       </ModalContent>
