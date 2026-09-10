@@ -22,6 +22,7 @@ import {
 import type { PricingSettings } from "@/lib/types";
 import type {
   BusinessHealth,
+  InsightProduct,
   PricingInsights,
   PricingRow,
 } from "@/lib/data/pricing";
@@ -96,263 +97,176 @@ function HealthCard({ h }: { h: BusinessHealth }) {
 }
 
 // =======================================================================
-//  Estoque + o que vendeu (tabela ordenável)
+//  Estoque e vendas — ranking por produto
 // =======================================================================
 
-type InsightSort =
-  | "total"
-  | "unitsSold"
-  | "stockUnits"
-  | "revenue"
-  | "contrib";
+type InsightSort = "contrib" | "revenue" | "unitsSold" | "stockUnits" | "total";
 
-const INSIGHT_COLS: {
-  key: InsightSort;
-  label: string;
-  short: string;
-  money?: boolean;
-}[] = [
-  { key: "total", label: "Entraram", short: "Entr." },
-  { key: "unitsSold", label: "Vendidas", short: "Vend." },
-  { key: "stockUnits", label: "Em estoque", short: "Estoq." },
-  { key: "revenue", label: "Receita", short: "Receita", money: true },
-  { key: "contrib", label: "Contribuição", short: "Contrib.", money: true },
+const INSIGHT_SORTS: { key: InsightSort; label: string; money?: boolean }[] = [
+  { key: "contrib", label: "Contribuição", money: true },
+  { key: "revenue", label: "Receita", money: true },
+  { key: "unitsSold", label: "Vendidas" },
+  { key: "stockUnits", label: "Em estoque" },
+  { key: "total", label: "Entraram" },
 ];
 
-function MiniNum({
-  label,
-  v,
-  on,
-  tone,
-  muted,
-}: {
-  label: string;
-  v: ReactNode;
-  on?: boolean;
-  tone?: string;
-  muted?: boolean;
-}) {
-  return (
-    <div className={cn("rounded-lg px-1 py-1.5", on && "bg-foreground/[0.06]")}>
-      <p
-        className={cn(
-          "text-sm font-bold tabular-nums",
-          muted ? "text-muted" : tone,
-        )}
-      >
-        {v}
-      </p>
-      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted">
-        {label}
-      </p>
-    </div>
-  );
-}
+const INSIGHT_CAPTION: { key: InsightSort; text: (p: InsightProduct) => string }[] =
+  [
+    { key: "total", text: (p) => `${p.total} entraram` },
+    { key: "unitsSold", text: (p) => `${p.unitsSold} vendidas` },
+    { key: "stockUnits", text: (p) => `${p.stockUnits} em estoque` },
+    { key: "revenue", text: (p) => `${formatBRL(p.revenue)} receita` },
+    { key: "contrib", text: (p) => `${formatBRL(p.contrib)} contribuição` },
+  ];
 
 function InsightsSection({ x }: { x: PricingInsights }) {
   const [sort, setSort] = useState<InsightSort>("contrib");
+  const [showAll, setShowAll] = useState(false);
 
-  const rows = useMemo(
+  const sorted = useMemo(
     () => [...x.products].sort((a, b) => b[sort] - a[sort]),
     [x.products, sort],
   );
-  const max = Math.max(1, ...rows.map((p) => Math.abs(p[sort])));
+  const max = Math.max(1, ...sorted.map((p) => Math.abs(p[sort])));
+  const shown = showAll ? sorted : sorted.slice(0, 12);
+  const hero = INSIGHT_SORTS.find((s) => s.key === sort)!;
 
   const kpis = [
-    { value: formatBRL(x.stockCost), label: `Parado em estoque · ${x.stockUnits} un.` },
     {
       value: formatBRL(x.stockContribPotential),
-      label: "Contribuição se vender o estoque",
+      label: "Contribuição parada no estoque",
       tone: "text-success",
     },
-    { value: formatBRL(x.stockRetail), label: "Receita se vender o estoque" },
+    { value: formatBRL(x.stockRetail), label: "Receita parada no estoque" },
+    {
+      value: `${x.stockUnits}`,
+      label: `Peças em estoque · ${formatBRL(x.stockCost)} a custo`,
+    },
   ];
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
       <h2 className="mb-1 font-black">Estoque e vendas</h2>
       <p className="mb-3 text-xs text-muted">
-        Cada produto: quantas entraram, quantas vendeu, quantas sobraram, e quanto
-        já gerou de receita e de contribuição. Toque num título pra reordenar.
+        Ranking dos produtos — escolha por qual número ordenar. O valor aparece
+        grande à direita, com barra pra comparar de relance.
       </p>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3">
         {kpis.map((k) => (
           <div key={k.label}>
-            <p className={cn("text-lg font-black leading-none", k.tone)}>{k.value}</p>
-            <p className="mt-1 text-[11px] text-muted">{k.label}</p>
+            <p className={cn("text-lg font-black leading-none", k.tone)}>
+              {k.value}
+            </p>
+            <p className="mt-1 text-[11px] leading-tight text-muted">{k.label}</p>
           </div>
         ))}
       </div>
 
       {x.noCostStock > 0 && (
         <p className="mt-2 text-xs text-warning">
-          {x.noCostStock} produto(s) com estoque e sem custo — a contribuição deles
-          fica de fora.
+          {x.noCostStock} produto(s) em estoque sem custo cadastrado — a
+          contribuição deles não conta.
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-muted">Ordenar por</span>
-        {INSIGHT_COLS.map((c) => (
+      <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs font-semibold text-muted">Ordenar por</span>
+        {INSIGHT_SORTS.map((s) => (
           <button
-            key={c.key}
+            key={s.key}
             type="button"
-            onClick={() => setSort(c.key)}
+            onClick={() => {
+              setSort(s.key);
+              setShowAll(false);
+            }}
             className={cn(
               "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-              sort === c.key
+              sort === s.key
                 ? "bg-foreground text-background"
                 : "border border-border text-muted hover:text-foreground",
             )}
           >
-            {c.label}
+            {s.label}
           </button>
         ))}
       </div>
 
-      {rows.length === 0 ? (
+      {sorted.length === 0 ? (
         <p className="mt-4 py-6 text-center text-xs text-muted">
           Nenhum produto com venda ou estoque ainda.
         </p>
       ) : (
         <>
-        <ul className="mt-3 space-y-2 sm:hidden">
-          {rows.map((p, i) => {
-            const idle = p.unitsSold === 0 && p.stockUnits > 0;
-            return (
-              <li key={i} className="rounded-xl border border-border/70 p-3">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xs tabular-nums text-muted">{i + 1}</span>
-                  <span className="line-clamp-1 flex-1 font-semibold" title={p.name}>
-                    {p.name}
-                  </span>
-                </div>
-                {!p.hasCost ? (
-                  <p className="mt-0.5 text-[11px] text-warning">sem custo cadastrado</p>
-                ) : idle ? (
-                  <p className="mt-0.5 text-[11px] text-muted">parado · nada vendido</p>
-                ) : null}
-                <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
-                  <MiniNum label="Entraram" v={p.total} on={sort === "total"} />
-                  <MiniNum label="Vendidas" v={p.unitsSold} on={sort === "unitsSold"} />
-                  <MiniNum
-                    label="Estoque"
-                    v={p.stockUnits}
-                    on={sort === "stockUnits"}
-                    muted={p.stockUnits === 0}
-                  />
-                </div>
-                <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-center">
-                  <MiniNum
-                    label="Receita"
-                    v={formatBRL(p.revenue)}
-                    on={sort === "revenue"}
-                  />
-                  <MiniNum
-                    label="Contribuição"
-                    v={formatBRL(p.contrib)}
-                    on={sort === "contrib"}
-                    tone={p.contrib > 0 ? "text-success" : undefined}
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="mt-3 -mx-4 hidden overflow-x-auto px-4 sm:block">
-          <table className="w-full min-w-[560px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted">
-                <th className="w-7 py-2 text-left font-semibold">#</th>
-                <th className="py-2 text-left font-semibold">Produto</th>
-                {INSIGHT_COLS.map((c) => (
-                  <th
-                    key={c.key}
-                    onClick={() => setSort(c.key)}
-                    className={cn(
-                      "cursor-pointer select-none whitespace-nowrap py-2 pl-3 text-right font-semibold",
-                      sort === c.key && "text-foreground",
-                    )}
-                  >
-                    {c.short}
-                    {sort === c.key ? " ↓" : ""}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p, i) => {
-                const idle = p.unitsSold === 0 && p.stockUnits > 0;
-                const vals: Record<InsightSort, ReactNode> = {
-                  total: p.total,
-                  unitsSold: p.unitsSold,
-                  stockUnits:
-                    p.stockUnits === 0 ? (
-                      <span className="text-muted">0</span>
-                    ) : (
-                      p.stockUnits
-                    ),
-                  revenue: formatBRL(p.revenue),
-                  contrib: (
-                    <span className={p.contrib > 0 ? "text-success" : undefined}>
-                      {formatBRL(p.contrib)}
-                    </span>
-                  ),
-                };
-                return (
-                  <tr
-                    key={i}
-                    className="border-b border-border/50 last:border-0"
-                  >
-                    <td className="py-2 text-left text-xs tabular-nums text-muted">
+          <ol className="mt-3">
+            {shown.map((p, i) => {
+              const idle = p.unitsSold === 0 && p.stockUnits > 0;
+              const heroVal = p[sort];
+              const heroText = hero.money
+                ? formatBRL(heroVal)
+                : String(heroVal);
+              const caption = INSIGHT_CAPTION.filter((c) => c.key !== sort)
+                .map((c) => c.text(p))
+                .join(" · ");
+              return (
+                <li
+                  key={p.name + i}
+                  className="border-b border-border/50 py-2.5 last:border-0"
+                >
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="w-4 shrink-0 text-xs font-bold tabular-nums text-muted">
                       {i + 1}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span
-                        className="line-clamp-1 font-medium"
-                        title={p.name}
-                      >
-                        {p.name}
-                      </span>
-                      {!p.hasCost ? (
-                        <span className="text-[11px] text-warning">
-                          sem custo cadastrado
-                        </span>
-                      ) : idle ? (
-                        <span className="text-[11px] text-muted">
-                          parado · nada vendido
-                        </span>
-                      ) : null}
-                    </td>
-                    {INSIGHT_COLS.map((c) => (
-                      <td
-                        key={c.key}
-                        className={cn(
-                          "relative whitespace-nowrap py-2 pl-3 text-right tabular-nums",
-                          sort === c.key
-                            ? "font-bold text-foreground"
-                            : "text-muted",
-                        )}
-                      >
-                        {sort === c.key && (
-                          <span
-                            aria-hidden
-                            className="absolute inset-y-1 right-0 rounded-sm bg-foreground/[0.06]"
-                            style={{
-                              width: `${Math.max(4, (Math.abs(p[c.key]) / max) * 100)}%`,
-                            }}
-                          />
-                        )}
-                        <span className="relative z-10">{vals[c.key]}</span>
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </span>
+                    <span
+                      className="min-w-0 flex-1 truncate text-sm font-semibold"
+                      title={p.name}
+                    >
+                      {p.name}
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 text-right text-base font-black tabular-nums",
+                        sort === "contrib" && p.contrib > 0
+                          ? "text-success"
+                          : "text-foreground",
+                      )}
+                    >
+                      {heroText}
+                    </span>
+                  </div>
+                  <div className="ml-6 mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/[0.05]">
+                    <div
+                      className={cn(
+                        "h-full rounded-full",
+                        sort === "contrib" ? "bg-success/70" : "bg-accent/70",
+                      )}
+                      style={{
+                        width: `${Math.max(2, (Math.abs(heroVal) / max) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="ml-6 mt-1 text-[11px] text-muted">
+                    {caption}
+                    {!p.hasCost && (
+                      <span className="text-warning"> · sem custo cadastrado</span>
+                    )}
+                    {idle && p.hasCost && <span> · parado</span>}
+                  </p>
+                </li>
+              );
+            })}
+          </ol>
+          {sorted.length > 12 && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="mt-2 text-xs font-semibold text-primary"
+            >
+              {showAll
+                ? "Mostrar só o top 12"
+                : `Mostrar todos (${sorted.length})`}
+            </button>
+          )}
         </>
       )}
     </div>
