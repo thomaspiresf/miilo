@@ -1,16 +1,12 @@
 import Link from "next/link";
 import { getCategories } from "@/lib/data/catalog";
-import { getUser, isDemoMode } from "@/lib/auth";
+import { isDemoMode } from "@/lib/auth";
 import { SiteHeader } from "@/components/site/header";
 import { Logo } from "@/components/site/logo";
 import { env } from "@/lib/env";
 
 export default async function LojaLayout({ children }: LayoutProps<"/">) {
-  const [categories, user, demo] = await Promise.all([
-    getCategories(),
-    getUser(),
-    isDemoMode(),
-  ]);
+  const [categories, demo] = await Promise.all([getCategories(), isDemoMode()]);
 
   return (
     <>
@@ -20,14 +16,7 @@ export default async function LojaLayout({ children }: LayoutProps<"/">) {
           simulado. Configure o <code>.env.local</code> para dados reais.
         </div>
       )}
-      <SiteHeader
-        categories={categories}
-        user={
-          user
-            ? { name: user.name, email: user.email, isAdmin: user.role === "admin" }
-            : null
-        }
-      />
+      <SiteHeader categories={categories} />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-4 sm:px-6">
         {children}
       </main>

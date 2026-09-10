@@ -36,6 +36,17 @@ import { ORDER_STATUS } from "@/lib/order-status";
 import { parseMoney } from "@/lib/format";
 import type { CategoryKind, OrderStatus, VideoAudio } from "@/lib/types";
 
+/**
+ * Limpa o cache das páginas públicas da loja (home + categorias + produtos).
+ * Home e página de produto são pré-renderadas/ISR — sem isso, uma mudança de
+ * preço/estoque/foto só apareceria na próxima revalidação (até 60s).
+ */
+function revalidateStorefront() {
+  revalidateStorefront();
+  revalidatePath("/c/[slug]", "page");
+  revalidatePath("/p/[slug]", "page");
+}
+
 const variantSchema = z.object({
   id: z.string().optional(),
   size: z.string().trim().nullable().default(null),
@@ -126,7 +137,7 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
   }
 
   revalidatePath("/admin/produtos");
-  revalidatePath("/");
+  revalidateStorefront();
   // ao criar, vai direto pra tela do produto (onde ficam as fotos)
   redirect(newId ? `/admin/produtos/${newId}?criado=1` : "/admin/produtos");
 }
@@ -148,7 +159,7 @@ export async function deleteProductAction(id: string): Promise<{ error?: string 
   });
   revalidatePath("/admin/produtos");
   revalidatePath("/admin");
-  revalidatePath("/");
+  revalidateStorefront();
   return {};
 }
 
@@ -171,7 +182,7 @@ export async function toggleProductActiveAction(
     summary: `${active ? "Ativou" : "Desativou"} o produto "${before?.name ?? id}"`,
   });
   revalidatePath("/admin/produtos");
-  revalidatePath("/");
+  revalidateStorefront();
   return {};
 }
 
@@ -214,7 +225,7 @@ export async function reorderImagesAction(productId: string, ids: string[]) {
     console.error("reorderImages:", (err as Error).message);
   }
   revalidatePath(`/admin/produtos/${productId}`);
-  revalidatePath("/");
+  revalidateStorefront();
 }
 
 export async function setProductVideoAction(formData: FormData) {
@@ -233,7 +244,7 @@ export async function setProductVideoAction(formData: FormData) {
     console.error("setProductVideo:", (err as Error).message);
   }
   revalidatePath(`/admin/produtos/${productId}`);
-  revalidatePath("/");
+  revalidateStorefront();
 }
 
 const VIDEO_AUDIO_LABEL: Record<VideoAudio, string> = {
@@ -260,7 +271,7 @@ export async function setProductVideoAudioAction(productId: string, audio: Video
     return { error: "Não foi possível salvar. Tente de novo." };
   }
   revalidatePath(`/admin/produtos/${productId}`);
-  revalidatePath("/");
+  revalidateStorefront();
   return {};
 }
 
@@ -317,7 +328,7 @@ export async function createCategoryAction(_prev: unknown, formData: FormData) {
     return { error: err instanceof Error ? err.message : "Falha ao criar" };
   }
   revalidatePath("/admin/categorias");
-  revalidatePath("/");
+  revalidateStorefront();
   return { ok: true };
 }
 
@@ -336,7 +347,7 @@ export async function deleteCategoryAction(formData: FormData) {
     console.error("deleteCategory:", (err as Error).message);
   }
   revalidatePath("/admin/categorias");
-  revalidatePath("/");
+  revalidateStorefront();
 }
 
 const ORDER_STATUSES: OrderStatus[] = [

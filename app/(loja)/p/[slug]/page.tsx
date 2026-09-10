@@ -14,6 +14,10 @@ import { ExpandableText } from "@/components/site/expandable-text";
 import { Accordion } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/misc";
 
+// Página pública, igual pra todo mundo: pré-renderada no build (generateStaticParams)
+// e revalidada a cada 60s. Abrir um produto passa a ser instantâneo.
+export const revalidate = 60;
+
 export async function generateStaticParams() {
   try {
     const slugs = await getAllProductSlugs();
@@ -41,17 +45,8 @@ export async function generateMetadata(
 
 export default async function ProductPage(props: PageProps<"/p/[slug]">) {
   const { slug } = await props.params;
-  const sp = await props.searchParams;
   const product = await getProductBySlug(slug);
   if (!product) notFound();
-
-  // ?cor= vindo da vitrine → cor inicial (normaliza pro nome exato da variação)
-  const rawColor = typeof sp.cor === "string" ? sp.cor : null;
-  const initialColor = rawColor
-    ? (product.variants.find(
-        (v) => v.color && v.color.toLowerCase() === rawColor.toLowerCase(),
-      )?.color ?? null)
-    : null;
 
   const related = (await listProducts({ categorySlug: product.category.slug }))
     .filter((p) => p.id !== product.id)
@@ -76,7 +71,6 @@ export default async function ProductPage(props: PageProps<"/p/[slug]">) {
       <ProductDetail
         product={product}
         installments={installments}
-        initialColor={initialColor}
         info={
           <>
             {product.brand && (

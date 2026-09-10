@@ -1,5 +1,6 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { cache } from "react";
+import { createPublicClient } from "@/lib/supabase/server";
 import { env, hasSupabase } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
 import { maybeSweepReservations } from "@/lib/data/stock-reservations";
@@ -117,10 +118,10 @@ async function withFallback<T>(
 // --------------------------------------------------------------------------
 //  Categorias
 // --------------------------------------------------------------------------
-export async function getCategories(): Promise<Category[]> {
+export const getCategories = cache(async (): Promise<Category[]> => {
   return withFallback(
     async () => {
-      const supabase = await createClient();
+      const supabase = createPublicClient();
       const { data, error } = await supabase
         .from("categories")
         .select("id, slug, name, kind, sort")
@@ -131,7 +132,7 @@ export async function getCategories(): Promise<Category[]> {
     },
     () => [...mockDB().categories].sort((a, b) => a.sort - b.sort),
   );
-}
+});
 
 // --------------------------------------------------------------------------
 //  Listagem com filtros
@@ -186,31 +187,44 @@ function applyClientFilters(list: Product[], f: CatalogFilters): Product[] {
 
 export async function listProducts(f: CatalogFilters = {}): Promise<Product[]> {
   maybeSweepReservations(); // devolve reservas de checkout abandonado (throttled)
-  return withFallback(
-    async () => {
-      const supabase = await createClient();
-      let query = supabase.from("products").select(PRODUCT_SELECT).eq("active", true);
-
-      if (f.categorySlug) query = query.eq("category.slug", f.categorySlug);
-      if (f.kind) query = query.eq("category.kind", f.kind);
-      if (f.q) query = query.ilike("name", `%${f.q}%`);
-      if (f.sort === "novidades") query = query.order("created_at", { ascending: false });
-      else query = query.order("name", { ascending: true });
-
-      const { data, error } = await query.limit(200);
-      if (error) throw error;
-
-      // filtros que dependem das variações são aplicados no cliente
-      return applyClientFilters((data ?? []).map(mapProduct), {
-        ...f,
-        categorySlug: undefined,
-        kind: undefined,
-        q: undefined,
-      });
-    },
-    () => applyClientFilters(mockDB().products, f),
+  // normaliza a chave: só os campos que mudam a consulta ao banco importam pro
+  // cache; o resto é filtrado em memória sobre o mesmo resultado.
+  return listProductsCached(f.kind ?? null, f.categorySlug ?? null, f.q ?? null, f.sort ?? null).then(
+    (rows) => applyClientFilters(rows, { ...f, categorySlug: undefined, kind: undefined, q: undefined }),
   );
 }
+
+const listProductsCached = cache(
+  async (
+    kind: CatalogFilters["kind"] | null,
+    categorySlug: string | null,
+    q: string | null,
+    sort: CatalogFilters["sort"] | null,
+  ): Promise<Product[]> => {
+    return withFallback(
+      async () => {
+        const supabase = createPublicClient();
+        let query = supabase.from("products").select(PRODUCT_SELECT).eq("active", true);
+
+        if (categorySlug) query = query.eq("category.slug", categorySlug);
+        if (kind) query = query.eq("category.kind", kind);
+        if (q) query = query.ilike("name", `%${q}%`);
+        if (sort === "novidades") query = query.order("created_at", { ascending: false });
+        else query = query.order("name", { ascending: true });
+
+        const { data, error } = await query.limit(200);
+        if (error) throw error;
+        return (data ?? []).map(mapProduct);
+      },
+      () =>
+        applyClientFilters(mockDB().products, {
+          kind: kind ?? undefined,
+          categorySlug: categorySlug ?? undefined,
+          q: q ?? undefined,
+        }),
+    );
+  },
+);
 
 export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
   const all = await listProducts({ sort: "novidades" });
@@ -220,37 +234,39 @@ export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
 // --------------------------------------------------------------------------
 //  Produto único
 // --------------------------------------------------------------------------
-export async function getProductBySlug(slug: string): Promise<Product | null> {
-  maybeSweepReservations();
-  return withFallback(
-    async () => {
-      const supabase = await createClient();
-      const { data, error } = await supabase
-        .from("products")
-        .select(PRODUCT_SELECT)
-        .eq("slug", slug)
-        .maybeSingle();
-      if (error) throw error;
-      return data ? mapProduct(data) : null;
-    },
-    () => mockDB().products.find((p) => p.slug === slug && p.active) ?? null,
-  );
-}
+export const getProductBySlug = cache(
+  async (slug: string): Promise<Product | null> => {
+    maybeSweepReservations();
+    return withFallback(
+      async () => {
+        const supabase = createPublicClient();
+        const { data, error } = await supabase
+          .from("products")
+          .select(PRODUCT_SELECT)
+          .eq("slug", slug)
+          .maybeSingle();
+        if (error) throw error;
+        return data ? mapProduct(data) : null;
+      },
+      () => mockDB().products.find((p) => p.slug === slug && p.active) ?? null,
+    );
+  },
+);
 
-export async function getAllProductSlugs(): Promise<string[]> {
+export const getAllProductSlugs = cache(async (): Promise<string[]> => {
   return withFallback(
     async () => {
-      const supabase = await createClient();
+      const supabase = createPublicClient();
       const { data, error } = await supabase
         .from("products")
         .select("slug")
         .eq("active", true);
       if (error) throw error;
-      return (data ?? []).map((r) => r.slug as string);
+      return ((data ?? []) as { slug: string }[]).map((r) => r.slug);
     },
     () => mockDB().products.map((p) => p.slug),
   );
-}
+});
 
 /** Tamanhos distintos disponíveis (para o painel de filtros). */
 export async function getAvailableSizes(kind?: string): Promise<string[]> {

@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseAdmin, hasSupabase } from "@/lib/env";
@@ -424,6 +425,21 @@ function mockMoveStock(
   });
 }
 
+/**
+ * Uma venda mexe no estoque — limpa o cache das páginas públicas (home + produto
+ * são ISR de 60s) pra "Esgotado" aparecer na hora. Fora de contexto de request
+ * (não deve acontecer), o try/catch evita quebrar o fluxo do pedido.
+ */
+function revalidateStorefrontStock() {
+  try {
+    revalidatePath("/");
+    revalidatePath("/c/[slug]", "page");
+    revalidatePath("/p/[slug]", "page");
+  } catch {
+    /* chamado fora de um request — ISR cobre em até 60s */
+  }
+}
+
 export async function approveOrder(
   id: string,
   opts: { mpPaymentId?: string | null; mpStatus?: string; method?: string | null } = {},
@@ -447,6 +463,7 @@ export async function approveOrder(
     }
     await incrementCouponUse(order.coupon_code);
     await sendOrderConfirmationEmail(order);
+    revalidateStorefrontStock();
     return;
   }
   const admin = createAdminClient();
@@ -464,6 +481,8 @@ export async function approveOrder(
     p_method: opts.method ?? null,
   });
   if (error) throw error;
+
+  revalidateStorefrontStock();
 
   if (wasPaid) return; // já estava pago — não conta cupom nem reenvia e-mail
 

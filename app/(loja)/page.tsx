@@ -8,6 +8,9 @@ import { CategoryPills } from "@/components/site/category-pills";
 import { EmptyState } from "@/components/ui/misc";
 import { CATEGORY_KINDS, KIND_LABELS } from "@/lib/types";
 
+// Vitrine igual pra todo mundo: pré-renderada e revalidada a cada 60s.
+export const revalidate = 60;
+
 const PER_ROW = 12;
 
 export default async function HomePage() {

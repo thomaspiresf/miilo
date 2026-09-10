@@ -1,23 +1,46 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Product } from "@/lib/types";
 import type { Installment } from "@/lib/mp-installments";
 import { imagesForColor } from "@/lib/product-cards";
 import { ProductGallery } from "@/components/site/product-gallery";
 import { ProductBuyBox } from "@/components/site/product-buy-box";
 
-export function ProductDetail({
-  product,
-  info,
-  installments,
-  initialColor = null,
-}: {
+type Props = {
   product: Product;
   info: ReactNode;
   installments: Record<string, Installment>;
-  initialColor?: string | null;
-}) {
+};
+
+export function ProductDetail(props: Props) {
+  // A página é estática/ISR. O `?cor=` vindo da vitrine é lido só no cliente
+  // (Suspense) — o fallback já renderiza o produto inteiro na cor padrão, então
+  // não há tela vazia nem perda de SEO/LCP.
+  return (
+    <Suspense fallback={<ProductDetailInner {...props} initialColor={null} />}>
+      <ProductDetailWithColorParam {...props} />
+    </Suspense>
+  );
+}
+
+function ProductDetailWithColorParam(props: Props) {
+  const raw = useSearchParams().get("cor");
+  const initialColor = raw
+    ? (props.product.variants.find(
+        (v) => v.color && v.color.toLowerCase() === raw.toLowerCase(),
+      )?.color ?? null)
+    : null;
+  return <ProductDetailInner {...props} initialColor={initialColor} />;
+}
+
+function ProductDetailInner({
+  product,
+  info,
+  installments,
+  initialColor,
+}: Props & { initialColor: string | null }) {
   const first = product.variants.find((v) => v.stock > 0) ?? product.variants[0];
   const [color, setColor] = useState<string | null>(initialColor ?? first?.color ?? null);
 

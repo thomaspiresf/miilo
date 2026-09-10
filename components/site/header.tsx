@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, Search, ShoppingBag, User } from "lucide-react";
 import type { Category } from "@/lib/types";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
@@ -10,15 +10,26 @@ import { CartSheet } from "@/components/site/cart-sheet";
 import { CartCount } from "@/components/site/cart-count";
 import { Logo } from "@/components/site/logo";
 
-export function SiteHeader({
-  categories,
-  user,
-}: {
-  categories: Category[];
-  user: { name: string | null; email: string | null; isAdmin?: boolean } | null;
-}) {
+export function SiteHeader({ categories }: { categories: Category[] }) {
   const router = useRouter();
   const [q, setQ] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // A sessão é checada no cliente (via /api/me) pra não forçar renderização
+  // dinâmica nas páginas da loja. O link "admin" aparece logo após o carregamento
+  // pra quem tem acesso; ninguém mais chega a ver que ele existe.
+  useEffect(() => {
+    let live = true;
+    fetch("/api/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (live && d?.isAdmin) setIsAdmin(true);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
   const roupas = categories.filter((c) => c.kind === "roupas");
   const brinquedos = categories.filter((c) => c.kind === "brinquedos");
   const livros = categories.filter((c) => c.kind === "livros");
@@ -71,7 +82,7 @@ export function SiteHeader({
         </form>
 
         <div className="ml-auto flex items-center gap-1 md:ml-0">
-          {user?.isAdmin && (
+          {isAdmin && (
             <Link
               href="/admin"
               className="mr-1 hidden rounded-full bg-foreground px-3 py-1.5 text-xs font-bold text-background sm:block"
@@ -90,7 +101,7 @@ export function SiteHeader({
             href="/conta"
             aria-label="Minha conta"
             className="rounded-full p-2 hover:bg-black/5"
-            title={user?.email ?? "Entrar"}
+            title="Minha conta"
           >
             <User className="h-5 w-5" />
           </Link>
