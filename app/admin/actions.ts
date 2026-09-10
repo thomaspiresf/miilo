@@ -17,6 +17,7 @@ import {
   adminCreateCategory,
   adminDeleteCategory,
   adminSetProductVideo,
+  adminSetProductVideoMuted,
 } from "@/lib/data/admin";
 import {
   adminDeleteOrder,
@@ -228,6 +229,25 @@ export async function setProductVideoAction(formData: FormData) {
   }
   revalidatePath(`/admin/produtos/${productId}`);
   revalidatePath("/");
+}
+
+export async function setProductVideoMutedAction(productId: string, muted: boolean) {
+  await requireAdmin();
+  try {
+    await adminSetProductVideoMuted(productId, muted);
+    await logAction({
+      action: "product.video",
+      entity: "product",
+      entityId: productId,
+      summary: `Vídeo de "${await productName(productId)}" agora toca ${muted ? "sem áudio" : "com áudio"}`,
+    });
+  } catch (err) {
+    console.error("setProductVideoMuted:", (err as Error).message);
+    return { error: "Não foi possível salvar. Tente de novo." };
+  }
+  revalidatePath(`/admin/produtos/${productId}`);
+  revalidatePath("/");
+  return {};
 }
 
 export async function setImageColorAction(formData: FormData) {

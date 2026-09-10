@@ -34,3 +34,16 @@ export function isVideoLink(url: string) {
   const p = parseVideo(url);
   return p?.kind === "youtube" || p?.kind === "vimeo";
 }
+
+/**
+ * src do iframe para YouTube/Vimeo. Quando `muted`, liga autoplay silencioso
+ * (prévia); caso contrário mantém o embed padrão (play manual, com áudio).
+ */
+export function embedSrc(video: ParsedVideo, muted: boolean): string {
+  if (video.kind === "file") return video.src;
+  if (!muted) return video.src;
+  if (video.kind === "youtube") {
+    return `https://www.youtube.com/embed/${video.id}?rel=0&autoplay=1&mute=1&loop=1&playlist=${video.id}&controls=1`;
+  }
+  return `https://player.vimeo.com/video/${video.id}?autoplay=1&muted=1&loop=1`;
+}

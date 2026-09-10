@@ -182,6 +182,7 @@ function buildMockProduct(
     rating_count: 0,
     max_installments: 3,
     video_url: null,
+    video_muted: true,
     split_by_color: input.splitByColor,
     category: { id: category.id, slug: category.slug, name: category.name, kind: category.kind },
     images: [],
@@ -251,6 +252,7 @@ export async function adminUpdateProduct(
     rebuilt.rating_avg = p.rating_avg;
     rebuilt.rating_count = p.rating_count;
     rebuilt.video_url = p.video_url;
+    rebuilt.video_muted = p.video_muted;
     Object.assign(p, rebuilt);
     await notifyRestockForProduct(id);
     return;
@@ -480,6 +482,26 @@ export async function adminSetProductVideo(
   }
   const admin = createAdminClient();
   const { error } = await admin.from("products").update({ video_url: v }).eq("id", productId);
+  if (error && !MISSING_COLUMN.test(error.message)) throw error;
+}
+
+/** Define se o vídeo do produto toca com áudio (false) ou mudo/prévia (true). */
+export async function adminSetProductVideoMuted(
+  productId: string,
+  muted: boolean,
+): Promise<void> {
+  assertPersistable();
+
+  if (!hasSupabaseAdmin()) {
+    const p = mockDB().products.find((x) => x.id === productId);
+    if (p) p.video_muted = muted;
+    return;
+  }
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("products")
+    .update({ video_muted: muted })
+    .eq("id", productId);
   if (error && !MISSING_COLUMN.test(error.message)) throw error;
 }
 

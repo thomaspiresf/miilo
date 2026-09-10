@@ -4,17 +4,19 @@ import Image from "next/image";
 import { useState } from "react";
 import { Play } from "lucide-react";
 import type { ProductImage } from "@/lib/types";
-import { parseVideo } from "@/lib/video";
+import { parseVideo, embedSrc } from "@/lib/video";
 import { cn } from "@/lib/utils";
 
 export function ProductGallery({
   images,
   name,
   video,
+  videoMuted = true,
 }: {
   images: ProductImage[];
   name: string;
   video?: string | null;
+  videoMuted?: boolean;
 }) {
   const parsedVideo = parseVideo(video);
   // slides: 1ª foto, depois o vídeo (se houver), depois as demais fotos
@@ -41,11 +43,14 @@ export function ProductGallery({
               src={parsedVideo.src}
               controls
               playsInline
+              muted={videoMuted}
+              autoPlay={videoMuted}
+              loop={videoMuted}
               className="h-full w-full bg-black object-contain"
             />
           ) : (
             <iframe
-              src={parsedVideo.src}
+              src={embedSrc(parsedVideo, videoMuted)}
               className="h-full w-full"
               allow="autoplay; fullscreen; picture-in-picture"
               title={`Vídeo — ${name}`}

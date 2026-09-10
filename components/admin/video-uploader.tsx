@@ -1,11 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Film, X } from "lucide-react";
-import { setProductVideoAction } from "@/app/admin/actions";
+import {
+  setProductVideoAction,
+  setProductVideoMutedAction,
+} from "@/app/admin/actions";
 import { parseVideo } from "@/lib/video";
 import { uploadToStorage } from "@/lib/admin-upload";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
 
@@ -14,15 +18,33 @@ const MAX_MB = 50;
 export function VideoUploader({
   productId,
   video,
+  muted: mutedInitial,
 }: {
   productId: string;
   video: string | null;
+  muted: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState("");
+
+  const [muted, setMuted] = useState(mutedInitial);
+  const [savingMuted, startMuted] = useTransition();
+
+  function toggleMuted() {
+    const next = !muted;
+    setMuted(next);
+    setError(null);
+    startMuted(async () => {
+      const res = await setProductVideoMutedAction(productId, next);
+      if (res?.error) {
+        setMuted(!next);
+        setError(res.error);
+      }
+    });
+  }
 
   const parsed = parseVideo(video);
 
@@ -67,7 +89,7 @@ export function VideoUploader({
       <div className="space-y-3">
         <div className="relative w-full max-w-sm overflow-hidden rounded-xl border border-border bg-black/5">
           {parsed.kind === "file" ? (
-            <video src={parsed.src} controls className="aspect-video w-full" />
+            <video src={parsed.src} controls muted={muted} className="aspect-video w-full" />
           ) : (
             <iframe
               src={parsed.src}
@@ -80,6 +102,41 @@ export function VideoUploader({
         <p className="text-xs text-muted">
           {parsed.kind === "file" ? "Arquivo enviado" : `Link do ${parsed.kind === "youtube" ? "YouTube" : "Vimeo"}`}
         </p>
+
+        {/* áudio do vídeo */}
+        <div className="flex items-start gap-3 rounded-xl border border-border bg-background p-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!muted}
+            aria-label={muted ? "Sem áudio — clique para ativar o som" : "Com áudio — clique para silenciar"}
+            disabled={savingMuted}
+            onClick={toggleMuted}
+            className={cn(
+              "relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+              !muted ? "bg-success" : "bg-black/20",
+              savingMuted && "opacity-60",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                !muted ? "translate-x-[18px]" : "translate-x-0.5",
+              )}
+            />
+          </button>
+          <div className="text-sm">
+            <p className="font-medium">
+              {muted ? "Sem áudio" : "Com áudio"}
+              {savingMuted && <Spinner className="ml-2 inline h-3 w-3" />}
+            </p>
+            <p className="text-xs text-muted">
+              {muted
+                ? "Toca como prévia silenciosa em loop na página. O cliente pode ativar o som."
+                : "O cliente dá play e ouve o áudio do vídeo."}
+            </p>
+          </div>
+        </div>
         <Button
           type="button"
           size="sm"

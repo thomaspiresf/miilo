@@ -83,6 +83,8 @@ export type Product = {
   max_installments: number;
   /** vídeo do produto: URL pública de um MP4 hospedado OU link YouTube/Vimeo */
   video_url: string | null;
+  /** true = vídeo toca sem áudio (prévia silenciosa em loop); false = com áudio */
+  video_muted: boolean;
   /** true = cada cor vira um card na vitrine; false = um card só pro produto */
   split_by_color: boolean;
   category: Pick<Category, "id" | "slug" | "name" | "kind">;

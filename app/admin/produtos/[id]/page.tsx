@@ -111,7 +111,11 @@ export default async function AdminProductEditPage(
           <p className="mb-3 text-xs text-muted">
             Aparece logo depois da primeira foto na galeria da página do produto.
           </p>
-          <VideoUploader productId={product.id} video={product.video_url} />
+          <VideoUploader
+            productId={product.id}
+            video={product.video_url}
+            muted={product.video_muted}
+          />
         </section>
       )}
 
