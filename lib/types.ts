@@ -210,6 +210,8 @@ export type Order = {
   tracking_code: string | null;
   /** Observação livre (ex.: "paga dia 15"). */
   notes: string | null;
+  /** Como a venda na loja foi lançada: link | now | cash | later. Null p/ online. */
+  pos_pay_mode: string | null;
   stock_restored: boolean;
   /** Estoque baixado na criação do pedido (reserva). */
   stock_reserved: boolean;

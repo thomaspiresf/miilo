@@ -50,6 +50,7 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
       channel: "pos",
       discount: discount || 0,
       notes,
+      posPayMode: payMode,
     });
 
     if (payMode === "cash") {

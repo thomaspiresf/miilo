@@ -82,7 +82,12 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
             <span className="text-muted">{formatDate(o.created_at)}</span>
             <span className="text-muted">{o.customer_name ?? o.email}</span>
             {isReceivable(o) ? (
-              <Badge tone="warning">a receber</Badge>
+              <>
+                <Badge tone="warning">a receber</Badge>
+                <span className="text-xs text-muted">
+                  {o.pos_pay_mode === "later" ? "anotado" : "com link"}
+                </span>
+              </>
             ) : o.channel === "pos" ? (
               <Badge tone="primary">loja</Badge>
             ) : (

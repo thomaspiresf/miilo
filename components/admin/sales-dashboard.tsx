@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, ChevronDown } from "lucide-react";
 import type { OrderChannel, OrderStatus } from "@/lib/types";
 import type { PricingInsights } from "@/lib/data/pricing";
 import { ORDER_STATUS } from "@/lib/order-status";
-import { formatBRL, formatDateTime } from "@/lib/format";
+import { formatBRL, formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/misc";
 import { ProductPerformance } from "@/components/admin/product-performance";
@@ -20,11 +20,17 @@ export type DashOrder = {
   total: number;
   channel: OrderChannel;
   paymentMethod: string | null;
+  posPayMode: string | null;
   items: { name: string; qty: number; total: number }[];
 };
 
 const PAID: OrderStatus[] = ["paid", "shipped", "delivered"];
 const isPaid = (o: DashOrder) => PAID.includes(o.status);
+/** venda na loja ainda não paga = dinheiro a receber */
+const isReceivable = (o: DashOrder) =>
+  o.channel === "pos" && o.status === "pending";
+/** a receber "só anotado" (vendedor não empurrou cobrança) vs "com link" */
+const isMarkedOnly = (o: DashOrder) => o.posPayMode === "later";
 
 type RangeId = "7d" | "30d" | "90d" | "12m" | "all";
 const RANGES: { id: RangeId; label: string; days: number | null }[] = [
@@ -342,6 +348,21 @@ export function SalesDashboard({
     const units = paid.reduce((s, o) => s + o.items.reduce((a, i) => a + i.qty, 0), 0);
     const prevRevenue = prevPaid.reduce((s, o) => s + o.total, 0);
 
+    // recebido x a receber x total vendido
+    const sum = (arr: DashOrder[]) => arr.reduce((s, o) => s + o.total, 0);
+    const receivableOrders = inRange.filter(isReceivable);
+    const receivable = sum(receivableOrders);
+    const receivableMarked = sum(receivableOrders.filter(isMarkedOnly));
+    const receivableLink = receivable - receivableMarked;
+    const linkOrders = receivableOrders.filter((o) => !isMarkedOnly(o));
+    const oldestLink = linkOrders.reduce<string | null>(
+      (min, o) => (!min || o.created_at < min ? o.created_at : min),
+      null,
+    );
+    const sold = revenue + receivable;
+    const prevReceivable = sum(prevRange.filter(isReceivable));
+    const prevSold = prevRevenue + prevReceivable;
+
     // buckets do gráfico de receita
     const bucketMode: "day" | "week" | "month" =
       !cfg.days || cfg.days > 120 ? "month" : cfg.days > 45 ? "week" : "day";
@@ -431,6 +452,16 @@ export function SalesDashboard({
     return {
       revenue,
       prevRevenue,
+      sold,
+      prevSold,
+      receivable,
+      prevReceivable,
+      receivableMarked,
+      receivableLink,
+      receivableCount: receivableOrders.length,
+      markedCount: receivableOrders.filter(isMarkedOnly).length,
+      linkCount: linkOrders.length,
+      oldestLink,
       paidCount: paid.length,
       prevPaidCount: prevPaid.length,
       units,
@@ -450,11 +481,53 @@ export function SalesDashboard({
     };
   }, [orders, range, channel]);
 
-  const kpis = [
-    { label: "Receita paga", value: formatBRL(view.revenue), now: view.revenue, prev: view.prevRevenue, money: true },
+  const receivableSub =
+    view.receivableCount === 0
+      ? "tudo recebido no período"
+      : [
+          view.markedCount > 0 &&
+            `${formatBRL(view.receivableMarked)} anotado (${view.markedCount})`,
+          view.linkCount > 0 &&
+            `${formatBRL(view.receivableLink)} com link${
+              view.oldestLink ? `, desde ${formatDate(view.oldestLink)}` : ""
+            } (${view.linkCount})`,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+  const moneyKpis: {
+    label: string;
+    value: string;
+    tone?: string;
+    delta?: { now: number; prev: number; money?: boolean };
+    sub?: string;
+    href?: string;
+  }[] = [
+    {
+      label: "Vendido no período",
+      value: formatBRL(view.sold),
+      delta: { now: view.sold, prev: view.prevSold, money: true },
+    },
+    {
+      label: "Recebido",
+      value: formatBRL(view.revenue),
+      tone: "text-success",
+      delta: { now: view.revenue, prev: view.prevRevenue, money: true },
+    },
+    {
+      label: "A receber",
+      value: formatBRL(view.receivable),
+      tone: view.receivable > 0 ? "text-warning" : undefined,
+      sub: receivableSub,
+      href:
+        view.receivableCount > 0 ? "/admin/pedidos?status=receber" : undefined,
+    },
+  ];
+
+  const countKpis = [
     { label: "Pedidos pagos", value: String(view.paidCount), now: view.paidCount, prev: view.prevPaidCount },
-    { label: "Ticket médio", value: formatBRL(view.avg), now: view.avg, prev: view.prevAvg, money: true },
     { label: "Itens vendidos", value: String(view.units), now: view.units, prev: view.prevUnits },
+    { label: "Ticket médio", value: formatBRL(view.avg), now: view.avg, prev: view.prevAvg, money: true },
   ];
 
   const channels: { id: ChannelId; label: string }[] = [
@@ -506,9 +579,42 @@ export function SalesDashboard({
         </Link>
       )}
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {kpis.map((k) => (
+      {/* KPIs — dinheiro */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {moneyKpis.map((k) => {
+          const body = (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                {k.label}
+              </p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <p className={cn("text-xl font-black", k.tone)}>{k.value}</p>
+                {view.hasCompare && k.delta && (
+                  <Delta now={k.delta.now} prev={k.delta.prev} money={k.delta.money} />
+                )}
+              </div>
+              {k.sub && (
+                <p className="mt-1 text-[11px] leading-tight text-muted">{k.sub}</p>
+              )}
+            </>
+          );
+          return k.href ? (
+            <Link
+              key={k.label}
+              href={k.href}
+              className="rounded-2xl border border-border bg-surface p-4 transition-colors hover:bg-black/[0.02]"
+            >
+              {body}
+            </Link>
+          ) : (
+            <Card key={k.label}>{body}</Card>
+          );
+        })}
+      </div>
+
+      {/* KPIs — números */}
+      <div className="grid grid-cols-3 gap-3">
+        {countKpis.map((k) => (
           <Card key={k.label}>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">
               {k.label}

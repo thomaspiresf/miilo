@@ -32,6 +32,8 @@ export type NewOrderInput = {
   couponCode?: string | null;
   /** Observação livre do vendedor (venda na loja). */
   notes?: string | null;
+  /** Como a venda na loja foi lançada: link | now | cash | later. */
+  posPayMode?: string | null;
 };
 
 export type ResolvedLine = {
@@ -143,6 +145,8 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
     : `${input.shipping.company} ${input.shipping.service}`.trim();
   const address = pickup ? null : input.address;
   const notes = input.notes?.trim() ? input.notes.trim().slice(0, 500) : null;
+  const posPayMode =
+    channel === "pos" && input.posPayMode ? input.posPayMode : null;
 
   // ---- modo demonstração ----
   if (!hasSupabaseAdmin()) {
@@ -170,6 +174,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       payment_method: null,
       tracking_code: null,
       notes,
+      pos_pay_mode: posPayMode,
       stock_restored: false,
       stock_reserved: true,
       created_at: new Date().toISOString(),
@@ -207,6 +212,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
   // vai removendo campos até o insert passar (channel -> trio do checkout).
   const coupon = discount > 0 ? { discount, coupon_code: couponCode } : {};
   const note = notes ? { notes } : {};
+  const posMode = posPayMode ? { pos_pay_mode: posPayMode } : {};
   const full = {
     ...baseRow,
     customer_name: input.name,
@@ -215,6 +221,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
     channel,
   };
   const rowAttempts = [
+    { ...full, ...coupon, ...note, ...posMode },
     { ...full, ...coupon, ...note },
     { ...full, ...coupon },
     full,
@@ -302,6 +309,7 @@ function mapOrder(row: any, items: any[]): Order {
     payment_method: row.payment_method ?? null,
     tracking_code: row.tracking_code ?? null,
     notes: row.notes ?? null,
+    pos_pay_mode: row.pos_pay_mode ?? null,
     stock_restored: row.stock_restored ?? false,
     stock_reserved: row.stock_reserved ?? false,
     created_at: row.created_at,

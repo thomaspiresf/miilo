@@ -30,6 +30,7 @@ export default async function AdminDashboard() {
     total: o.total,
     channel: o.channel,
     paymentMethod: o.payment_method,
+    posPayMode: o.pos_pay_mode,
     items: o.items.map((it) => ({
       name: it.product_name,
       qty: it.qty,
