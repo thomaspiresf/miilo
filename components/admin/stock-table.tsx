@@ -130,6 +130,13 @@ export function StockTable({
     [rows],
   );
 
+  // quantas variações o produto tem no total (independe de filtro)
+  const totalByProduct = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) m.set(r.productId, (m.get(r.productId) ?? 0) + 1);
+    return m;
+  }, [rows]);
+
   const groups = useMemo<ProductGroup[]>(() => {
     const map = new Map<string, ProductGroup>();
     for (const r of filtered) {
@@ -345,10 +352,19 @@ export function StockTable({
 
       <div className="space-y-2.5">
         {groups.map((g) => {
-          const single = g.variantCount === 1;
-          const collapsible = !single;
-          const isOpen = !collapsible || isGroupOpen(g.productId);
-          const only = single ? g.colors[0].items[0] : null;
+          // linha inline (chip + rótulo + stepper) quando só há UMA variação
+          // pra mexer: produto de 1 variação só, ou só 1 bateu o filtro
+          const total = totalByProduct.get(g.productId) ?? g.variantCount;
+          const inline =
+            total === 1 || g.variantCount === 1
+              ? (g.colors[0]?.items[0] ?? null)
+              : null;
+          const inlineLabel =
+            inline && (inline.size || inline.color)
+              ? [inline.size, inline.color].filter(Boolean).join(" · ")
+              : "Único";
+          const collapsible = !inline;
+          const isOpen = collapsible && isGroupOpen(g.productId);
 
           return (
             <div
@@ -359,7 +375,7 @@ export function StockTable({
               <div
                 className={cn(
                   "flex items-center gap-3 p-3",
-                  single ? "flex-wrap" : "",
+                  inline ? "flex-wrap" : "",
                 )}
               >
                 <ThumbLink
@@ -376,7 +392,7 @@ export function StockTable({
                     {g.productName}
                   </Link>
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
-                    {!single && (
+                    {!inline && (
                       <span
                         className={cn(
                           "rounded-full px-2 py-0.5 font-bold ring-1 ring-inset",
@@ -387,7 +403,7 @@ export function StockTable({
                       </span>
                     )}
                     {g.colors.length > 1 && <span>{g.colors.length} cores</span>}
-                    {!single && g.outCount > 0 && (
+                    {!inline && g.outCount > 0 && (
                       <span className="font-semibold text-danger">
                         {g.outCount} esgotad{g.outCount > 1 ? "as" : "a"}
                       </span>
@@ -405,13 +421,16 @@ export function StockTable({
                   </div>
                 </div>
 
-                {single && only ? (
+                {inline ? (
                   <div className="ml-[60px] flex w-full items-center gap-2 sm:ml-0 sm:w-auto">
-                    <StockChip n={only.stock} />
-                    <span className="mr-auto text-sm text-muted sm:mr-0">Único</span>
-                    <Stepper r={only} />
+                    <StockChip n={inline.stock} />
+                    <span className="mr-auto flex items-center gap-1.5 text-sm text-muted sm:mr-0">
+                      {inline.colorHex && <Swatch hex={inline.colorHex} />}
+                      {inlineLabel}
+                    </span>
+                    <Stepper r={inline} />
                   </div>
-                ) : collapsible ? (
+                ) : (
                   <button
                     type="button"
                     onClick={() => toggle(g.productId)}
@@ -422,11 +441,11 @@ export function StockTable({
                       className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")}
                     />
                   </button>
-                ) : null}
+                )}
               </div>
 
               {/* variações (multi) */}
-              {!single && isOpen && (
+              {isOpen && (
                 <div className="divide-y divide-border border-t border-border">
                   {g.colors.map((c, ci) => (
                     <div key={ci} className="flex gap-3 p-3">
