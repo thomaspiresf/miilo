@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Box,
+  Calculator,
   Check,
   ChevronDown,
   CreditCard,
@@ -23,6 +24,7 @@ import type { BusinessHealth, PricingRow } from "@/lib/data/pricing";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Modal, ModalContent } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/misc";
 import { computeMargins, suggestForContribution } from "@/lib/pricing-math";
 import {
@@ -389,109 +391,142 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [cost, setCost] = useState("");
-  const [tm, setTm] = useState(String(settings.targetMarginPercent));
-  const [pk, setPk] = useState(fmt2(settings.packagingCost));
   const [testPrice, setTestPrice] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const costN = num(cost);
-  const tmN = num(tm) ?? settings.targetMarginPercent;
-  const pkN = num(pk) ?? 0;
-  // regras "de teste" — sobrepõe margem-alvo e embalagem sem salvar
+  // regras editáveis só pra simulação — puxadas das regras de precificação
+  const [tax, setTax] = useState(settings.taxPercent);
+  const [fee, setFee] = useState(settings.mpCreditPercent);
+  const [pk, setPk] = useState(settings.packagingCost);
+  const [tm, setTm] = useState(settings.targetMarginPercent);
+
+  function onOpenChange(v: boolean) {
+    if (v) {
+      setTax(settings.taxPercent);
+      setFee(settings.mpCreditPercent);
+      setPk(settings.packagingCost);
+      setTm(settings.targetMarginPercent);
+      setCost("");
+      setTestPrice("");
+    }
+    setOpen(v);
+  }
+
   const simSettings: PricingSettings = {
     ...settings,
-    targetMarginPercent: tmN,
-    packagingCost: pkN,
+    taxPercent: tax,
+    mpCreditPercent: fee,
+    packagingCost: pk,
+    targetMarginPercent: tm,
   };
-  const suggested =
-    costN != null ? suggestForContribution(costN, simSettings, tmN) : null;
+  const costN = num(cost);
+  const suggested = costN != null ? suggestForContribution(costN, simSettings, tm) : null;
   const testN = num(testPrice);
 
+  const eq = (a: number, b: number) => Math.abs(a - b) < 0.001;
   const changed =
-    Math.abs(tmN - settings.targetMarginPercent) > 0.001 ||
-    Math.abs(pkN - settings.packagingCost) > 0.001;
+    !eq(tax, settings.taxPercent) ||
+    !eq(fee, settings.mpCreditPercent) ||
+    !eq(pk, settings.packagingCost) ||
+    !eq(tm, settings.targetMarginPercent);
 
+  function restore() {
+    setTax(settings.taxPercent);
+    setFee(settings.mpCreditPercent);
+    setPk(settings.packagingCost);
+    setTm(settings.targetMarginPercent);
+  }
   async function saveDefaults() {
     setSaving(true);
     await savePricingSettingsAction({
       ...settings,
-      targetMarginPercent: tmN,
-      packagingCost: pkN,
+      taxPercent: tax,
+      mpCreditPercent: fee,
+      packagingCost: pk,
+      targetMarginPercent: tm,
     });
     setSaving(false);
     router.refresh();
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-surface">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-3 p-4 text-left"
-      >
-        <span className="font-black">Simular preço</span>
-        <span className="hidden text-[11px] text-muted sm:inline">
-          testar um produto antes de comprar
-        </span>
-        <ChevronDown
-          className={cn("ml-auto h-4 w-4 shrink-0 text-muted transition", open && "rotate-180")}
-        />
-      </button>
+    <Modal open={open} onOpenChange={onOpenChange}>
+      <Button variant="outline" onClick={() => onOpenChange(true)}>
+        <Calculator className="h-4 w-4" /> Simular preço de um produto
+      </Button>
 
-      {open && (
-        <div className="space-y-4 border-t border-border p-4">
+      <ModalContent
+        title="Simular preço"
+        description="Teste um produto antes de comprar. Os custos vêm das regras de precificação — mude o que quiser pra ver outros cenários."
+      >
+        <div className="space-y-5">
+          {/* custo */}
           <div>
-            <p className="text-[11px] uppercase tracking-wide text-muted">
-              Comprei por (unidade)
-            </p>
-            <div className="mt-0.5">
-              <CostField value={cost} onChange={setCost} big />
+            <p className="text-xs font-medium text-muted">Custo de compra (por unidade)</p>
+            <div className="mt-1.5">
+              <LotField value={cost} onChange={setCost} />
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
-            <span className="inline-flex items-center gap-1">
-              margem-alvo
-              <Ghost value={tm} onChange={setTm} suffix="%" ch={2.5} className="text-foreground" />
-            </span>
-            <span className="inline-flex items-center gap-1">
-              embalagem
-              <Ghost value={pk} onChange={setPk} prefix="R$" ch={3.5} className="text-foreground" />
-            </span>
-            <span>+ taxa crédito {settings.mpCreditPercent}% + imposto {settings.taxPercent}% (= margem de contribuição)</span>
+          {/* regras */}
+          <div className="rounded-xl border border-border bg-black/[0.02] p-3.5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-muted">Custos e meta</p>
+              {changed && (
+                <button
+                  type="button"
+                  onClick={restore}
+                  className="text-[11px] font-medium text-muted hover:text-foreground"
+                >
+                  restaurar padrão
+                </button>
+              )}
+            </div>
+            <div className="mt-2.5 grid grid-cols-2 gap-3">
+              <NumField label="Imposto" value={tax} onChange={setTax} suffix="%" />
+              <NumField label="Taxa do cartão" value={fee} onChange={setFee} suffix="%" />
+              <NumField label="Embalagem" value={pk} onChange={setPk} suffix="R$" />
+              <NumField label="Margem-alvo" value={tm} onChange={setTm} suffix="%" />
+            </div>
             {changed && (
               <button
                 type="button"
                 onClick={saveDefaults}
                 disabled={saving}
-                className="font-semibold text-primary"
+                className="mt-2.5 text-xs font-semibold text-primary disabled:opacity-60"
               >
-                {saving ? "salvando…" : "salvar como padrão"}
+                {saving ? "salvando…" : "salvar esses valores nas regras"}
               </button>
             )}
           </div>
 
+          {/* resultado */}
           {costN == null || suggested == null ? (
-            <p className="text-xs text-muted">Digite o custo pra ver o preço sugerido.</p>
+            <p className="text-sm text-muted">Digite o custo pra ver o preço sugerido.</p>
           ) : (
             (() => {
               const usedPrice = testN ?? suggested;
-              const v = verdict(computeMargins(costN, usedPrice, simSettings).contribPct, tmN);
+              const v = verdict(
+                computeMargins(costN, usedPrice, simSettings).contribPct,
+                tm,
+              );
               return (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                    <span className="text-muted">Vender por</span>
-                    <Ghost
-                      value={testPrice}
-                      onChange={setTestPrice}
-                      prefix="R$"
-                      ch={5}
-                      className="text-lg font-black text-foreground"
-                      placeholder={fmt2(suggested)}
-                    />
+                <div className="border-t border-border pt-4">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="text-xs text-muted">Vender por</span>
+                    <span className="text-2xl font-black">
+                      <Ghost
+                        value={testPrice}
+                        onChange={setTestPrice}
+                        prefix="R$"
+                        ch={5.5}
+                        placeholder={fmt2(suggested)}
+                        className="text-foreground"
+                      />
+                    </span>
                     {testN == null ? (
                       <span className="text-[11px] text-muted">
-                        (sugerido pra {tmN}% de contribuição)
+                        sugerido pra {tm}% de contribuição
                       </span>
                     ) : (
                       <button
@@ -504,18 +539,24 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
                     )}
                   </div>
 
-                  <p className={cn("text-sm font-semibold", v.c)}>
+                  <p className={cn("mt-2 text-sm font-semibold", v.c)}>
                     {v.i} {v.t}
                   </p>
 
-                  <PriceBreakdown cost={costN} price={usedPrice} settings={simSettings} />
+                  <div className="mt-3">
+                    <PriceBreakdown
+                      cost={costN}
+                      price={usedPrice}
+                      settings={simSettings}
+                    />
+                  </div>
                 </div>
               );
             })()
           )}
         </div>
-      )}
-    </div>
+      </ModalContent>
+    </Modal>
   );
 }
 
