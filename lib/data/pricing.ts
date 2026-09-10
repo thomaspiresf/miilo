@@ -154,6 +154,8 @@ export type PricingRow = {
   /** preço sugerido pra bater a margem-alvo (de contribuição) */
   suggested: number | null;
   unitsSold: number;
+  /** receita paga real (Σ unit_price × qty dos pedidos pagos) */
+  soldRevenue: number;
   profitToDate: number | null;
   /** unidades em estoque (soma das variações ativas) */
   stockUnits: number;
@@ -174,10 +176,16 @@ export async function listPricingRows(): Promise<{
   const orders = await listAllOrders();
   const paid = orders.filter((o) => ["paid", "shipped", "delivered"].includes(o.status));
   const soldByVariant = new Map<string, number>();
+  const revByVariant = new Map<string, number>();
   for (const o of paid)
     for (const it of o.items)
-      if (it.variant_id)
+      if (it.variant_id) {
         soldByVariant.set(it.variant_id, (soldByVariant.get(it.variant_id) ?? 0) + it.qty);
+        revByVariant.set(
+          it.variant_id,
+          (revByVariant.get(it.variant_id) ?? 0) + it.unit_price * it.qty,
+        );
+      }
 
   const fixedShare = fixedPerOrder(settings);
 
@@ -192,6 +200,9 @@ export async function listPricingRows(): Promise<{
     const unitsSold = p.variants.reduce(
       (s, v) => s + (soldByVariant.get(v.id) ?? 0),
       0,
+    );
+    const soldRevenue = round2(
+      p.variants.reduce((s, v) => s + (revByVariant.get(v.id) ?? 0), 0),
     );
     const stockUnits = p.variants.reduce((s, v) => s + Math.max(0, v.stock), 0);
     const stockCost = round2(
@@ -224,6 +235,7 @@ export async function listPricingRows(): Promise<{
       margins,
       suggested,
       unitsSold,
+      soldRevenue,
       profitToDate,
       stockUnits,
       stockCost,
@@ -239,12 +251,18 @@ export async function listPricingRows(): Promise<{
 
 export type InsightProduct = {
   name: string;
+  /** unidades que já entraram (vendidas + em estoque hoje) */
+  total: number;
   unitsSold: number;
+  stockUnits: number;
+  /** receita paga real */
+  revenue: number;
   /** contribuição acumulada (contribValue/un × vendidos) */
   contrib: number;
-  stockUnits: number;
   /** valor em estoque a custo */
   stockCost: number;
+  /** já tem custo de compra cadastrado? */
+  hasCost: boolean;
 };
 
 export type PricingInsights = {
@@ -272,10 +290,13 @@ export function pricingInsights(rows: PricingRow[]): PricingInsights {
     .filter((r) => r.unitsSold > 0 || r.stockUnits > 0)
     .map((r) => ({
       name: r.name,
+      total: r.unitsSold + r.stockUnits,
       unitsSold: r.unitsSold,
-      contrib: round2(r.profitToDate ?? 0),
       stockUnits: r.stockUnits,
+      revenue: r.soldRevenue,
+      contrib: round2(r.profitToDate ?? 0),
       stockCost: r.stockCost,
+      hasCost: r.cost != null,
     }));
 
   const idleCount = products.filter(

@@ -96,80 +96,90 @@ function HealthCard({ h }: { h: BusinessHealth }) {
 }
 
 // =======================================================================
-//  Estoque + o que vendeu (gráficos)
+//  Estoque + o que vendeu (tabela ordenável)
 // =======================================================================
 
-type InsightView = "contrib" | "sold" | "stock" | "idle";
+type InsightSort =
+  | "total"
+  | "unitsSold"
+  | "stockUnits"
+  | "revenue"
+  | "contrib";
 
-const INSIGHT_VIEWS: { id: InsightView; label: string }[] = [
-  { id: "contrib", label: "Mais contribuíram" },
-  { id: "sold", label: "Mais venderam" },
-  { id: "stock", label: "Valor em estoque" },
-  { id: "idle", label: "Estoque parado" },
+const INSIGHT_COLS: {
+  key: InsightSort;
+  label: string;
+  short: string;
+  money?: boolean;
+}[] = [
+  { key: "total", label: "Entraram", short: "Entr." },
+  { key: "unitsSold", label: "Vendidas", short: "Vend." },
+  { key: "stockUnits", label: "Em estoque", short: "Estoq." },
+  { key: "revenue", label: "Receita", short: "Receita", money: true },
+  { key: "contrib", label: "Contribuição", short: "Contrib.", money: true },
 ];
 
+function MiniNum({
+  label,
+  v,
+  on,
+  tone,
+  muted,
+}: {
+  label: string;
+  v: ReactNode;
+  on?: boolean;
+  tone?: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className={cn("rounded-lg px-1 py-1.5", on && "bg-foreground/[0.06]")}>
+      <p
+        className={cn(
+          "text-sm font-bold tabular-nums",
+          muted ? "text-muted" : tone,
+        )}
+      >
+        {v}
+      </p>
+      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 function InsightsSection({ x }: { x: PricingInsights }) {
-  const [view, setView] = useState<InsightView>("contrib");
+  const [sort, setSort] = useState<InsightSort>("contrib");
 
-  const list = useMemo(() => {
-    const key =
-      view === "sold" ? "unitsSold" : view === "contrib" ? "contrib" : "stockCost";
-    let arr = x.products;
-    if (view === "idle") {
-      arr = arr.filter((p) => p.stockUnits > 0 && p.unitsSold === 0);
-    } else {
-      arr = arr.filter((p) => (p[key as keyof typeof p] as number) > 0);
-    }
-    return [...arr]
-      .sort(
-        (a, b) =>
-          (b[key as keyof typeof b] as number) -
-          (a[key as keyof typeof a] as number),
-      )
-      .slice(0, 8)
-      .map((p) => ({
-        p,
-        metric: p[key as keyof typeof p] as number,
-      }));
-  }, [x.products, view]);
-
-  const max = Math.max(1, ...list.map((r) => r.metric));
-  const isStockView = view === "stock" || view === "idle";
-  const barColor =
-    view === "contrib"
-      ? "bg-success"
-      : view === "idle"
-        ? "bg-warning"
-        : "bg-accent";
+  const rows = useMemo(
+    () => [...x.products].sort((a, b) => b[sort] - a[sort]),
+    [x.products, sort],
+  );
+  const max = Math.max(1, ...rows.map((p) => Math.abs(p[sort])));
 
   const kpis = [
-    {
-      value: formatBRL(x.stockCost),
-      label: `Parado em estoque · ${x.stockUnits} un.`,
-      tone: undefined as string | undefined,
-    },
+    { value: formatBRL(x.stockCost), label: `Parado em estoque · ${x.stockUnits} un.` },
     {
       value: formatBRL(x.stockContribPotential),
-      label: "Contribuição se vender tudo",
+      label: "Contribuição se vender o estoque",
       tone: "text-success",
     },
-    {
-      value: formatBRL(x.stockRetail),
-      label: "Receita se vender tudo",
-      tone: undefined,
-    },
+    { value: formatBRL(x.stockRetail), label: "Receita se vender o estoque" },
   ];
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="mb-3 font-black">Estoque e vendas</h2>
+      <h2 className="mb-1 font-black">Estoque e vendas</h2>
+      <p className="mb-3 text-xs text-muted">
+        Cada produto: quantas entraram, quantas vendeu, quantas sobraram, e quanto
+        já gerou de receita e de contribuição. Toque num título pra reordenar.
+      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {kpis.map((k) => (
           <div key={k.label}>
-            <p className={cn("text-lg font-black leading-none", k.tone)}>
-              {k.value}
-            </p>
+            <p className={cn("text-lg font-black leading-none", k.tone)}>{k.value}</p>
             <p className="mt-1 text-[11px] text-muted">{k.label}</p>
           </div>
         ))}
@@ -177,71 +187,173 @@ function InsightsSection({ x }: { x: PricingInsights }) {
 
       {x.noCostStock > 0 && (
         <p className="mt-2 text-xs text-warning">
-          {x.noCostStock} produto(s) com estoque e sem custo — não entram na conta
-          de contribuição.
+          {x.noCostStock} produto(s) com estoque e sem custo — a contribuição deles
+          fica de fora.
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {INSIGHT_VIEWS.map((v) => (
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted">Ordenar por</span>
+        {INSIGHT_COLS.map((c) => (
           <button
-            key={v.id}
+            key={c.key}
             type="button"
-            onClick={() => setView(v.id)}
+            onClick={() => setSort(c.key)}
             className={cn(
-              "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-              view === v.id
+              "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+              sort === c.key
                 ? "bg-foreground text-background"
                 : "border border-border text-muted hover:text-foreground",
             )}
           >
-            {v.label}
-            {v.id === "idle" && x.idleCount > 0 ? ` (${x.idleCount})` : ""}
+            {c.label}
           </button>
         ))}
       </div>
 
-      {list.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="mt-4 py-6 text-center text-xs text-muted">
-          {view === "idle"
-            ? "Nenhum produto parado — tudo que tem estoque já vendeu."
-            : "Sem dados ainda."}
+          Nenhum produto com venda ou estoque ainda.
         </p>
       ) : (
-        <ul className="mt-3 divide-y divide-border/60">
-          {list.map(({ p, metric }, i) => (
-            <li key={i} className="py-2.5">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 truncate text-sm font-medium" title={p.name}>
-                  {p.name}
-                </span>
-                <span className="shrink-0 text-xs tabular-nums text-muted">
-                  {isStockView ? (
-                    <>
-                      {p.stockUnits} un ·{" "}
-                      <span className="font-bold text-foreground">
-                        {formatBRL(p.stockCost)}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      {p.unitsSold} vend ·{" "}
-                      <span className="font-bold text-foreground">
-                        {formatBRL(p.contrib)}
-                      </span>
-                    </>
-                  )}
-                </span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
-                <div
-                  className={cn("h-full rounded-full", barColor)}
-                  style={{ width: `${Math.max(3, (metric / max) * 100)}%` }}
-                />
-              </div>
-            </li>
-          ))}
+        <>
+        <ul className="mt-3 space-y-2 sm:hidden">
+          {rows.map((p, i) => {
+            const idle = p.unitsSold === 0 && p.stockUnits > 0;
+            return (
+              <li key={i} className="rounded-xl border border-border/70 p-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs tabular-nums text-muted">{i + 1}</span>
+                  <span className="line-clamp-1 flex-1 font-semibold" title={p.name}>
+                    {p.name}
+                  </span>
+                </div>
+                {!p.hasCost ? (
+                  <p className="mt-0.5 text-[11px] text-warning">sem custo cadastrado</p>
+                ) : idle ? (
+                  <p className="mt-0.5 text-[11px] text-muted">parado · nada vendido</p>
+                ) : null}
+                <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+                  <MiniNum label="Entraram" v={p.total} on={sort === "total"} />
+                  <MiniNum label="Vendidas" v={p.unitsSold} on={sort === "unitsSold"} />
+                  <MiniNum
+                    label="Estoque"
+                    v={p.stockUnits}
+                    on={sort === "stockUnits"}
+                    muted={p.stockUnits === 0}
+                  />
+                </div>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-center">
+                  <MiniNum
+                    label="Receita"
+                    v={formatBRL(p.revenue)}
+                    on={sort === "revenue"}
+                  />
+                  <MiniNum
+                    label="Contribuição"
+                    v={formatBRL(p.contrib)}
+                    on={sort === "contrib"}
+                    tone={p.contrib > 0 ? "text-success" : undefined}
+                  />
+                </div>
+              </li>
+            );
+          })}
         </ul>
+        <div className="mt-3 -mx-4 hidden overflow-x-auto px-4 sm:block">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted">
+                <th className="w-7 py-2 text-left font-semibold">#</th>
+                <th className="py-2 text-left font-semibold">Produto</th>
+                {INSIGHT_COLS.map((c) => (
+                  <th
+                    key={c.key}
+                    onClick={() => setSort(c.key)}
+                    className={cn(
+                      "cursor-pointer select-none whitespace-nowrap py-2 pl-3 text-right font-semibold",
+                      sort === c.key && "text-foreground",
+                    )}
+                  >
+                    {c.short}
+                    {sort === c.key ? " ↓" : ""}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p, i) => {
+                const idle = p.unitsSold === 0 && p.stockUnits > 0;
+                const vals: Record<InsightSort, ReactNode> = {
+                  total: p.total,
+                  unitsSold: p.unitsSold,
+                  stockUnits:
+                    p.stockUnits === 0 ? (
+                      <span className="text-muted">0</span>
+                    ) : (
+                      p.stockUnits
+                    ),
+                  revenue: formatBRL(p.revenue),
+                  contrib: (
+                    <span className={p.contrib > 0 ? "text-success" : undefined}>
+                      {formatBRL(p.contrib)}
+                    </span>
+                  ),
+                };
+                return (
+                  <tr
+                    key={i}
+                    className="border-b border-border/50 last:border-0"
+                  >
+                    <td className="py-2 text-left text-xs tabular-nums text-muted">
+                      {i + 1}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <span
+                        className="line-clamp-1 font-medium"
+                        title={p.name}
+                      >
+                        {p.name}
+                      </span>
+                      {!p.hasCost ? (
+                        <span className="text-[11px] text-warning">
+                          sem custo cadastrado
+                        </span>
+                      ) : idle ? (
+                        <span className="text-[11px] text-muted">
+                          parado · nada vendido
+                        </span>
+                      ) : null}
+                    </td>
+                    {INSIGHT_COLS.map((c) => (
+                      <td
+                        key={c.key}
+                        className={cn(
+                          "relative whitespace-nowrap py-2 pl-3 text-right tabular-nums",
+                          sort === c.key
+                            ? "font-bold text-foreground"
+                            : "text-muted",
+                        )}
+                      >
+                        {sort === c.key && (
+                          <span
+                            aria-hidden
+                            className="absolute inset-y-1 right-0 rounded-sm bg-foreground/[0.06]"
+                            style={{
+                              width: `${Math.max(4, (Math.abs(p[c.key]) / max) * 100)}%`,
+                            }}
+                          />
+                        )}
+                        <span className="relative z-10">{vals[c.key]}</span>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        </>
       )}
     </div>
   );
