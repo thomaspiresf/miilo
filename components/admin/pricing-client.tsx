@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowRight,
   Box,
   Building2,
   Check,
@@ -725,8 +724,8 @@ function CostField({
 
   if (lot) {
     return (
-      <div className="text-xs">
-        <div className="flex items-center gap-1">
+      <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-1 text-xs font-normal">
+        <span className="inline-flex items-center gap-1">
           <span className="text-muted">R$</span>
           <input
             value={total}
@@ -752,21 +751,19 @@ function CostField({
             style={{ width: "3ch" }}
             className="rounded bg-black/[0.05] px-1 py-0.5 text-center tabular-nums outline-none"
           />
-        </div>
-        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
-          <span className="font-semibold text-foreground">
-            {unit != null ? `= R$ ${fmt2(unit)}/un` : "= —"}
-          </span>
-          <button type="button" onClick={() => setLot(false)} className="font-semibold text-primary">
-            ok
-          </button>
-        </div>
-      </div>
+        </span>
+        <span className="font-semibold text-foreground">
+          {unit != null ? `= R$ ${fmt2(unit)}` : "= —"}
+        </span>
+        <button type="button" onClick={() => setLot(false)} className="font-semibold text-primary">
+          ok
+        </button>
+      </span>
     );
   }
 
   return (
-    <div>
+    <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span className={cn(big ? "text-base font-bold" : "text-sm font-semibold")}>
         <Ghost value={value} onChange={onChange} prefix="R$" ch={big ? 5.5 : 5} />
       </span>
@@ -774,11 +771,11 @@ function CostField({
         type="button"
         onClick={() => setLot(true)}
         title="Calcular o custo unitário pelo valor total da compra"
-        className="mt-0.5 block text-[11px] font-semibold text-primary"
+        className="whitespace-nowrap text-[11px] font-semibold text-primary"
       >
         por lote
       </button>
-    </div>
+    </span>
   );
 }
 
@@ -962,87 +959,91 @@ function DetailsToggle({ open, onClick }: { open: boolean; onClick: () => void }
   );
 }
 
+function PriceLine({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline gap-2.5">
+      <span className="w-[3.75rem] shrink-0 text-[11px] uppercase tracking-wide text-muted">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
   const p = usePriceRow(r, ctx);
   const [details, setDetails] = useState(false);
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
-      <div className="flex items-start gap-3">
-        <Thumb url={r.imageUrl} size={44} />
-        <div className="min-w-0 flex-1">
-          <Link
-            href={`/admin/produtos/${r.productId}`}
-            className="line-clamp-1 text-sm font-bold hover:text-primary"
-          >
-            {r.name}
-          </Link>
-          <SubLine r={r} />
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-start justify-between gap-4">
-        <div className="flex items-start gap-4 sm:gap-5">
-          <MiniStat label="Compra">
-            <CostField value={p.cur.cost} onChange={p.setCost} big />
-          </MiniStat>
-
-          <ArrowRight className="mt-6 h-4 w-4 shrink-0 text-muted" />
-
-          <MiniStat label="Venda">
-            <div className="text-base font-bold">
-              {p.multi ? (
-                <span>
-                  {formatBRL(r.priceMin)}–{formatBRL(r.priceMax)}
-                </span>
-              ) : (
-                <Ghost value={p.cur.price} onChange={p.setPrice} prefix="R$" ch={5.5} />
-              )}
-            </div>
-          </MiniStat>
-        </div>
-
-        <SaveBtn r={r} p={p} ctx={ctx} className="w-[72px]" />
-      </div>
-
-      <div className="mt-3 border-t border-border/60 pt-3">
-        {p.multi ? (
-          <p className="text-[11px] text-muted">
-            Preços variam por variação —{" "}
-            <Link href={`/admin/produtos/${r.productId}`} className="text-primary">
-              editar na tela do produto
+      {/* cabeçalho + salvar */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <Thumb url={r.imageUrl} size={44} />
+          <div className="min-w-0">
+            <Link
+              href={`/admin/produtos/${r.productId}`}
+              className="line-clamp-1 text-sm font-bold hover:text-primary"
+            >
+              {r.name}
             </Link>
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
-              <MiniStat label="M. bruta">
-                <GrossCell p={p} />
-              </MiniStat>
-              <MiniStat label="M. contribuição">
-                <ContribCell p={p} showValue />
-              </MiniStat>
-              <MiniStat label="M. líquida">
-                <NetCell p={p} />
-              </MiniStat>
-              <MiniStat label="Markup">
-                <MarkupCell p={p} />
-              </MiniStat>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
+            <SubLine r={r} />
+          </div>
+        </div>
+        <SaveBtn r={r} p={p} ctx={ctx} className="w-[76px] shrink-0" />
+      </div>
+
+      {p.multi ? (
+        <p className="mt-3 border-t border-border/60 pt-3 text-[11px] text-muted">
+          Preços variam por variação —{" "}
+          <Link href={`/admin/produtos/${r.productId}`} className="text-primary">
+            editar na tela do produto
+          </Link>
+        </p>
+      ) : (
+        <>
+          {/* compra → venda */}
+          <div className="mt-4 space-y-2">
+            <PriceLine label="Compra">
+              <CostField value={p.cur.cost} onChange={p.setCost} big />
+            </PriceLine>
+            <PriceLine label="Venda">
+              <span className="text-base font-bold">
+                <Ghost value={p.cur.price} onChange={p.setPrice} prefix="R$" ch={5.5} />
+              </span>
               <BumpLink p={p} ctx={ctx} />
-              {p.costN != null && (
-                <DetailsToggle open={details} onClick={() => setDetails((o) => !o)} />
+            </PriceLine>
+          </div>
+
+          {/* margens */}
+          <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-border/60 pt-3 sm:grid-cols-4">
+            <MiniStat label="M. bruta">
+              <GrossCell p={p} />
+            </MiniStat>
+            <MiniStat label="M. contribuição">
+              <ContribCell p={p} showValue />
+            </MiniStat>
+            <MiniStat label="M. líquida">
+              <NetCell p={p} />
+            </MiniStat>
+            <MiniStat label="Markup">
+              <MarkupCell p={p} />
+            </MiniStat>
+          </div>
+
+          {/* detalhamento */}
+          {p.costN != null && (
+            <div className="mt-3 border-t border-border/60 pt-2.5">
+              <DetailsToggle open={details} onClick={() => setDetails((o) => !o)} />
+              {details && (
+                <div className="mt-3">
+                  <PriceBreakdown cost={p.costN} price={p.priceN} settings={ctx.settings} />
+                </div>
               )}
             </div>
-            {details && p.costN != null && (
-              <div className="mt-3">
-                <PriceBreakdown cost={p.costN} price={p.priceN} settings={ctx.settings} />
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
