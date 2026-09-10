@@ -6,10 +6,8 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Box,
-  Building2,
   Check,
   ChevronDown,
-  CircleDollarSign,
   CreditCard,
   ImageOff,
   Package,
@@ -26,11 +24,7 @@ import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
-import {
-  computeMargins,
-  fixedPerOrder,
-  suggestForContribution,
-} from "@/lib/pricing-math";
+import { computeMargins, suggestForContribution } from "@/lib/pricing-math";
 import {
   savePricingSettingsAction,
   setProductPricingAction,
@@ -41,12 +35,6 @@ function toneChip(pct: number | null) {
   if (pct < 30) return "bg-danger/10 text-danger";
   if (pct < 45) return "bg-warning/15 text-warning";
   return "bg-success/10 text-success";
-}
-function toneText(pct: number | null) {
-  if (pct == null) return "text-muted";
-  if (pct < 0) return "text-danger";
-  if (pct < 20) return "text-warning";
-  return "text-accent";
 }
 const brl = (n: number | null) => (n == null ? "—" : formatBRL(n));
 const pctStr = (n: number | null) => (n == null ? "—" : `${Math.round(n)}%`);
@@ -236,16 +224,12 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
           </div>
 
           <div>
-            <p className="text-xs font-bold text-muted">Custos fixos (entram só na margem líquida)</p>
+            <p className="text-xs font-bold text-muted">
+              Custos fixos mensais {totalFixed > 0 && `· ${formatBRL(totalFixed)}/mês`}
+            </p>
             <p className="mb-2 mt-1 text-[11px] text-muted">
-              {s.monthlyOrders > 0 && totalFixed > 0 ? (
-                <>
-                  {formatBRL(totalFixed)}/mês ÷ {s.monthlyOrders} pedidos ={" "}
-                  <strong>{formatBRL(totalFixed / s.monthlyOrders)} por pedido</strong>
-                </>
-              ) : (
-                "Preencha os custos fixos e os pedidos/mês pra calcular a margem líquida."
-              )}
+              Aluguel, funcionário, plataformas… Usados no “lucro real” do negócio, no
+              card lá em cima.
             </p>
             <div className="space-y-2">
               {s.fixedCosts.map((f, i) => (
@@ -290,17 +274,6 @@ function SettingsPanel({ initial }: { initial: PricingSettings }) {
               >
                 <Plus className="h-3.5 w-3.5" /> adicionar custo fixo
               </button>
-            </div>
-
-            <div className="mt-3 max-w-[16rem]">
-              <NumField
-                label="Pedidos por mês (estimado)"
-                value={s.monthlyOrders}
-                onChange={(n) => setNum("monthlyOrders", n)}
-                suffix="ped."
-                integer
-                hint="deixe 0 enquanto não tiver ideia — a margem líquida fica oculta"
-              />
             </div>
           </div>
 
@@ -361,7 +334,7 @@ function PriceBreakdown({
   price: number;
   settings: PricingSettings;
 }) {
-  const m = computeMargins(cost, price, settings, fixedPerOrder(settings));
+  const m = computeMargins(cost, price, settings);
   const hr = <div className="mx-3 border-t border-border/70" />;
 
   return (
@@ -393,37 +366,12 @@ function PriceBreakdown({
         {hr}
         <BreakLine
           icon={<Wallet className="text-success" />}
-          label="Margem de contribuição"
+          label="Sobra por venda"
           value={m.contribValue}
           strong
           valueClass={cn(m.contribValue != null && m.contribValue < 0 ? "text-danger" : "text-success")}
           sub={m.contribPct != null ? `${fmt1(m.contribPct)}% da venda` : undefined}
         />
-
-        {m.netPct != null ? (
-          <>
-            {hr}
-            <BreakLine
-              icon={<Building2 />}
-              label="Custos fixos da empresa"
-              value={-m.fixedShare}
-              sub="rateado por pedido"
-            />
-            {hr}
-            <BreakLine
-              icon={<CircleDollarSign className="text-accent" />}
-              label="Margem líquida"
-              value={m.netValue}
-              strong
-              valueClass={m.netValue != null && m.netValue < 0 ? "text-danger" : "text-accent"}
-              sub={`${fmt1(m.netPct)}% da venda`}
-            />
-          </>
-        ) : (
-          <p className="px-3 py-2 text-[11px] text-muted">
-            Defina custos fixos e pedidos/mês nas regras pra ver a margem líquida.
-          </p>
-        )}
       </div>
     </div>
   );
@@ -596,7 +544,7 @@ function usePriceRow(r: PricingRow, ctx: RowCtx) {
   const costN = cur.cost === "" ? null : num(cur.cost);
   const priceN = num(cur.price) ?? r.priceMin;
 
-  const m = computeMargins(costN, priceN, s, fixedPerOrder(s));
+  const m = computeMargins(costN, priceN, s);
   const suggested = costN != null ? suggestForContribution(costN, s, s.targetMarginPercent) : null;
   const canBump = !multi && suggested != null && suggested > priceN + 0.01;
 
@@ -823,25 +771,6 @@ function ContribCell({ p, showValue }: { p: ReturnType<typeof usePriceRow>; show
   );
 }
 
-/** Margem líquida — só leitura (contribuição − custo fixo rateado). "—" se sem pedidos/mês. */
-function NetCell({ p }: { p: ReturnType<typeof usePriceRow> }) {
-  if (p.m.netPct == null) {
-    return (
-      <span className="text-xs text-muted" title="Defina custos fixos e pedidos/mês nas regras">
-        —
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex flex-col items-start gap-0.5">
-      <span className={cn("text-sm font-bold tabular-nums", toneText(p.m.netPct))}>
-        {pctStr(p.m.netPct)}
-      </span>
-      <span className="text-[11px] text-muted">{brl(p.m.netValue)}</span>
-    </span>
-  );
-}
-
 /** Markup (preço ÷ custo) — editável, mexe no preço. */
 function MarkupCell({ p }: { p: ReturnType<typeof usePriceRow> }) {
   if (p.m.markup == null) return <span className="text-xs text-muted">—</span>;
@@ -914,8 +843,8 @@ function MarginLegend() {
       <span className="font-semibold text-foreground">Bruta</span> = só o produto ·{" "}
       <span className="font-semibold text-foreground">Contribuição</span> = produto +
       embalagem + taxa MP + imposto ·{" "}
-      <span className="font-semibold text-foreground">Líquida</span> = contribuição − custos
-      fixos rateados ·{" "}
+      <span className="font-semibold text-foreground">Sobra por venda</span> = a contribuição
+      em reais ·{" "}
       <span className="font-semibold text-foreground">Markup</span> = preço ÷ custo (não é
       margem)
     </div>
@@ -1146,13 +1075,12 @@ function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
             <Stat
               label="Contribuição"
               value={pctStr(p.m.contribPct)}
-              sub={p.m.contribValue == null ? undefined : brl(p.m.contribValue)}
               tone={marginToneText(p.m.contribPct)}
             />
             <Stat
-              label="Margem líquida"
-              value={p.m.netPct == null ? "—" : pctStr(p.m.netPct)}
-              sub={p.m.netValue == null ? undefined : brl(p.m.netValue)}
+              label="Sobra por venda"
+              value={brl(p.m.contribValue)}
+              tone={marginToneText(p.m.contribPct)}
             />
             <Stat
               label="Markup"
@@ -1280,10 +1208,6 @@ function TableRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
           <ContribCell p={p} showValue />
         </td>
 
-        <td className="px-3 py-3">
-          <NetCell p={p} />
-        </td>
-
         <td className="whitespace-nowrap px-3 py-3">
           <MarkupCell p={p} />
           <div className="mt-0.5 text-[11px] text-muted">mín {brl(p.m.minPrice)}</div>
@@ -1307,7 +1231,7 @@ function TableRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
       </tr>
       {details && p.costN != null && !p.multi && (
         <tr className="border-b border-border/60">
-          <td colSpan={8} className="bg-black/[0.02] px-3 py-3">
+          <td colSpan={7} className="bg-black/[0.02] px-3 py-3">
             <div className="max-w-md">
               <PriceBreakdown cost={p.costN} price={p.priceN} settings={ctx.settings} />
             </div>
@@ -1331,7 +1255,7 @@ function TableView({
 }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
-      <table className="w-full min-w-[800px] border-collapse text-sm">
+      <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted">
             <SortTh k="name" sort={sort} onSort={onSort}>Produto</SortTh>
@@ -1339,7 +1263,6 @@ function TableView({
             <SortTh k="price" sort={sort} onSort={onSort}>Venda</SortTh>
             <th className="px-3 py-2.5 font-semibold">M. bruta</th>
             <SortTh k="margin" sort={sort} onSort={onSort}>M. contrib.</SortTh>
-            <th className="px-3 py-2.5 font-semibold">M. líquida</th>
             <th className="px-3 py-2.5 font-semibold">Markup</th>
             <th className="px-3 py-2.5" />
           </tr>
