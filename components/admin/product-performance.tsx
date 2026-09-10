@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import Image from "next/image";
+import { ImageOff, Search, X } from "lucide-react";
 import type { InsightProduct, PricingInsights } from "@/lib/data/pricing";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,37 @@ const INSIGHT_CAPTION: { key: InsightSort; text: (p: InsightProduct) => string }
 const FIRST_SHOWN = 5;
 const PAGE_SIZE = 25;
 
+function Thumb({ src, alt }: { src: string | null; alt: string }) {
+  return (
+    <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-border bg-black/[0.03]">
+      {src ? (
+        <Image src={src} alt={alt} fill sizes="36px" className="object-cover" />
+      ) : (
+        <div className="grid h-full w-full place-items-center text-muted">
+          <ImageOff className="h-3.5 w-3.5" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Kpi({
+  value,
+  label,
+  tone,
+}: {
+  value: string;
+  label: string;
+  tone?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className={cn("text-sm font-black leading-none", tone)}>{value}</p>
+      <p className="mt-1 text-[10px] leading-tight text-muted">{label}</p>
+    </div>
+  );
+}
+
 export function ProductPerformance({ x }: { x: PricingInsights }) {
   const [data, setData] = useState(x);
   const [sort, setSort] = useState<InsightSort>("contrib");
@@ -47,7 +79,6 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
   const filtered = q
     ? sorted.filter((p) => p.name.toLowerCase().includes(q))
     : sorted;
-  const max = Math.max(1, ...sorted.map((p) => Math.abs(p[sort])));
   const shown = filtered.slice(0, limit);
   const hero = INSIGHT_SORTS.find((s) => s.key === sort)!;
 
@@ -88,7 +119,7 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
                 setLimit(FIRST_SHOWN);
               }}
               placeholder="Buscar produto"
-              className="h-9 w-36 rounded-lg border border-border bg-background pl-7 pr-6 text-xs sm:w-48"
+              className="h-9 w-32 rounded-lg border border-border bg-background pl-7 pr-6 text-xs sm:w-48"
             />
             {query && (
               <button
@@ -106,29 +137,20 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <div>
-          <p className="text-lg font-black leading-none text-success">
-            {formatBRL(data.stockContribPotential)}
-          </p>
-          <p className="mt-1 text-[11px] leading-tight text-muted">
-            Contribuição parada no estoque
-          </p>
-        </div>
-        <div>
-          <p className="text-lg font-black leading-none">
-            {formatBRL(data.stockRetail)}
-          </p>
-          <p className="mt-1 text-[11px] leading-tight text-muted">
-            Receita parada no estoque
-          </p>
-        </div>
-        <div>
-          <p className="text-lg font-black leading-none">{data.stockUnits}</p>
-          <p className="mt-1 text-[11px] leading-tight text-muted">
-            Peças em estoque · {formatBRL(data.stockCost)} a custo
-          </p>
-        </div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Kpi
+          value={formatBRL(data.stockContribPotential)}
+          label="Contribuição parada no estoque"
+          tone="text-success"
+        />
+        <Kpi
+          value={formatBRL(data.stockRetail)}
+          label="Receita parada no estoque"
+        />
+        <Kpi
+          value={String(data.stockUnits)}
+          label={`Peças em estoque · ${formatBRL(data.stockCost)} a custo`}
+        />
       </div>
 
       {data.noCostStock > 0 && (
@@ -138,23 +160,25 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs font-semibold text-muted">Ordenar por</span>
-        {INSIGHT_SORTS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setSort(s.key)}
-            className={cn(
-              "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-              sort === s.key
-                ? "bg-foreground text-background"
-                : "border border-border text-muted hover:text-foreground",
-            )}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div className="mt-4">
+        <p className="mb-1.5 text-xs font-semibold text-muted">Ordenar por:</p>
+        <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
+          {INSIGHT_SORTS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setSort(s.key)}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                sort === s.key
+                  ? "bg-foreground text-background"
+                  : "border border-border text-muted hover:text-foreground",
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -176,47 +200,37 @@ export function ProductPerformance({ x }: { x: PricingInsights }) {
               return (
                 <li
                   key={p.name + i}
-                  className="border-b border-border/50 py-2.5 last:border-0"
+                  className="flex items-center gap-2.5 border-b border-border/50 py-2 last:border-0"
                 >
-                  <div className="flex items-baseline gap-2.5">
-                    <span className="w-4 shrink-0 text-xs font-bold tabular-nums text-muted">
-                      {i + 1}
-                    </span>
-                    <span
-                      className="min-w-0 flex-1 truncate text-sm font-semibold"
+                  <span className="w-4 shrink-0 text-xs font-bold tabular-nums text-muted">
+                    {i + 1}
+                  </span>
+                  <Thumb src={p.image} alt={p.name} />
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="truncate text-sm font-semibold"
                       title={p.name}
                     >
                       {p.name}
-                    </span>
-                    <span
-                      className={cn(
-                        "shrink-0 text-right text-base font-black tabular-nums",
-                        sort === "contrib" && p.contrib > 0
-                          ? "text-success"
-                          : "text-foreground",
+                    </p>
+                    <p className="text-[11px] leading-tight text-muted">
+                      {caption}
+                      {!p.hasCost && (
+                        <span className="text-warning"> · sem custo</span>
                       )}
-                    >
-                      {heroText}
-                    </span>
+                      {idle && p.hasCost && <span> · parado</span>}
+                    </p>
                   </div>
-                  <div className="ml-6 mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/[0.05]">
-                    <div
-                      className={cn(
-                        "h-full rounded-full",
-                        sort === "contrib" ? "bg-success/70" : "bg-accent/70",
-                      )}
-                      style={{
-                        width: `${Math.max(2, (Math.abs(heroVal) / max) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="ml-6 mt-1 text-[11px] text-muted">
-                    {caption}
-                    {!p.hasCost && (
-                      <span className="text-warning"> · sem custo cadastrado</span>
+                  <span
+                    className={cn(
+                      "shrink-0 text-right text-sm font-black tabular-nums",
+                      sort === "contrib" && p.contrib > 0
+                        ? "text-success"
+                        : "text-foreground",
                     )}
-                    {idle && p.hasCost && <span> · parado</span>}
-                  </p>
+                  >
+                    {heroText}
+                  </span>
                 </li>
               );
             })}

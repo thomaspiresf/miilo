@@ -502,6 +502,7 @@ export function SalesDashboard({
     delta?: { now: number; prev: number; money?: boolean };
     sub?: string;
     href?: string;
+    wide?: boolean;
   }[] = [
     {
       label: "Vendido no período",
@@ -521,6 +522,7 @@ export function SalesDashboard({
       sub: receivableSub,
       href:
         view.receivableCount > 0 ? "/admin/pedidos?status=receber" : undefined,
+      wide: true,
     },
   ];
 
@@ -580,15 +582,17 @@ export function SalesDashboard({
       )}
 
       {/* KPIs — dinheiro */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {moneyKpis.map((k) => {
           const body = (
             <>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted sm:text-xs">
                 {k.label}
               </p>
-              <div className="mt-1 flex items-baseline gap-2">
-                <p className={cn("text-xl font-black", k.tone)}>{k.value}</p>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+                <p className={cn("text-lg font-black sm:text-xl", k.tone)}>
+                  {k.value}
+                </p>
                 {view.hasCompare && k.delta && (
                   <Delta now={k.delta.now} prev={k.delta.prev} money={k.delta.money} />
                 )}
@@ -598,32 +602,42 @@ export function SalesDashboard({
               )}
             </>
           );
+          const cls = cn(
+            "rounded-2xl border border-border bg-surface p-4",
+            k.href && "transition-colors hover:bg-black/[0.02]",
+            k.wide && "col-span-2 sm:col-span-1",
+          );
           return k.href ? (
-            <Link
-              key={k.label}
-              href={k.href}
-              className="rounded-2xl border border-border bg-surface p-4 transition-colors hover:bg-black/[0.02]"
-            >
+            <Link key={k.label} href={k.href} className={cls}>
               {body}
             </Link>
           ) : (
-            <Card key={k.label}>{body}</Card>
+            <div key={k.label} className={cls}>
+              {body}
+            </div>
           );
         })}
       </div>
 
       {/* KPIs — números */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {countKpis.map((k) => (
-          <Card key={k.label}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+          <div
+            key={k.label}
+            className="rounded-2xl border border-border bg-surface p-3 sm:p-4"
+          >
+            <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted sm:text-xs">
               {k.label}
             </p>
-            <div className="mt-1 flex items-baseline gap-2">
-              <p className="text-xl font-black">{k.value}</p>
-              {view.hasCompare && <Delta now={k.now} prev={k.prev} money={k.money} />}
-            </div>
-          </Card>
+            <p className="mt-1 text-base font-black leading-none sm:text-xl">
+              {k.value}
+            </p>
+            {view.hasCompare && (
+              <div className="mt-1">
+                <Delta now={k.now} prev={k.prev} money={k.money} />
+              </div>
+            )}
+          </div>
         ))}
       </div>
 

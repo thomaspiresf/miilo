@@ -254,6 +254,7 @@ export async function listPricingRows(): Promise<{
 
 export type InsightProduct = {
   name: string;
+  image: string | null;
   /** unidades que já entraram (vendidas + em estoque hoje) */
   total: number;
   unitsSold: number;
@@ -343,6 +344,7 @@ export async function getPricingInsights(
       const contribUnit = r.margins?.contribValue ?? 0;
       return {
         name: r.name,
+        image: r.imageUrl,
         total: unitsSold + r.stockUnits,
         unitsSold,
         stockUnits: r.stockUnits,
