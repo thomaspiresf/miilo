@@ -26,6 +26,11 @@ import {
   setOrderStatus,
 } from "@/lib/data/orders";
 import { reconcileOrderPayment } from "@/lib/mp-reconcile";
+import {
+  listPricingRows,
+  getPricingInsights,
+  type PricingInsights,
+} from "@/lib/data/pricing";
 import { logAction } from "@/lib/data/audit";
 import { ORDER_STATUS } from "@/lib/order-status";
 import { parseMoney } from "@/lib/format";
@@ -420,4 +425,34 @@ export async function deleteOrderAction(
   revalidatePath("/admin");
   // a navegação é feita no cliente (a página do pedido deixa de existir)
   return { ok: true };
+}
+
+// -------------------------------------------------------------------------
+//  Desempenho por produto (painel)
+// -------------------------------------------------------------------------
+
+const perfDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const perfRangeSchema = z.object({
+  days: z
+    .union([z.literal(7), z.literal(15), z.literal(30), z.literal(90)])
+    .optional(),
+  from: perfDate.optional(),
+  to: perfDate.optional(),
+});
+
+export async function loadProductPerformanceAction(
+  input: unknown,
+): Promise<PricingInsights | { error: string }> {
+  await requireAdmin();
+  const parsed = perfRangeSchema.safeParse(input ?? {});
+  if (!parsed.success) return { error: "Período inválido." };
+  const { days, from, to } = parsed.data;
+  if ((from && !to) || (to && !from)) {
+    return { error: "Escolha as duas datas do período." };
+  }
+  if (from && to && from > to) {
+    return { error: "A data inicial vem antes da final." };
+  }
+  const { rows } = await listPricingRows();
+  return getPricingInsights(rows, from && to ? { from, to } : { days });
 }

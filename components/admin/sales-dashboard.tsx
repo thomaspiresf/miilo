@@ -4,10 +4,12 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import type { OrderChannel, OrderStatus } from "@/lib/types";
+import type { PricingInsights } from "@/lib/data/pricing";
 import { ORDER_STATUS } from "@/lib/order-status";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/misc";
+import { ProductPerformance } from "@/components/admin/product-performance";
 
 export type DashOrder = {
   id: string;
@@ -87,45 +89,6 @@ function Delta({ now, prev, money }: { now: number; prev: number; money?: boolea
       {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
       {Math.abs(pct)}%
     </span>
-  );
-}
-
-function BarList({
-  items,
-  money,
-  empty,
-}: {
-  items: { label: string; value: number; hint?: string }[];
-  money?: boolean;
-  empty: string;
-}) {
-  const max = Math.max(1, ...items.map((i) => i.value));
-  if (items.length === 0)
-    return <p className="py-6 text-center text-sm text-muted">{empty}</p>;
-  return (
-    <div className="space-y-3">
-      {items.map((i, idx) => (
-        <div key={idx} className="text-sm">
-          <div className="mb-1 flex items-baseline justify-between gap-2">
-            <span className="min-w-0 truncate font-medium" title={i.label}>
-              {i.label}
-            </span>
-            <span className="shrink-0 font-semibold">
-              {money ? formatBRL(i.value) : i.value}
-              {i.hint && (
-                <span className="ml-1 text-[11px] font-normal text-muted">{i.hint}</span>
-              )}
-            </span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
-            <div
-              className="h-full rounded-full bg-accent"
-              style={{ width: `${Math.max(2, (i.value / max) * 100)}%` }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -257,9 +220,11 @@ function Card({ children }: { children: React.ReactNode }) {
 export function SalesDashboard({
   orders,
   outOfStock,
+  performance,
 }: {
   orders: DashOrder[];
   outOfStock: number;
+  performance: PricingInsights;
 }) {
   const [range, setRange] = useState<RangeId>("30d");
   const [channel, setChannel] = useState<ChannelId>("all");
@@ -367,24 +332,6 @@ export function SalesDashboard({
       }))
       .filter((b) => b.value > 0);
 
-    // top produtos
-    const prodMap = new Map<string, { units: number; revenue: number }>();
-    for (const o of paid)
-      for (const it of o.items) {
-        const e = prodMap.get(it.name) ?? { units: 0, revenue: 0 };
-        e.units += it.qty;
-        e.revenue += it.total;
-        prodMap.set(it.name, e);
-      }
-    const topProducts = [...prodMap.entries()]
-      .sort((a, b) => b[1].units - a[1].units)
-      .slice(0, 6)
-      .map(([name, e]) => ({
-        label: name,
-        value: e.units,
-        hint: formatBRL(e.revenue),
-      }));
-
     // meios de pagamento
     const payMap = new Map<string, number>();
     for (const o of paid) payMap.set(payLabel(o.paymentMethod), (payMap.get(payLabel(o.paymentMethod)) ?? 0) + 1);
@@ -412,7 +359,6 @@ export function SalesDashboard({
       pending: inRange.filter((o) => o.status === "pending").length,
       buckets,
       statusSegs,
-      topProducts,
       paySegs,
       channelSegs,
       channelTotal: online + pos,
@@ -503,35 +449,28 @@ export function SalesDashboard({
         <RevenueChart buckets={view.buckets} />
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <h2 className="mb-3 font-black">Mais vendidos</h2>
-          <p className="mb-3 -mt-2 text-xs text-muted">
-            Por unidades vendidas · receita ao lado
-          </p>
-          <BarList items={view.topProducts} empty="Nenhuma venda no período." />
-        </Card>
-        <Card>
-          <h2 className="mb-4 font-black">Como as vendas se dividem</h2>
-          <div className="space-y-4">
-            <SegmentBar
-              title="Pedidos por status"
-              segments={view.statusSegs}
-              empty="Nenhum pedido no período."
-            />
-            <SegmentBar
-              title="Meios de pagamento"
-              segments={view.paySegs}
-              empty="Nenhuma venda paga."
-            />
-            <SegmentBar
-              title="Canal de venda"
-              segments={view.channelSegs}
-              empty="Nenhuma venda paga."
-            />
-          </div>
-        </Card>
-      </div>
+      <ProductPerformance x={performance} />
+
+      <Card>
+        <h2 className="mb-4 font-black">Como as vendas se dividem</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <SegmentBar
+            title="Pedidos por status"
+            segments={view.statusSegs}
+            empty="Nenhum pedido no período."
+          />
+          <SegmentBar
+            title="Meios de pagamento"
+            segments={view.paySegs}
+            empty="Nenhuma venda paga."
+          />
+          <SegmentBar
+            title="Canal de venda"
+            segments={view.channelSegs}
+            empty="Nenhuma venda paga."
+          />
+        </div>
+      </Card>
 
       {/* pedidos recentes */}
       <section>

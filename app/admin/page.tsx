@@ -1,12 +1,20 @@
 import { adminListProducts } from "@/lib/data/admin";
 import { listAllOrders } from "@/lib/data/orders";
+import { listPricingRows, getPricingInsights } from "@/lib/data/pricing";
 import { SalesDashboard, type DashOrder } from "@/components/admin/sales-dashboard";
 
+const PERFORMANCE_DEFAULT_DAYS = 30;
+
 export default async function AdminDashboard() {
-  const [products, orders] = await Promise.all([
+  const [products, orders, { rows }] = await Promise.all([
     adminListProducts(),
     listAllOrders(),
+    listPricingRows(),
   ]);
+
+  const performance = await getPricingInsights(rows, {
+    days: PERFORMANCE_DEFAULT_DAYS,
+  });
 
   const outOfStock = products.reduce(
     (n, p) => n + p.variants.filter((v) => v.active && v.stock === 0).length,
@@ -32,7 +40,11 @@ export default async function AdminDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-black">Painel</h1>
-      <SalesDashboard orders={dashOrders} outOfStock={outOfStock} />
+      <SalesDashboard
+        orders={dashOrders}
+        outOfStock={outOfStock}
+        performance={performance}
+      />
     </div>
   );
 }
