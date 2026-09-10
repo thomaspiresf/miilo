@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/misc";
 
 type NavLink = { href: string; label: string; icon: LucideIcon };
 
@@ -35,6 +36,23 @@ const MASTER_LINKS: NavLink[] = [
   { href: "/admin/usuarios", label: "Usuários", icon: Users },
 ];
 
+/** Fica dentro do <Link>: troca o ícone por um spinner enquanto a página carrega. */
+function NavItemBody({ label, Icon }: { label: string; Icon: LucideIcon }) {
+  const { pending } = useLinkStatus();
+  return (
+    <>
+      {pending ? (
+        <Spinner className="h-4 w-4 shrink-0" />
+      ) : (
+        <Icon className="h-4 w-4 shrink-0" />
+      )}
+      <span className={cn("whitespace-nowrap", pending && "opacity-70")}>
+        {label}
+      </span>
+    </>
+  );
+}
+
 export function AdminNav({ master = false }: { master?: boolean }) {
   const pathname = usePathname();
   const links = master ? [...LINKS, ...MASTER_LINKS] : LINKS;
@@ -43,18 +61,19 @@ export function AdminNav({ master = false }: { master?: boolean }) {
       {links.map((l) => {
         const active =
           l.href === "/admin" ? pathname === "/admin" : pathname.startsWith(l.href);
-        const Icon = l.icon;
         return (
           <Link
             key={l.href}
             href={l.href}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold",
-              active ? "bg-primary/10 text-primary" : "text-muted hover:bg-black/5",
+              "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
+              active
+                ? "bg-primary/10 text-primary"
+                : "text-muted hover:bg-black/5 active:bg-black/[0.08]",
             )}
           >
-            <Icon className="h-4 w-4 shrink-0" />
-            {l.label}
+            <NavItemBody label={l.label} Icon={l.icon} />
           </Link>
         );
       })}

@@ -43,6 +43,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Segura os segmentos de página no cache do cliente por um tempo: navegar
+  // entre telas do admin já visitadas há pouco fica instantâneo (sem ida ao
+  // servidor). Uma mutação (revalidatePath) limpa esse cache pro caminho.
+  experimental: {
+    staleTimes: { dynamic: 30, static: 180 },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
