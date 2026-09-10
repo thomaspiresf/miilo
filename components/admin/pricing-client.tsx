@@ -387,6 +387,49 @@ function verdict(contribPct: number | null, target: number) {
   return { c: "text-success", i: "✅", t: "Contribuição dentro da meta." };
 }
 
+function MarginSlider({
+  value,
+  onChange,
+  min = 5,
+  max = 80,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const clamped = Math.min(max, Math.max(min, value));
+  const pct = ((clamped - min) / (max - min)) * 100;
+  return (
+    <div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={clamped}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label="Margem de contribuição"
+        className={cn(
+          "h-2.5 w-full cursor-pointer appearance-none rounded-full outline-none",
+          "[&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none",
+          "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background",
+          "[&::-webkit-slider-thumb]:bg-foreground [&::-webkit-slider-thumb]:shadow-md",
+          "[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full",
+          "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-background [&::-moz-range-thumb]:bg-foreground",
+        )}
+        style={{
+          background: `linear-gradient(to right, var(--foreground) ${pct}%, rgba(0,0,0,0.10) ${pct}%)`,
+        }}
+      />
+      <div className="mt-1 flex justify-between text-[10px] text-muted">
+        <span>{min}%</span>
+        <span>{max}%</span>
+      </div>
+    </div>
+  );
+}
+
 function PriceSimulator({ settings }: { settings: PricingSettings }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -482,11 +525,10 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
                 </button>
               )}
             </div>
-            <div className="mt-2.5 grid grid-cols-2 gap-3">
+            <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-3">
               <NumField label="Imposto" value={tax} onChange={setTax} suffix="%" />
               <NumField label="Taxa do cartão" value={fee} onChange={setFee} suffix="%" />
               <NumField label="Embalagem" value={pk} onChange={setPk} suffix="R$" />
-              <NumField label="Margem-alvo" value={tm} onChange={setTm} suffix="%" />
             </div>
             {changed && (
               <button
@@ -506,50 +548,61 @@ function PriceSimulator({ settings }: { settings: PricingSettings }) {
           ) : (
             (() => {
               const usedPrice = testN ?? suggested;
-              const v = verdict(
-                computeMargins(costN, usedPrice, simSettings).contribPct,
-                tm,
-              );
+              const usedMargin = computeMargins(costN, usedPrice, simSettings).contribPct ?? tm;
+              const v = verdict(usedMargin, tm);
               return (
-                <div className="border-t border-border pt-4">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="text-xs text-muted">Vender por</span>
-                    <span className="text-2xl font-black">
-                      <Ghost
-                        value={testPrice}
-                        onChange={setTestPrice}
-                        prefix="R$"
-                        ch={5.5}
-                        placeholder={fmt2(suggested)}
-                        className="text-foreground"
+                <div className="space-y-4 border-t border-border pt-4">
+                  {/* barra da margem */}
+                  <div>
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-xs font-medium text-muted">
+                        Margem de contribuição
+                      </p>
+                      <p className="text-sm font-bold tabular-nums">
+                        {Math.round(usedMargin)}%
+                      </p>
+                    </div>
+                    <div className="mt-2">
+                      <MarginSlider
+                        value={Math.round(usedMargin)}
+                        onChange={(n) => {
+                          setTm(n);
+                          setTestPrice("");
+                        }}
                       />
-                    </span>
-                    {testN == null ? (
-                      <span className="text-[11px] text-muted">
-                        sugerido pra {tm}% de contribuição
+                    </div>
+                  </div>
+
+                  {/* preço */}
+                  <div>
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <span className="text-xs text-muted">Vender por</span>
+                      <span className="text-3xl font-black">
+                        <Ghost
+                          value={testPrice}
+                          onChange={setTestPrice}
+                          prefix="R$"
+                          ch={5.5}
+                          placeholder={fmt2(suggested)}
+                          className="text-foreground"
+                        />
                       </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setTestPrice("")}
-                        className="text-[11px] font-semibold text-primary"
-                      >
-                        voltar pro sugerido
-                      </button>
-                    )}
+                      {testN != null && (
+                        <button
+                          type="button"
+                          onClick={() => setTestPrice("")}
+                          className="text-[11px] font-semibold text-primary"
+                        >
+                          voltar pro sugerido
+                        </button>
+                      )}
+                    </div>
+                    <p className={cn("mt-1.5 text-sm font-semibold", v.c)}>
+                      {v.i} {v.t}
+                    </p>
                   </div>
 
-                  <p className={cn("mt-2 text-sm font-semibold", v.c)}>
-                    {v.i} {v.t}
-                  </p>
-
-                  <div className="mt-3">
-                    <PriceBreakdown
-                      cost={costN}
-                      price={usedPrice}
-                      settings={simSettings}
-                    />
-                  </div>
+                  <PriceBreakdown cost={costN} price={usedPrice} settings={simSettings} />
                 </div>
               );
             })()
