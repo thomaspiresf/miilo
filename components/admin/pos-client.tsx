@@ -8,14 +8,13 @@ import {
   Check,
   ChevronDown,
   Copy,
-  CreditCard,
   ExternalLink,
-  Link2,
   Minus,
   Pencil,
   Plus,
   QrCode,
   Search,
+  Send,
   Trash2,
 } from "lucide-react";
 import QRCode from "qrcode";
@@ -81,9 +80,24 @@ const PAY_MODES: {
   sub: string;
   icon: typeof Banknote;
 }[] = [
-  { id: "cash", label: "Dinheiro / maquininha", sub: "Já recebido — registra e baixa o estoque", icon: Banknote },
-  { id: "link", label: "Enviar link ao cliente", sub: "Pix ou cartão — manda por WhatsApp", icon: Link2 },
-  { id: "now", label: "Pagar agora na tela", sub: "Abre o Pix / cartão neste aparelho", icon: CreditCard },
+  {
+    id: "link",
+    label: "Mandar link pro cliente pagar",
+    sub: "Pix ou cartão — envia por WhatsApp. O estoque baixa quando o pagamento cai.",
+    icon: Send,
+  },
+  {
+    id: "now",
+    label: "Pagar agora neste aparelho",
+    sub: "Abre o Pix / cartão aqui na hora.",
+    icon: QrCode,
+  },
+  {
+    id: "cash",
+    label: "Já recebi (dinheiro ou maquininha)",
+    sub: "Registra a venda como paga e baixa o estoque agora.",
+    icon: Banknote,
+  },
 ];
 
 export function PosClient({
@@ -101,7 +115,7 @@ export function PosClient({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [discountInput, setDiscountInput] = useState("");
-  const [payMode, setPayMode] = useState<PayMode>("cash");
+  const [payMode, setPayMode] = useState<PayMode | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,11 +127,13 @@ export function PosClient({
   const phoneDigits = onlyDigits(phone);
   const itemCount = cart.reduce((n, l) => n + l.qty, 0);
   const submitLabel =
-    payMode === "cash"
-      ? "Registrar venda paga"
-      : payMode === "link"
-        ? "Gerar link de pagamento"
-        : "Ir para o pagamento";
+    payMode === null
+      ? "Escolha como vai receber"
+      : payMode === "cash"
+        ? "Registrar venda paga"
+        : payMode === "link"
+          ? "Gerar link de pagamento"
+          : "Ir para o pagamento";
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -167,6 +183,10 @@ export function PosClient({
       setError("Adicione ao menos um produto.");
       return;
     }
+    if (!payMode) {
+      setError("Escolha como o cliente vai pagar.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -204,7 +224,7 @@ export function PosClient({
     setPhone("");
     setEmail("");
     setDiscountInput("");
-    setPayMode("cash");
+    setPayMode(null);
     setQuery("");
     setError(null);
   }
@@ -477,34 +497,59 @@ export function PosClient({
           </section>
 
           {/* Recebimento */}
-          <section className="rounded-2xl border border-border bg-surface p-5">
-            <h2 className="mb-3 font-black">4. Como vai receber</h2>
+          <section
+            className={cn(
+              "rounded-2xl border bg-surface p-5 transition-colors",
+              payMode === null && cart.length > 0
+                ? "border-warning/50"
+                : "border-border",
+            )}
+          >
+            <h2 className="font-black">4. Como o cliente vai pagar</h2>
+            <p className="mb-3 mt-1 text-xs text-muted">
+              Escolha uma opção pra seguir.
+            </p>
             <div className="space-y-2">
-              {PAY_MODES.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setPayMode(opt.id)}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition",
-                    payMode === opt.id
-                      ? "border-foreground bg-foreground/[0.04]"
-                      : "border-border hover:border-foreground/30",
-                  )}
-                >
-                  <opt.icon className="h-5 w-5 shrink-0" />
-                  <span className="flex-1">
-                    <span className="block text-sm font-bold">{opt.label}</span>
-                    <span className="block text-xs text-muted">{opt.sub}</span>
-                  </span>
-                  <span
+              {PAY_MODES.map((opt) => {
+                const on = payMode === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setPayMode(opt.id);
+                      setError(null);
+                    }}
                     className={cn(
-                      "h-4 w-4 shrink-0 rounded-full border-2",
-                      payMode === opt.id ? "border-foreground bg-foreground" : "border-border",
+                      "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition",
+                      on
+                        ? "border-foreground bg-foreground/[0.04] ring-1 ring-foreground"
+                        : "border-border hover:border-foreground/30",
                     )}
-                  />
-                </button>
-              ))}
+                  >
+                    <span
+                      className={cn(
+                        "grid h-11 w-11 shrink-0 place-items-center rounded-xl",
+                        on ? "bg-foreground text-background" : "bg-black/[0.05] text-foreground",
+                      )}
+                    >
+                      <opt.icon className="h-5 w-5" />
+                    </span>
+                    <span className="flex-1">
+                      <span className="block text-sm font-bold">{opt.label}</span>
+                      <span className="block text-xs text-muted">{opt.sub}</span>
+                    </span>
+                    <span
+                      className={cn(
+                        "grid h-5 w-5 shrink-0 place-items-center rounded-full border-2",
+                        on ? "border-foreground bg-foreground text-background" : "border-border",
+                      )}
+                    >
+                      {on && <Check className="h-3 w-3" strokeWidth={3} />}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
         </div>
@@ -548,14 +593,16 @@ export function PosClient({
               className="mt-4 hidden w-full lg:flex"
               size="lg"
               onClick={submit}
-              disabled={submitting || cart.length === 0}
+              disabled={submitting || cart.length === 0 || !payMode}
             >
               {submitting ? <Spinner /> : submitLabel}
             </Button>
             <p className="mt-2 hidden text-center text-xs text-muted lg:block">
-              {payMode === "cash"
-                ? "O estoque é baixado na hora."
-                : "O estoque é baixado quando o pagamento é confirmado."}
+              {payMode === null
+                ? "Escolha a forma de pagamento acima."
+                : payMode === "cash"
+                  ? "O estoque é baixado na hora."
+                  : "O estoque é baixado quando o pagamento é confirmado."}
             </p>
           </div>
 
@@ -605,7 +652,7 @@ export function PosClient({
             className="flex-1"
             size="lg"
             onClick={submit}
-            disabled={submitting || cart.length === 0}
+            disabled={submitting || cart.length === 0 || !payMode}
           >
             {submitting ? <Spinner /> : submitLabel}
           </Button>
