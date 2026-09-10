@@ -29,8 +29,11 @@ export const posOrderSchema = z.object({
     .refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
       message: "E-mail inválido",
     }),
-  /** dinheiro/maquininha (já pago) · link para o cliente · pagar agora na tela */
-  payMode: z.enum(["cash", "link", "now"]),
+  /**
+   * link para o cliente · pagar agora na tela · dinheiro/maquininha (já pago) ·
+   * anotar como "a receber" (cliente paga depois)
+   */
+  payMode: z.enum(["link", "now", "cash", "later"]),
   /** desconto em reais aplicado na venda (o servidor limita ao subtotal) */
   discount: z.number().nonnegative().optional().default(0),
   lines: z

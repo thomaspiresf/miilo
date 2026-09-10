@@ -10,6 +10,7 @@ import {
   Copy,
   ExternalLink,
   Minus,
+  NotebookPen,
   Pencil,
   Plus,
   QrCode,
@@ -25,7 +26,11 @@ import type { OrderStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/misc";
-import { createPosOrder, discardPosOrder } from "@/app/admin/pdv/actions";
+import {
+  createPosOrder,
+  discardPosOrder,
+  markPosSalePaid,
+} from "@/app/admin/pdv/actions";
 
 export type PosProduct = {
   id: string;
@@ -63,7 +68,7 @@ type CartLine = {
   qty: number;
 };
 
-type PayMode = "cash" | "link" | "now";
+type PayMode = "link" | "now" | "cash" | "later";
 
 type Created = {
   orderId: string;
@@ -97,6 +102,12 @@ const PAY_MODES: {
     label: "Já recebi (dinheiro ou maquininha)",
     sub: "Registra a venda como paga e baixa o estoque agora.",
     icon: Banknote,
+  },
+  {
+    id: "later",
+    label: "Anotar — cliente paga depois",
+    sub: "Fica como 'a receber'. O estoque é reservado; você confirma ou manda o link quando ele pagar.",
+    icon: NotebookPen,
   },
 ];
 
@@ -133,7 +144,9 @@ export function PosClient({
         ? "Registrar venda paga"
         : payMode === "link"
           ? "Gerar link de pagamento"
-          : "Ir para o pagamento";
+          : payMode === "later"
+            ? "Anotar venda a receber"
+            : "Ir para o pagamento";
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -185,6 +198,10 @@ export function PosClient({
     }
     if (!payMode) {
       setError("Escolha como o cliente vai pagar.");
+      return;
+    }
+    if (payMode === "later" && !customerName.trim()) {
+      setError("Coloque o nome do cliente pra anotar uma venda a receber.");
       return;
     }
     setSubmitting(true);
@@ -681,9 +698,24 @@ function SaleResult({
   const [paid, setPaid] = useState(created.paid);
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
+  const [marking, setMarking] = useState(false);
+  const [markErr, setMarkErr] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const payUrl = created.payUrl;
+  const receivable = created.mode === "later";
+
+  async function markReceived() {
+    setMarking(true);
+    setMarkErr(null);
+    const res = await markPosSalePaid(created.orderId);
+    setMarking(false);
+    if ("error" in res) {
+      setMarkErr(res.error);
+      return;
+    }
+    setPaid(true);
+  }
 
   useEffect(() => {
     if (!payUrl) return;
@@ -742,10 +774,20 @@ function SaleResult({
             paid ? "bg-success/15 text-success" : "bg-warning/15 text-warning",
           )}
         >
-          {paid ? <Check className="h-6 w-6" /> : <QrCode className="h-6 w-6" />}
+          {paid ? (
+            <Check className="h-6 w-6" />
+          ) : receivable ? (
+            <NotebookPen className="h-6 w-6" />
+          ) : (
+            <QrCode className="h-6 w-6" />
+          )}
         </div>
         <h1 className="mt-3 text-xl font-black">
-          {paid ? "Pagamento confirmado" : "Venda registrada"}
+          {paid
+            ? "Pagamento confirmado"
+            : receivable
+              ? "Venda anotada"
+              : "Venda registrada"}
         </h1>
         <p className="mt-1 text-sm text-muted">
           Pedido <span className="font-semibold text-foreground">{created.orderNumber}</span> ·{" "}
@@ -754,7 +796,9 @@ function SaleResult({
         <p className="mt-1 text-xs text-muted">
           {paid
             ? "Estoque baixado. Tudo certo."
-            : "O estoque será baixado assim que o cliente pagar."}
+            : receivable
+              ? `${formatBRL(created.total)} a receber. O estoque já está reservado — confirme quando o cliente pagar, ou mande o link.`
+              : "O estoque será baixado assim que o cliente pagar."}
         </p>
 
         {!paid && (
@@ -770,8 +814,32 @@ function SaleResult({
         )}
       </div>
 
+      {!paid && (
+        <div className="space-y-3 rounded-2xl border border-border bg-surface p-5">
+          <Button
+            size="lg"
+            className="w-full"
+            variant={receivable ? "primary" : "secondary"}
+            onClick={markReceived}
+            disabled={marking}
+          >
+            {marking ? <Spinner /> : <Banknote className="h-5 w-5" />}
+            {receivable ? "Marcar como recebido" : "Recebi em dinheiro / maquininha"}
+          </Button>
+          {markErr && <p className="text-xs text-danger">{markErr}</p>}
+          <p className="text-center text-[11px] text-muted">
+            Confirma o pagamento e baixa o estoque agora.
+          </p>
+        </div>
+      )}
+
       {!paid && payUrl && (
         <div className="space-y-4 rounded-2xl border border-border bg-surface p-5">
+          {receivable && (
+            <p className="text-sm font-bold">
+              Ou mande o link pro cliente pagar
+            </p>
+          )}
           {created.mode === "now" ? (
             <Button asChild size="lg" className="w-full">
               <a href={payUrl} target="_blank" rel="noopener noreferrer">
@@ -807,9 +875,11 @@ function SaleResult({
             </div>
           )}
 
-          <div className="flex items-center justify-center gap-2 text-xs text-muted">
-            <Spinner className="h-3.5 w-3.5" /> Aguardando pagamento…
-          </div>
+          {!receivable && (
+            <div className="flex items-center justify-center gap-2 text-xs text-muted">
+              <Spinner className="h-3.5 w-3.5" /> Aguardando pagamento…
+            </div>
+          )}
         </div>
       )}
 

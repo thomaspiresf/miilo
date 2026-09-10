@@ -54,13 +54,17 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
       await approveOrder(order.id, { mpStatus: "manual", method: "dinheiro" });
     }
 
+    const tag =
+      payMode === "cash"
+        ? "(dinheiro/maquininha, pago)"
+        : payMode === "later"
+          ? "(a receber)"
+          : "(link de pagamento)";
     await logAction({
       action: "pos.sale",
       entity: "order",
       entityId: order.id,
-      summary: `Venda na loja ${order.number} — ${formatBRL(order.total)} ${
-        payMode === "cash" ? "(dinheiro/maquininha, pago)" : "(link de pagamento)"
-      }`,
+      summary: `Venda na loja ${order.number} — ${formatBRL(order.total)} ${tag}`,
     });
 
     revalidatePath("/admin/pdv");
@@ -73,12 +77,50 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
       orderNumber: order.number,
       total: order.total,
       paid: payMode === "cash",
+      // "a receber" e link/now: o /pagar/[id] existe pra qualquer pedido pendente
       payUrl: payMode === "cash" ? null : `${site.url}/pagar/${order.id}`,
     };
   } catch (err) {
     console.error("createPosOrder", err);
     return { error: err instanceof Error ? err.message : "Falha ao registrar a venda" };
   }
+}
+
+/**
+ * Marca uma venda "a receber" como paga em dinheiro (quando o cliente
+ * finalmente paga). Só pedido PDV que ainda está pendente.
+ */
+export async function markPosSalePaid(
+  orderId: string,
+): Promise<{ ok: true } | { error: string }> {
+  await requireAdmin();
+  const order = await getOrderById(orderId);
+  if (!order || order.channel !== "pos") {
+    return { error: "Venda não encontrada." };
+  }
+  if (["paid", "shipped", "delivered"].includes(order.status)) {
+    return { ok: true }; // já estava paga
+  }
+  if (order.status !== "pending") {
+    return { error: "Essa venda não pode ser marcada como paga." };
+  }
+  try {
+    await approveOrder(orderId, { mpStatus: "manual", method: "dinheiro" });
+  } catch (err) {
+    console.error("markPosSalePaid", err);
+    return { error: "Não foi possível confirmar o recebimento." };
+  }
+  await logAction({
+    action: "pos.sale",
+    entity: "order",
+    entityId: orderId,
+    summary: `Recebeu a venda na loja ${order.number} — ${formatBRL(order.total)} (a receber → pago)`,
+  });
+  revalidatePath("/admin/pdv");
+  revalidatePath("/admin/pedidos");
+  revalidatePath(`/admin/pedidos/${orderId}`);
+  revalidatePath("/admin");
+  return { ok: true };
 }
 
 /**
