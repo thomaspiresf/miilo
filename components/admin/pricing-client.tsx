@@ -128,7 +128,7 @@ function HealthCard({ initial }: { initial: BusinessHealth }) {
               {brl(h.contributionMargin)}
             </p>
             <p className="mt-1 text-[11px] text-muted">
-              Lucro · {label.toLowerCase()}
+              Contribuição · {label.toLowerCase()}
             </p>
           </div>
         )}

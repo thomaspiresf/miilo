@@ -25,6 +25,7 @@ export default async function AdminDashboard() {
     id: o.id,
     number: o.number,
     email: o.email,
+    customerName: o.customer_name,
     created_at: o.created_at,
     status: o.status,
     total: o.total,

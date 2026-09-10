@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { listAllOrders } from "@/lib/data/orders";
-import { formatBRL, formatDate } from "@/lib/format";
-import { ORDER_STATUS } from "@/lib/order-status";
-import { Badge } from "@/components/ui/misc";
+import { formatBRL } from "@/lib/format";
+import { OrderList, type OrderListItem } from "@/components/admin/order-list";
 import type { Order, OrderStatus } from "@/lib/types";
 
 const FILTERS: { value: string; label: string }[] = [
@@ -16,6 +15,24 @@ const FILTERS: { value: string; label: string }[] = [
 ];
 
 const isReceivable = (o: Order) => o.channel === "pos" && o.status === "pending";
+
+const toItem = (o: Order): OrderListItem => ({
+  id: o.id,
+  number: o.number,
+  email: o.email,
+  customerName: o.customer_name,
+  created_at: o.created_at,
+  status: o.status,
+  total: o.total,
+  channel: o.channel,
+  paymentMethod: o.payment_method,
+  posPayMode: o.pos_pay_mode,
+  items: o.items.map((it) => ({
+    name: it.product_name,
+    qty: it.qty,
+    total: it.unit_price * it.qty,
+  })),
+});
 
 export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">) {
   const sp = await props.searchParams;
@@ -71,40 +88,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
         </div>
       )}
 
-      <div className="divide-y divide-border rounded-2xl border border-border bg-surface">
-        {orders.map((o) => (
-          <Link
-            key={o.id}
-            href={`/admin/pedidos/${o.id}`}
-            className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm hover:bg-black/[0.02]"
-          >
-            <span className="font-bold">{o.number}</span>
-            <span className="text-muted">{formatDate(o.created_at)}</span>
-            <span className="text-muted">{o.customer_name ?? o.email}</span>
-            {isReceivable(o) ? (
-              <>
-                <Badge tone="warning">a receber</Badge>
-                <span className="text-xs text-muted">
-                  {o.pos_pay_mode === "later" ? "anotado" : "com link"}
-                </span>
-              </>
-            ) : o.channel === "pos" ? (
-              <Badge tone="primary">loja</Badge>
-            ) : (
-              o.delivery_mode === "pickup" && <Badge tone="warning">retirada</Badge>
-            )}
-            {!isReceivable(o) && (
-              <Badge tone={ORDER_STATUS[o.status].tone}>
-                {ORDER_STATUS[o.status].label}
-              </Badge>
-            )}
-            <span className="ml-auto font-bold">{formatBRL(o.total)}</span>
-          </Link>
-        ))}
-        {orders.length === 0 && (
-          <p className="p-6 text-center text-sm text-muted">Nenhum pedido.</p>
-        )}
-      </div>
+      <OrderList orders={orders.map(toItem)} empty="Nenhum pedido." />
     </div>
   );
 }

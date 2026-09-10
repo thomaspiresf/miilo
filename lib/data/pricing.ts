@@ -10,7 +10,16 @@ import {
   suggestForContribution,
   type Margins,
 } from "@/lib/pricing-math";
-import type { FixedCost, PricingSettings, Product } from "@/lib/types";
+import type { FixedCost, Order, PricingSettings, Product } from "@/lib/types";
+
+/**
+ * Uma venda "de verdade" pra contar como vendido: pedidos pagos + as vendas
+ * na loja anotadas como "a receber" (o produto já saiu, o pagamento é que
+ * está pendente). Pedido online pendente = carrinho abandonado, não conta.
+ */
+const isSold = (o: Order) =>
+  ["paid", "shipped", "delivered"].includes(o.status) ||
+  (o.channel === "pos" && o.status === "pending");
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -174,12 +183,12 @@ export async function listPricingRows(): Promise<{
     getPricingSettings(),
   ]);
 
-  // vendas pagas -> unidades por produto (via variação)
+  // vendas (pagas + a receber) -> unidades por produto (via variação)
   const orders = await listAllOrders();
-  const paid = orders.filter((o) => ["paid", "shipped", "delivered"].includes(o.status));
+  const sold = orders.filter(isSold);
   const soldByVariant = new Map<string, number>();
   const revByVariant = new Map<string, number>();
-  for (const o of paid)
+  for (const o of sold)
     for (const it of o.items)
       if (it.variant_id) {
         soldByVariant.set(it.variant_id, (soldByVariant.get(it.variant_id) ?? 0) + it.qty);
@@ -287,9 +296,7 @@ export async function getPricingInsights(
   range: InsightRange = {},
 ): Promise<PricingInsights> {
   const orders = await listAllOrders();
-  const paid = orders.filter((o) =>
-    ["paid", "shipped", "delivered"].includes(o.status),
-  );
+  const sold = orders.filter(isSold);
 
   let fromT = -Infinity;
   let toT = Infinity;
@@ -302,7 +309,7 @@ export async function getPricingInsights(
 
   const soldByVariant = new Map<string, number>();
   const revByVariant = new Map<string, number>();
-  for (const o of paid) {
+  for (const o of sold) {
     const t = Date.parse(o.created_at);
     if (Number.isFinite(t) && (t < fromT || t > toT)) continue;
     for (const it of o.items)
@@ -410,10 +417,8 @@ export async function getBusinessHealth(
     fromT = Date.now() - opts.days * 86_400_000;
   }
 
-  const allPaid = (await listAllOrders()).filter((o) =>
-    ["paid", "shipped", "delivered"].includes(o.status),
-  );
-  const orders = allPaid.filter((o) => {
+  const allSold = (await listAllOrders()).filter(isSold);
+  const orders = allSold.filter((o) => {
     const t = new Date(o.created_at).getTime();
     return Number.isFinite(t) ? t >= fromT && t <= toT : true;
   });
@@ -426,7 +431,7 @@ export async function getBusinessHealth(
   } else if (opts.days && opts.days > 0) {
     days = opts.days;
   } else {
-    const oldest = allPaid.reduce(
+    const oldest = allSold.reduce(
       (min, o) => Math.min(min, new Date(o.created_at).getTime() || min),
       Date.now(),
     );
