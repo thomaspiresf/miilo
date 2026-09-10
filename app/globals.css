@@ -52,8 +52,14 @@
   --radius-xl: calc(var(--radius) + 0.4rem);
 }
 
-* {
-  border-color: var(--color-border);
+/* cor de borda padrão (como o preflight do Tailwind v3) — em @layer base pra
+   que os utilitários border-<cor> continuem podendo sobrescrever */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
 }
 
 html {

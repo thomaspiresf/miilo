@@ -40,12 +40,11 @@ export function ProductBuyBox({
     return [...map.entries()].map(([name, hex]) => ({ name, hex }));
   }, [variants]);
 
-  // tamanho inicial: preferindo um com estoque NA COR selecionada
-  const [size, setSize] = useState<string | null>(() => {
-    const pool = variants.filter((v) => colors.length === 0 || v.color === color);
-    return (pool.find((v) => v.stock > 0) ?? pool[0])?.size ?? null;
-  });
+  // Só pré-seleciona tamanho quando há um único. Com vários, o cliente escolhe —
+  // assim as cores aparecem todas e só filtram DEPOIS que um tamanho é escolhido.
+  const [size, setSize] = useState<string | null>(() => (sizes.length === 1 ? sizes[0] : null));
   const [added, setAdded] = useState(false);
+  const [hint, setHint] = useState(false);
 
   const selected = useMemo(
     () =>
@@ -59,16 +58,20 @@ export function ProductBuyBox({
 
   const add = useCart((s) => s.add);
 
+  // estoque de um tamanho dentro da cor selecionada
   function sizeStock(s: string) {
     return variants
       .filter((v) => v.size === s && (colors.length === 0 || v.color === color))
       .reduce((n, v) => n + v.stock, 0);
   }
+  // estoque de uma cor — só filtra por tamanho depois que o cliente escolhe um
   function colorStock(c: string) {
     return variants
-      .filter((v) => v.color === c && (sizes.length === 0 || v.size === size))
+      .filter((v) => v.color === c && (size == null || v.size === size))
       .reduce((n, v) => n + v.stock, 0);
   }
+
+  const needsSize = sizes.length > 0 && size == null;
 
   function addSelected() {
     if (!selected || selected.stock < 1) return false;
@@ -87,12 +90,14 @@ export function ProductBuyBox({
   }
 
   function handleAdd() {
+    if (needsSize) return setHint(true);
     if (!addSelected()) return;
     setAdded(true);
     setTimeout(() => setAdded(false), 1800);
   }
 
   function handleBuyNow() {
+    if (needsSize) return setHint(true);
     if (!addSelected()) return;
     router.push("/checkout");
   }
@@ -104,7 +109,7 @@ export function ProductBuyBox({
       : product.compare_at_from;
   const off = discountPercent(price, compareAt);
   const inst = installments[String(price)];
-  const outOfStock = !selected || selected.stock < 1;
+  const soldOut = !needsSize && (!selected || selected.stock < 1);
 
   return (
     <div className="space-y-5">
@@ -138,31 +143,33 @@ export function ProductBuyBox({
               {selected?.sku ? ` | ${selected.sku}` : ""}
             </span>
           </p>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             {colors.map((c) => {
               const avail = colorStock(c.name) > 0;
+              const active = color === c.name;
               return (
                 <button
                   key={c.name}
+                  type="button"
                   onClick={() => onColorChange(c.name)}
                   title={c.name}
                   aria-label={c.name}
+                  aria-pressed={active}
                   className={cn(
-                    "relative h-9 w-9 rounded-full border-2 transition",
-                    color === c.name ? "border-foreground" : "border-border",
+                    "relative h-10 w-10 rounded-full border transition",
+                    active
+                      ? "border-transparent ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                      : "border-black/15 hover:border-black/40",
                     !avail && "opacity-40",
                   )}
                   style={{ backgroundColor: c.hex ?? "#d4d4d8" }}
                 >
                   {!avail && (
-                    <span className="absolute inset-0 m-auto h-px w-8 rotate-45 bg-foreground/60" />
+                    <span className="absolute inset-0 m-auto h-px w-9 rotate-45 bg-foreground/50" />
                   )}
                 </button>
               );
             })}
-            <span className="text-sm text-muted">
-              Ver cores ({colors.length})
-            </span>
           </div>
         </div>
       )}
@@ -171,38 +178,53 @@ export function ProductBuyBox({
       {sizes.length > 0 && (
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold">Tamanho</p>
+            <p className="text-sm">
+              <span className="font-semibold">Tamanho:</span>{" "}
+              <span className={cn(size ? "text-muted" : "font-semibold text-primary")}>
+                {size ?? "escolha abaixo"}
+              </span>
+            </p>
             <SizeGuide />
           </div>
           <div className="flex flex-wrap gap-2">
             {sizes.map((s) => {
-              const stock = sizeStock(s);
-              const oos = stock === 0;
+              const oos = sizeStock(s) === 0;
+              const active = size === s;
               return (
                 <button
                   key={s}
-                  onClick={() => !oos && setSize(s)}
-                  disabled={oos}
+                  type="button"
+                  onClick={() => {
+                    setSize(s);
+                    setHint(false);
+                  }}
+                  aria-pressed={active}
                   className={cn(
-                    "relative min-w-11 rounded-xl border px-3 py-2 text-sm font-semibold transition",
-                    size === s && !oos
-                      ? "border-foreground"
-                      : "border-border bg-surface",
-                    oos && "text-muted",
+                    "relative min-w-[3rem] rounded-lg border-2 px-4 py-2 text-center text-sm font-bold transition",
+                    active
+                      ? "border-foreground bg-foreground text-background"
+                      : oos
+                        ? "border-border bg-surface text-muted"
+                        : "border-foreground/40 bg-surface text-foreground hover:border-foreground hover:bg-black/[0.03]",
                   )}
                 >
                   <span className={cn(oos && "line-through")}>{s}</span>
                   {oos && (
-                    <Bell className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-background text-muted" />
+                    <Bell className="absolute -right-1.5 -top-1.5 h-4 w-4 rounded-full bg-background p-0.5 text-muted" />
                   )}
                 </button>
               );
             })}
           </div>
+          {hint && needsSize && (
+            <p className="mt-2 text-sm font-semibold text-primary">
+              Escolha um tamanho pra continuar.
+            </p>
+          )}
         </div>
       )}
 
-      {!outOfStock && (
+      {!soldOut && !needsSize && (
         <p className="text-xs text-muted">
           {selected && selected.stock <= 5
             ? `Últimas ${selected.stock} unidades`
@@ -210,7 +232,7 @@ export function ProductBuyBox({
         </p>
       )}
 
-      {outOfStock ? (
+      {soldOut ? (
         <StockAlertForm
           productId={product.id}
           variantId={selected?.id ?? null}
@@ -223,10 +245,19 @@ export function ProductBuyBox({
       ) : (
         /* CTA — barra fixa no mobile */
         <div className="sticky bottom-0 z-10 -mx-4 space-y-2 border-t border-border bg-background/95 p-4 pb-safe backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
-          <Button onClick={handleBuyNow} size="lg" className="w-full">
+          <Button
+            onClick={handleBuyNow}
+            size="lg"
+            className={cn("w-full", needsSize && "opacity-60")}
+          >
             <Zap className="h-5 w-5" /> Comprar agora
           </Button>
-          <Button onClick={handleAdd} size="lg" variant="outline" className="w-full">
+          <Button
+            onClick={handleAdd}
+            size="lg"
+            variant="outline"
+            className={cn("w-full", needsSize && "opacity-60")}
+          >
             {added ? (
               <>
                 <Check className="h-5 w-5" /> Na sacola
@@ -237,6 +268,9 @@ export function ProductBuyBox({
               </>
             )}
           </Button>
+          {needsSize && (
+            <p className="text-center text-xs text-muted">Selecione o tamanho acima</p>
+          )}
         </div>
       )}
 
