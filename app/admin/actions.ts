@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireAdmin, requireMasterAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import {
   adminCreateProduct,
   adminUpdateProduct,
@@ -406,7 +406,7 @@ export async function recheckPaymentAction(formData: FormData) {
 export async function deleteOrderAction(
   id: string,
 ): Promise<{ ok: true } | { error: string }> {
-  await requireMasterAdmin();
+  await requireAdmin();
   const before = await getOrderById(id);
   try {
     await adminDeleteOrder(id);

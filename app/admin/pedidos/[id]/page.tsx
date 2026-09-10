@@ -171,12 +171,12 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
         <Button type="submit">Salvar</Button>
       </form>
 
-      {user?.master && (
+      {user && (
         <div className="rounded-2xl border border-danger/30 bg-danger/[0.03] p-5">
           <h2 className="font-bold text-danger">Apagar pedido</h2>
           <p className="mt-1 text-xs text-muted">
             Some de vez do sistema. Se o estoque já tinha sido baixado, ele volta.
-            Use só pra pedidos de teste ou lixo.
+            Use só pra pedidos de teste, duplicados ou lançados errado.
           </p>
           <DeleteOrderButton orderId={order.id} number={order.number} />
         </div>

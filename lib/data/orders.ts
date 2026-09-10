@@ -551,7 +551,7 @@ export async function setOrderStatus(
 }
 
 /**
- * Apaga um pedido de vez (só admin master). Se o estoque já tinha sido baixado,
+ * Apaga um pedido de vez (qualquer admin). Se o estoque já tinha sido baixado,
  * devolve antes (via o mesmo caminho do cancelamento). order_items somem junto
  * (cascade); stock_movements e payment_events ficam com order_id nulo.
  */
