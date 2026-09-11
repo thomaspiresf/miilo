@@ -4,30 +4,39 @@ import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   Boxes,
   Calculator,
-  FolderTree,
   LayoutDashboard,
   Package,
   Receipt,
   Store,
-  TicketPercent,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/misc";
 
-type NavLink = { href: string; label: string; icon: LucideIcon };
+type NavLink = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  /** outras rotas que devem manter este item aceso (ex.: sub-páginas sem link próprio) */
+  matches?: string[];
+};
 
 const LINKS: NavLink[] = [
   { href: "/admin", label: "Painel", icon: LayoutDashboard },
   { href: "/admin/pdv", label: "Venda na loja", icon: Store },
-  { href: "/admin/produtos", label: "Produtos", icon: Package },
+  {
+    href: "/admin/produtos",
+    label: "Produtos",
+    icon: Package,
+    matches: ["/admin/categorias", "/admin/cupons"],
+  },
   { href: "/admin/estoque", label: "Estoque", icon: Boxes },
   { href: "/admin/precificacao", label: "Precificação", icon: Calculator },
-  { href: "/admin/categorias", label: "Categorias", icon: FolderTree },
-  { href: "/admin/cupons", label: "Cupons", icon: TicketPercent },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/pedidos", label: "Pedidos", icon: Receipt },
   { href: "/admin/atividade", label: "Atividade", icon: Activity },
 ];
@@ -60,7 +69,10 @@ export function AdminNav({ master = false }: { master?: boolean }) {
     <nav className="flex gap-1 overflow-x-auto no-scrollbar md:flex-col">
       {links.map((l) => {
         const active =
-          l.href === "/admin" ? pathname === "/admin" : pathname.startsWith(l.href);
+          l.href === "/admin"
+            ? pathname === "/admin"
+            : pathname.startsWith(l.href) ||
+              (l.matches?.some((m) => pathname.startsWith(m)) ?? false);
         return (
           <Link
             key={l.href}
