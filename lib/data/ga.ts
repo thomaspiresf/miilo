@@ -137,7 +137,9 @@ export async function getGaOverview(
     const [overviewRes, funnelRes, acquisitionRes, realtimeRes] = await Promise.all([
       c.runReport({
         property: property(),
-        dimensions: [{ name: "dateRange" }],
+        // "dateRange" NÃO entra em `dimensions` — a API já devolve essa
+        // pseudo-dimensão sozinha (dimensionValues[0]) quando há mais de um
+        // dateRange no pedido; declará-la explicitamente dá INVALID_ARGUMENT.
         metrics: [
           { name: "activeUsers" },
           { name: "sessions" },
