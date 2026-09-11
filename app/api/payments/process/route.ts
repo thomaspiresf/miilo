@@ -65,6 +65,7 @@ export async function POST(request: Request) {
         mpPaymentId: result.id,
         mpStatus: result.status,
         method: result.payment_method_id,
+        netAmount: result.netReceivedAmount ?? null,
       });
     } else if (result.status === "rejected") {
       await setOrderStatus(order.id, "pending", {

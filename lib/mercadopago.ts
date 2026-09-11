@@ -26,6 +26,12 @@ export type PaymentResult = {
     qr_code_base64: string;
     ticket_url?: string;
   };
+  /**
+   * Valor que efetivamente cai na conta, já descontada a taxa do Mercado Pago
+   * (`transaction_details.net_received_amount`, com fallback pra soma de
+   * `fee_details`). Null quando o MP ainda não informou esse valor.
+   */
+  netReceivedAmount?: number | null;
 };
 
 function mpClient() {
@@ -167,6 +173,24 @@ function normalize(res: any): PaymentResult {
           ticket_url: pi.ticket_url,
         }
       : undefined,
+    netReceivedAmount: netReceivedAmount(res),
   };
+}
+
+/**
+ * O que efetivamente cai na conta: `transaction_details.net_received_amount`
+ * quando o MP já informou (fonte mais confiável); senão, valor menos a soma
+ * de `fee_details`. Sem nenhum dos dois, retorna null (trata como = total).
+ */
+function netReceivedAmount(res: any): number | null {
+  const fromDetails = res?.transaction_details?.net_received_amount;
+  if (fromDetails != null) return Number(fromDetails);
+
+  const fees = res?.fee_details;
+  if (Array.isArray(fees) && fees.length && res?.transaction_amount != null) {
+    const totalFees = fees.reduce((s: number, f: any) => s + Number(f?.amount ?? 0), 0);
+    return Number(res.transaction_amount) - totalFees;
+  }
+  return null;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

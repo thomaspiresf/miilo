@@ -103,6 +103,18 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
             <span>Total</span>
             <span>{formatBRL(order.total)}</span>
           </div>
+          {order.net_amount != null && Math.abs(order.net_amount - order.total) > 0.005 && (
+            <>
+              <div className="mt-2 flex justify-between border-t border-border pt-2 text-danger">
+                <span>Taxa do Mercado Pago</span>
+                <span>−{formatBRL(order.total - order.net_amount)}</span>
+              </div>
+              <div className="flex justify-between font-black text-success">
+                <span>Recebido</span>
+                <span>{formatBRL(order.net_amount)}</span>
+              </div>
+            </>
+          )}
         </div>
       </section>
 

@@ -182,6 +182,7 @@ create table if not exists public.orders (
   tracking_code    text,
   notes            text,                -- observação livre (venda na loja: "paga dia 15"…)
   pos_pay_mode     text,                -- venda na loja: link|now|cash|later
+  net_amount       numeric(12,2),       -- valor líquido recebido (total - taxa do MP); null = sem esse dado
   stock_restored   boolean not null default false,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
@@ -194,6 +195,7 @@ alter table public.orders add column if not exists phone          text;
 alter table public.orders add column if not exists delivery_mode  text not null default 'delivery';
 alter table public.orders add column if not exists notes          text;
 alter table public.orders add column if not exists pos_pay_mode   text;
+alter table public.orders add column if not exists net_amount     numeric(12,2);
 
 create index if not exists idx_orders_user on public.orders(user_id);
 create index if not exists idx_orders_created on public.orders(created_at desc);
@@ -255,7 +257,8 @@ create or replace function public.approve_order(
   p_order_id      uuid,
   p_mp_payment_id text default null,
   p_mp_status     text default 'approved',
-  p_method        text default null
+  p_method        text default null,
+  p_net_amount    numeric default null
 )
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -270,7 +273,8 @@ begin
      set status = 'paid',
          mp_payment_id = coalesce(p_mp_payment_id, mp_payment_id),
          mp_status = p_mp_status,
-         payment_method = coalesce(p_method, payment_method)
+         payment_method = coalesce(p_method, payment_method),
+         net_amount = coalesce(p_net_amount, net_amount)
    where id = p_order_id;
 
   if exists (

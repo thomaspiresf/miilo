@@ -29,6 +29,7 @@ export default async function AdminDashboard() {
     created_at: o.created_at,
     status: o.status,
     total: o.total,
+    netAmount: o.net_amount,
     channel: o.channel,
     paymentMethod: o.payment_method,
     posPayMode: o.pos_pay_mode,

@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { backfillOrderFeesAction } from "@/app/admin/actions";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import type { OrderChannel, OrderStatus } from "@/lib/types";
 import type { PricingInsights } from "@/lib/data/pricing";
@@ -19,6 +21,8 @@ export type DashOrder = {
   created_at: string;
   status: OrderStatus;
   total: number;
+  /** Valor líquido (já sem taxa do MP); null = sem esse dado, trata como = total. */
+  netAmount: number | null;
   channel: OrderChannel;
   paymentMethod: string | null;
   posPayMode: string | null;
@@ -32,6 +36,8 @@ const isReceivable = (o: DashOrder) =>
   o.channel === "pos" && o.status === "pending";
 /** a receber "só anotado" (vendedor não empurrou cobrança) vs "com link" */
 const isMarkedOnly = (o: DashOrder) => o.posPayMode === "later";
+/** valor que efetivamente entrou (desconta taxa do MP quando a gente sabe qual foi) */
+const netOf = (o: DashOrder) => o.netAmount ?? o.total;
 
 type RangeId = "7d" | "30d" | "90d" | "12m" | "all";
 const RANGES: { id: RangeId; label: string; days: number | null }[] = [
@@ -96,6 +102,47 @@ function Delta({ now, prev, money }: { now: number; prev: number; money?: boolea
       {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
       {Math.abs(pct)}%
     </span>
+  );
+}
+
+/**
+ * "Recebido" desconta a taxa do MP, mas pedidos pagos antes dessa mudança
+ * não têm esse valor gravado — este botão busca a taxa retroativamente.
+ */
+function RecalcFeesButton() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+
+  function run() {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await backfillOrderFeesAction();
+      if ("error" in res) {
+        setMsg(res.error);
+        return;
+      }
+      setMsg(
+        res.updated > 0
+          ? `${res.updated} pedido${res.updated > 1 ? "s" : ""} atualizado${res.updated > 1 ? "s" : ""} com o valor líquido do MP.`
+          : "Nenhum pedido pendente de atualização.",
+      );
+      if (res.updated > 0) router.refresh();
+    });
+  }
+
+  return (
+    <div className="-mt-1 flex flex-wrap items-center justify-end gap-2 text-[11px]">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={run}
+        className="font-semibold text-primary hover:underline disabled:opacity-50"
+      >
+        {pending ? "Recalculando…" : "Recalcular taxas do Mercado Pago em pedidos antigos"}
+      </button>
+      {msg && <span className="text-muted">{msg}</span>}
+    </div>
   );
 }
 
@@ -267,6 +314,9 @@ export function SalesDashboard({
     const revenue = paid.reduce((s, o) => s + o.total, 0);
     const units = paid.reduce((s, o) => s + o.items.reduce((a, i) => a + i.qty, 0), 0);
     const prevRevenue = prevPaid.reduce((s, o) => s + o.total, 0);
+    // "Recebido" de verdade: desconta a taxa do Mercado Pago quando ela é conhecida
+    const received = paid.reduce((s, o) => s + netOf(o), 0);
+    const prevReceived = prevPaid.reduce((s, o) => s + netOf(o), 0);
 
     // recebido x a receber x total vendido
     const sum = (arr: DashOrder[]) => arr.reduce((s, o) => s + o.total, 0);
@@ -372,6 +422,8 @@ export function SalesDashboard({
     return {
       revenue,
       prevRevenue,
+      received,
+      prevReceived,
       sold,
       prevSold,
       receivable,
@@ -431,9 +483,13 @@ export function SalesDashboard({
     },
     {
       label: "Recebido",
-      value: formatBRL(view.revenue),
+      value: formatBRL(view.received),
       tone: "text-success",
-      delta: { now: view.revenue, prev: view.prevRevenue, money: true },
+      delta: { now: view.received, prev: view.prevReceived, money: true },
+      sub:
+        Math.abs(view.received - view.revenue) > 0.005
+          ? `${formatBRL(view.revenue)} vendido − taxa do MP`
+          : undefined,
     },
     {
       label: "A receber",
@@ -538,6 +594,7 @@ export function SalesDashboard({
           );
         })}
       </div>
+      <RecalcFeesButton />
 
       {/* KPIs — números */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">

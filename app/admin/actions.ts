@@ -26,6 +26,9 @@ import {
   setOrderStatus,
 } from "@/lib/data/orders";
 import { reconcileOrderPayment } from "@/lib/mp-reconcile";
+import { getPayment } from "@/lib/mercadopago";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { hasSupabaseAdmin } from "@/lib/env";
 import {
   listPricingRows,
   getPricingInsights,
@@ -466,4 +469,51 @@ export async function loadProductPerformanceAction(
   }
   const { rows } = await listPricingRows();
   return getPricingInsights(rows, from && to ? { from, to } : { days });
+}
+
+// -------------------------------------------------------------------------
+//  Taxa do Mercado Pago em pedidos antigos
+// -------------------------------------------------------------------------
+
+/**
+ * Pedidos pagos via Mercado Pago ANTES do valor líquido passar a ser gravado
+ * ficaram com `net_amount` vazio — "Recebido" mostra o total da venda, não o
+ * que de fato caiu na conta. Isso busca a taxa de cada um retroativamente
+ * consultando o pagamento no MP.
+ */
+export async function backfillOrderFeesAction(): Promise<
+  { ok: true; updated: number; checked: number } | { error: string }
+> {
+  await requireAdmin();
+  if (!hasSupabaseAdmin()) return { error: "Supabase não configurado." };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("orders")
+    .select("id, mp_payment_id")
+    .eq("status", "paid")
+    .is("net_amount", null)
+    .not("mp_payment_id", "is", null)
+    .limit(200);
+  if (error) return { error: error.message };
+
+  const rows = (data ?? []) as { id: string; mp_payment_id: string }[];
+  let updated = 0;
+  for (const row of rows) {
+    try {
+      const payment = await getPayment(row.mp_payment_id);
+      if (payment.netReceivedAmount != null) {
+        await admin
+          .from("orders")
+          .update({ net_amount: payment.netReceivedAmount })
+          .eq("id", row.id);
+        updated++;
+      }
+    } catch (err) {
+      console.warn("backfillOrderFees:", row.id, (err as Error).message);
+    }
+  }
+
+  if (updated > 0) revalidatePath("/admin");
+  return { ok: true, updated, checked: rows.length };
 }

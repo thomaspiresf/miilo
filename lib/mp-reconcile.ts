@@ -28,6 +28,7 @@ export async function reconcileOrderPayment(
         mpPaymentId: payment.id,
         mpStatus: payment.status,
         method: payment.payment_method_id,
+        netAmount: payment.netReceivedAmount ?? null,
       });
     } else if (payment.status === "rejected" || payment.status === "cancelled") {
       await setOrderStatus(orderId, "failed", {

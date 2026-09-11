@@ -177,6 +177,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       tracking_code: null,
       notes,
       pos_pay_mode: posPayMode,
+      net_amount: null,
       stock_restored: false,
       stock_reserved: true,
       created_at: new Date().toISOString(),
@@ -312,6 +313,7 @@ function mapOrder(row: any, items: any[]): Order {
     tracking_code: row.tracking_code ?? null,
     notes: row.notes ?? null,
     pos_pay_mode: row.pos_pay_mode ?? null,
+    net_amount: row.net_amount != null ? Number(row.net_amount) : null,
     stock_restored: row.stock_restored ?? false,
     stock_reserved: row.stock_reserved ?? false,
     created_at: row.created_at,
@@ -442,7 +444,13 @@ function revalidateStorefrontStock() {
 
 export async function approveOrder(
   id: string,
-  opts: { mpPaymentId?: string | null; mpStatus?: string; method?: string | null } = {},
+  opts: {
+    mpPaymentId?: string | null;
+    mpStatus?: string;
+    method?: string | null;
+    /** Valor líquido (já sem a taxa do MP) — só informado pra pagamentos reais. */
+    netAmount?: number | null;
+  } = {},
 ): Promise<void> {
   if (!hasSupabaseAdmin()) {
     const order = mockDB().orders.find((o) => o.id === id);
@@ -451,6 +459,7 @@ export async function approveOrder(
     order.mp_payment_id = opts.mpPaymentId ?? order.mp_payment_id;
     order.mp_status = opts.mpStatus ?? "approved";
     order.payment_method = opts.method ?? order.payment_method;
+    order.net_amount = opts.netAmount ?? order.net_amount;
     if (order.stock_reserved && !order.stock_restored) {
       // estoque já baixado na reserva — só converte o histórico
       for (const mv of mockDB().movements) {
@@ -474,12 +483,24 @@ export async function approveOrder(
     .maybeSingle();
   const wasPaid = prev?.status === "paid";
 
-  const { error } = await admin.rpc("approve_order", {
+  // `p_net_amount` só existe na função depois da migration-order-net-amount.sql —
+  // se ainda não rodou no banco, cai pra assinatura antiga (a venda é aprovada
+  // do mesmo jeito, só sem o valor líquido).
+  let { error } = await admin.rpc("approve_order", {
     p_order_id: id,
     p_mp_payment_id: opts.mpPaymentId ?? null,
     p_mp_status: opts.mpStatus ?? "approved",
     p_method: opts.method ?? null,
+    p_net_amount: opts.netAmount ?? null,
   });
+  if (error?.message?.includes("p_net_amount")) {
+    ({ error } = await admin.rpc("approve_order", {
+      p_order_id: id,
+      p_mp_payment_id: opts.mpPaymentId ?? null,
+      p_mp_status: opts.mpStatus ?? "approved",
+      p_method: opts.method ?? null,
+    }));
+  }
   if (error) throw error;
 
   revalidateStorefrontStock();

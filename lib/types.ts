@@ -212,6 +212,12 @@ export type Order = {
   notes: string | null;
   /** Como a venda na loja foi lançada: link | now | cash | later. Null p/ online. */
   pos_pay_mode: string | null;
+  /**
+   * Valor líquido efetivamente recebido (depois da taxa do Mercado Pago).
+   * Null quando não temos esse dado (venda manual/na loja, ou pedido antigo) —
+   * nesse caso trate como igual a `total` (sem taxa a descontar).
+   */
+  net_amount: number | null;
   stock_restored: boolean;
   /** Estoque baixado na criação do pedido (reserva). */
   stock_reserved: boolean;
