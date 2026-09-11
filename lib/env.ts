@@ -47,6 +47,21 @@ export const env = {
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean),
+  /**
+   * Google Analytics Data API (dashboard embutido em /admin/analytics) —
+   * conta de serviço com acesso de leitor na propriedade GA4. Diferente do
+   * NEXT_PUBLIC_GA_MEASUREMENT_ID (que só manda dados pro GA); isto aqui é
+   * pra LER os relatórios de volta.
+   */
+  ga: {
+    propertyId: process.env.GA_PROPERTY_ID || "",
+    serviceAccountEmail: process.env.GA_SERVICE_ACCOUNT_EMAIL || "",
+    // a chave vem com "\n" escapado nas env vars da Vercel
+    serviceAccountKey: (process.env.GA_SERVICE_ACCOUNT_PRIVATE_KEY || "").replace(
+      /\\n/g,
+      "\n",
+    ),
+  },
 };
 
 /** O e-mail informado é de um administrador? */
@@ -90,4 +105,11 @@ export function paymentsMocked() {
 
 export function shippingMocked() {
   return env.melhorEnvio.mock || !env.melhorEnvio.token;
+}
+
+/** Dá pra ler os relatórios do GA4 (dashboard embutido no admin)? */
+export function hasGaData() {
+  return Boolean(
+    env.ga.propertyId && env.ga.serviceAccountEmail && env.ga.serviceAccountKey,
+  );
 }
