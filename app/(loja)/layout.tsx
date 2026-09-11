@@ -3,6 +3,8 @@ import { getCategories } from "@/lib/data/catalog";
 import { isDemoMode } from "@/lib/auth";
 import { SiteHeader } from "@/components/site/header";
 import { Logo } from "@/components/site/logo";
+import { AnalyticsScripts } from "@/components/site/analytics-scripts";
+import { CookieConsent } from "@/components/site/cookie-consent";
 import { env } from "@/lib/env";
 
 export default async function LojaLayout({ children }: LayoutProps<"/">) {
@@ -33,6 +35,7 @@ export default async function LojaLayout({ children }: LayoutProps<"/">) {
             <Link href="/c/livros">Livros</Link>
             <Link href="/conta">Minha conta</Link>
             <Link href="/conta/pedidos">Meus pedidos</Link>
+            <Link href="/privacidade">Privacidade</Link>
           </div>
           <p className="mt-6 text-xs">
             © {new Date().getFullYear()} {env.site.storeName}. Pagamentos via
@@ -40,6 +43,8 @@ export default async function LojaLayout({ children }: LayoutProps<"/">) {
           </p>
         </div>
       </footer>
+      <AnalyticsScripts />
+      <CookieConsent />
     </>
   );
 }

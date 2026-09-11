@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Product } from "@/lib/types";
 import type { Installment } from "@/lib/mp-installments";
 import { imagesForColor } from "@/lib/product-cards";
 import { ProductGallery } from "@/components/site/product-gallery";
 import { ProductBuyBox } from "@/components/site/product-buy-box";
+import { trackViewItem } from "@/lib/analytics";
 
 type Props = {
   product: Product;
@@ -15,6 +16,14 @@ type Props = {
 };
 
 export function ProductDetail(props: Props) {
+  const { id, name, price_from } = props.product;
+  // Fica aqui (fora do Suspense) pra disparar só uma vez por produto — o
+  // fallback e o conteúdo real do Suspense abaixo trocam de instância do
+  // ProductDetailInner, o que dispararia o evento em dobro se estivesse lá.
+  useEffect(() => {
+    trackViewItem({ id, name, price: price_from, quantity: 1 });
+  }, [id, name, price_from]);
+
   // A página é estática/ISR. O `?cor=` vindo da vitrine é lido só no cliente
   // (Suspense) — o fallback já renderiza o produto inteiro na cor padrão, então
   // não há tela vazia nem perda de SEO/LCP.

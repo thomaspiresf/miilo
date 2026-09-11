@@ -12,6 +12,7 @@ import { site } from "@/lib/site";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { OrderStatusPoller } from "@/components/order/order-status-poller";
+import { PurchaseTracker } from "@/components/order/purchase-tracker";
 import { PixQr } from "@/components/checkout/pix-qr";
 
 export const metadata: Metadata = { title: "Pedido", robots: { index: false } };
@@ -63,6 +64,21 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      {confirmed && (
+        <PurchaseTracker
+          order={{
+            id: order.id,
+            number: order.number,
+            total: order.total,
+            items: order.items.map((it) => ({
+              variantId: it.variant_id,
+              name: it.product_name,
+              unitPrice: it.unit_price,
+              qty: it.qty,
+            })),
+          }}
+        />
+      )}
       <div className="rounded-2xl border border-border bg-surface p-6 text-center">
         {confirmed ? (
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/10">

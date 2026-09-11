@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Home, Store } from "lucide-react";
 import { useCart } from "@/lib/cart-store";
 import { useHydrated } from "@/lib/use-hydrated";
+import { trackBeginCheckout } from "@/lib/analytics";
 import { formatBRL, formatCep } from "@/lib/format";
 import { onlyDigits } from "@/lib/utils";
 import { site } from "@/lib/site";
@@ -69,6 +70,21 @@ export function CheckoutClient({
   const lines = useCart((s) => s.lines);
   const clear = useCart((s) => s.clear);
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+
+  // uma vez por visita ao checkout, não a cada mudança na sacola
+  const trackedBeginCheckout = useRef(false);
+  useEffect(() => {
+    if (!mounted || lines.length === 0 || trackedBeginCheckout.current) return;
+    trackedBeginCheckout.current = true;
+    trackBeginCheckout(
+      lines.map((l) => ({
+        id: l.variantId,
+        name: l.name,
+        price: l.unitPrice,
+        quantity: l.qty,
+      })),
+    );
+  }, [mounted, lines]);
 
   const [mode, setMode] = useState<DeliveryMode>("delivery");
   const [form, setForm] = useState<FormState>({

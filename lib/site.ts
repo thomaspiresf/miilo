@@ -13,4 +13,10 @@ export const site = {
   pickupNote:
     process.env.NEXT_PUBLIC_STORE_PICKUP_NOTE ||
     "Avisaremos por e-mail e WhatsApp quando o pedido estiver pronto para retirada.",
+  /** Google Analytics 4 — Admin do GA -> Fluxo de dados -> ID de métricas (G-XXXXXXX). Vazio = desligado. */
+  gaId: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "",
+  /** Meta Pixel (Facebook/Instagram Ads) — Gerenciador de Eventos -> ID do pixel. Vazio = desligado. */
+  metaPixelId: process.env.NEXT_PUBLIC_META_PIXEL_ID || "",
+  /** E-mail de contato pra dúvidas de privacidade/dados. */
+  privacyEmail: process.env.NEXT_PUBLIC_PRIVACY_EMAIL || "contato@miilo.com.br",
 };

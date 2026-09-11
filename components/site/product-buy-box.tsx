@@ -6,6 +6,7 @@ import { Bell, Check, ShoppingBag, Zap } from "lucide-react";
 import type { Product, ProductVariant } from "@/lib/types";
 import type { Installment } from "@/lib/mp-installments";
 import { useCart } from "@/lib/cart-store";
+import { trackAddToCart } from "@/lib/analytics";
 import { discountPercent, formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,12 @@ export function ProductBuyBox({
       imageUrl: product.images[0]?.url ?? null,
       maxStock: selected.stock,
       weightGrams: selected.weight_grams,
+    });
+    trackAddToCart({
+      id: selected.id,
+      name: product.name,
+      price: selected.price,
+      quantity: 1,
     });
     return true;
   }

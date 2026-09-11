@@ -6,18 +6,19 @@ const supabaseHost = supabaseUrl ? new URL(supabaseUrl).hostname : undefined;
 /**
  * Content-Security-Policy.
  * Precisa liberar o SDK/Bricks do Mercado Pago (checkout transparente),
- * o Supabase (auth + imagens), ViaCEP (busca de CEP) e os players de vídeo.
+ * o Supabase (auth + imagens), ViaCEP (busca de CEP), os players de vídeo e o
+ * Google Analytics / Meta Pixel (analytics — components/site/analytics-scripts.tsx).
  */
 const csp = [
   "default-src 'self'",
   // Next injeta scripts inline; o SDK do Mercado Pago usa eval.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com https://www.googletagmanager.com https://connect.facebook.net",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   // vídeos dos produtos hospedados no Supabase Storage
   "media-src 'self' blob: https://*.supabase.co",
   "font-src 'self' data:",
-  `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mercadopago.com https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com https://viacep.com.br`,
+  `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mercadopago.com https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com https://viacep.com.br https://www.googletagmanager.com https://*.google-analytics.com https://www.facebook.com https://connect.facebook.net`,
   "frame-src 'self' https://*.mercadopago.com https://*.mercadolibre.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
