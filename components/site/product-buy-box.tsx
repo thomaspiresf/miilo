@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, ShoppingBag, Zap } from "lucide-react";
+import { Bell, Check, ShoppingBag, Store, Zap } from "lucide-react";
 import type { Product, ProductVariant } from "@/lib/types";
 import type { Installment } from "@/lib/mp-installments";
 import { useCart } from "@/lib/cart-store";
 import { trackAddToCart } from "@/lib/analytics";
 import { discountPercent, formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { site } from "@/lib/site";
 import { Button } from "@/components/ui/button";
 import { SizeGuide } from "@/components/site/size-guide";
 import { StockAlertForm } from "@/components/site/stock-alert-form";
@@ -282,10 +283,17 @@ export function ProductBuyBox({
       )}
 
       <div className="border-t border-border pt-5">
-        <CepEstimate
-          weightGrams={selected?.weight_grams ?? 300}
-          price={price}
-        />
+        {site.deliveryEnabled ? (
+          <CepEstimate weightGrams={selected?.weight_grams ?? 300} price={price} />
+        ) : (
+          <div className="flex items-start gap-2.5 text-sm">
+            <Store className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+            <div>
+              <p className="font-bold">Retirar na loja</p>
+              <p className="text-xs text-muted">{site.storeAddress}</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

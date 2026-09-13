@@ -86,7 +86,7 @@ export function CheckoutClient({
     );
   }, [mounted, lines]);
 
-  const [mode, setMode] = useState<DeliveryMode>("delivery");
+  const [mode, setMode] = useState<DeliveryMode>(site.deliveryEnabled ? "delivery" : "pickup");
   const [form, setForm] = useState<FormState>({
     ...EMPTY,
     email: initialEmail,
@@ -438,31 +438,46 @@ export function CheckoutClient({
         {/* Modo de entrega */}
         <section className="rounded-2xl border border-border bg-surface p-5">
           <h2 className="mb-3 font-black">1. Como você quer receber</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {(
-              [
-                { id: "delivery", label: "Receber em casa", icon: Home, sub: "Entrega pelos Correios" },
-                { id: "pickup", label: "Retirar na loja", icon: Store, sub: "Sem frete · retirada em Laranjal Paulista/SP" },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                disabled={locked}
-                onClick={() => setMode(opt.id)}
-                className={cn(
-                  "flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition disabled:opacity-60",
-                  mode === opt.id
-                    ? "border-foreground bg-foreground/[0.04]"
-                    : "border-border hover:border-foreground/30",
-                )}
-              >
-                <opt.icon className="h-5 w-5" />
-                <span className="text-sm font-bold">{opt.label}</span>
-                <span className="text-xs text-muted">{opt.sub}</span>
-              </button>
-            ))}
-          </div>
+          {site.deliveryEnabled ? (
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  { id: "delivery", label: "Receber em casa", icon: Home, sub: "Entrega pelos Correios" },
+                  { id: "pickup", label: "Retirar na loja", icon: Store, sub: "Sem frete · retirada em Laranjal Paulista/SP" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => setMode(opt.id)}
+                  className={cn(
+                    "flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition disabled:opacity-60",
+                    mode === opt.id
+                      ? "border-foreground bg-foreground/[0.04]"
+                      : "border-border hover:border-foreground/30",
+                  )}
+                >
+                  <opt.icon className="h-5 w-5" />
+                  <span className="text-sm font-bold">{opt.label}</span>
+                  <span className="text-xs text-muted">{opt.sub}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-xl border border-foreground bg-foreground/[0.04] p-3">
+              <Store className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="text-sm font-bold">Retirar na loja</p>
+                <p className="text-xs text-muted">
+                  Sem frete · retirada em Laranjal Paulista/SP
+                </p>
+                <p className="mt-1.5 text-xs text-muted">
+                  Entrega em casa ainda não está disponível — em breve!
+                </p>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Contato */}

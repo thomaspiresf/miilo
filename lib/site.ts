@@ -9,6 +9,13 @@ export const site = {
   storeAddress:
     process.env.NEXT_PUBLIC_STORE_ADDRESS ||
     "R. Alfredo Barbieri, 92 — Vila Conceição, Laranjal Paulista/SP",
+  /**
+   * Entrega pelos Correios ligada? Desligada em 2026-09-13 — ainda falta
+   * configurar o necessário para despachar pedidos. Só retirada na loja por
+   * enquanto. Religar aqui (e no servidor, em checkout-schema.ts) quando o
+   * frete estiver pronto.
+   */
+  deliveryEnabled: process.env.NEXT_PUBLIC_DELIVERY_ENABLED === "true",
   /** Texto mostrado no checkout quando o cliente escolhe "Retirar na loja". */
   pickupNote:
     process.env.NEXT_PUBLIC_STORE_PICKUP_NOTE ||

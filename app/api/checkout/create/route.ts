@@ -24,6 +24,15 @@ export async function POST(request: Request) {
     );
   }
 
+  // Entrega desligada por enquanto (site.deliveryEnabled) — só retirada na
+  // loja. Checagem no servidor pra não depender só da UI escondida.
+  if (!site.deliveryEnabled && parsed.data.deliveryMode === "delivery") {
+    return NextResponse.json(
+      { error: "Entrega em casa não está disponível no momento — só retirada na loja." },
+      { status: 422 },
+    );
+  }
+
   // devolve reservas de checkout abandonado antes de conferir o estoque
   await sweepExpiredReservations();
 

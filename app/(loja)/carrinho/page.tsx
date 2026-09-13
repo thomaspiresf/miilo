@@ -6,6 +6,7 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/lib/cart-store";
 import { useHydrated } from "@/lib/use-hydrated";
 import { formatBRL } from "@/lib/format";
+import { site } from "@/lib/site";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/misc";
 
@@ -93,7 +94,9 @@ export default function CartPage() {
             </div>
             <div className="mt-1 flex justify-between text-sm">
               <span className="text-muted">Frete</span>
-              <span className="text-muted">calculado no checkout</span>
+              <span className="text-muted">
+                {site.deliveryEnabled ? "calculado no checkout" : "retirada na loja"}
+              </span>
             </div>
             <div className="mt-4 border-t border-border pt-4 flex justify-between">
               <span className="font-bold">Total parcial</span>
