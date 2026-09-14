@@ -7,6 +7,7 @@ import { hasSupabaseAdmin, hasSupabase } from "@/lib/env";
 import { mockDB } from "@/lib/data/mock-store";
 import { imageUrl } from "@/lib/data/catalog";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { notifySale } from "@/lib/whatsapp";
 import { incrementCouponUse } from "@/lib/data/coupons";
 import type {
   DeliveryMode,
@@ -472,6 +473,7 @@ export async function approveOrder(
     }
     await incrementCouponUse(order.coupon_code);
     await sendOrderConfirmationEmail(order);
+    await notifySale(order);
     revalidateStorefrontStock();
     return;
   }
@@ -511,6 +513,7 @@ export async function approveOrder(
   if (fresh && fresh.status === "paid") {
     await incrementCouponUse(fresh.coupon_code);
     await sendOrderConfirmationEmail(fresh);
+    await notifySale(fresh);
   }
 }
 
