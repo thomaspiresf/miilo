@@ -18,6 +18,10 @@ import type { Order } from "@/lib/types";
  * Isto é só um AVISO pro dono da loja — não tem nada a ver com o
  * NEXT_PUBLIC_GA_MEASUREMENT_ID/GA_* (analytics) nem com e-mail pro cliente
  * (lib/email.ts).
+ *
+ * O bot que RECEBE comando ("vendi 1 body...") mora em lib/whatsapp-bot.ts
+ * e usa sendWhatsAppText daqui pra responder (dentro da janela de 24h
+ * aberta por quem mandou a mensagem — não precisa de template).
  */
 
 const GRAPH_VERSION = "v21.0";
@@ -27,19 +31,56 @@ function graphUrl() {
   return `https://graph.facebook.com/${GRAPH_VERSION}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 }
 
-export function whatsappEnabled() {
-  return Boolean(
-    process.env.WHATSAPP_ACCESS_TOKEN &&
-      process.env.WHATSAPP_PHONE_NUMBER_ID &&
-      process.env.WHATSAPP_TEMPLATE_NAME,
-  );
+/** Token + Phone Number ID configurados — o mínimo pra mandar qualquer mensagem. */
+export function hasWhatsAppCredentials() {
+  return Boolean(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
 }
 
-function notifyNumbers(): string[] {
+/** Credenciais + template aprovado — necessário só pro aviso automático (notifySale). */
+export function whatsappEnabled() {
+  return Boolean(hasWhatsAppCredentials() && process.env.WHATSAPP_TEMPLATE_NAME);
+}
+
+export function notifyNumbers(): string[] {
   return (process.env.WHATSAPP_NOTIFY_NUMBERS || "")
     .split(",")
     .map((n) => n.trim())
     .filter(Boolean);
+}
+
+/**
+ * Manda texto livre — só funciona respondendo dentro da janela de 24h de uma
+ * conversa que a PESSOA iniciou (ex.: o bot de comandos). Pra mensagem que a
+ * loja inicia sozinha, use sendWhatsAppTemplate/notifySale.
+ */
+export async function sendWhatsAppText(to: string, message: string): Promise<boolean> {
+  if (!hasWhatsAppCredentials()) {
+    console.info(`[whatsapp] desativado (faltam credenciais da Meta) — mensagem pra ${to} não enviada`);
+    return false;
+  }
+  try {
+    const res = await fetch(graphUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: message },
+      }),
+    });
+    if (!res.ok) {
+      console.error("[whatsapp] Meta respondeu", res.status, await res.text().catch(() => ""));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[whatsapp] erro ao enviar", err);
+    return false;
+  }
 }
 
 /**
