@@ -4,12 +4,19 @@ import { revalidatePath } from "next/cache";
 import { formatBRL } from "@/lib/format";
 import { site } from "@/lib/site";
 import { notifyNumbers } from "@/lib/whatsapp";
-import { hasSupabaseAdmin } from "@/lib/env";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { adminListProducts } from "@/lib/data/admin";
 import { createOrder, approveOrder, listAllOrders } from "@/lib/data/orders";
 import { logAction } from "@/lib/data/audit";
 import type { Order, Product, ProductVariant } from "@/lib/types";
+import {
+  loadHistory,
+  saveTurns,
+  normalize,
+  variantLabel,
+  matchProduct,
+  matchOrderByNumber,
+  runToolLoop,
+} from "@/lib/whatsapp-shared";
 
 /**
  * Bot conversacional de WhatsApp pro dono/admins da loja: pode registrar
@@ -17,8 +24,8 @@ import type { Order, Product, ProductVariant } from "@/lib/types";
  * período, estoque, detalhes de um pedido e ranking de mais vendidos —
  * e lembra da conversa pra responder perguntas de acompanhamento
  * ("e quais foram os itens?"). Webhook em
- * app/api/webhooks/whatsapp/route.ts recebe a mensagem e chama
- * handleWhatsAppMessage() aqui.
+ * app/api/webhooks/whatsapp/route.ts recebe a mensagem e roteia pra cá (se o
+ * número for confiável) ou pro bot público (lib/whatsapp-public-bot.ts).
  *
  * Duas camadas de segurança (o bot cria pedido/baixa estoque e expõe dados
  * internos, então NENHUMA das duas é opcional):
@@ -26,23 +33,21 @@ import type { Order, Product, ProductVariant } from "@/lib/types";
  *     (sem isso, qualquer um poderia forjar "de: seu número").
  *  2. isAuthorizedWhatsAppNumber() só deixa passar quem está em
  *     WHATSAPP_NOTIFY_NUMBERS (os mesmos números que recebem o aviso de
- *     venda — reaproveitado aqui como lista de quem pode conversar com o bot).
+ *     venda — reaproveitado aqui como lista de quem pode conversar com o
+ *     bot interno; qualquer outro número cai no bot público).
  *
  * Arquitetura: Claude (Haiku) conduz a conversa e decide quando chamar uma
- * das "ferramentas" abaixo — mas o CASAMENTO com o catálogo real (produto,
- * cor, tamanho, estoque) e a criação do pedido continuam em código, não na
- * IA, pra manter controle sobre o que efetivamente mexe em dinheiro/estoque.
- * As ferramentas de consulta (vendas, estoque, pedido, ranking) devolvem
- * dados estruturados — quem escreve a frase final é o Claude, usando o
- * histórico da conversa (guardado em `whatsapp_conversations`) pra manter
- * contexto entre mensagens.
+ * das "ferramentas" abaixo (loop genérico em lib/whatsapp-shared.ts) — mas o
+ * CASAMENTO com o catálogo real (produto, cor, tamanho, estoque) e a criação
+ * do pedido continuam em código, não na IA, pra manter controle sobre o que
+ * efetivamente mexe em dinheiro/estoque. As ferramentas de consulta (vendas,
+ * estoque, pedido, ranking) devolvem dados estruturados — quem escreve a
+ * frase final é o Claude, usando o histórico da conversa pra manter contexto
+ * entre mensagens.
  */
 
 const POS_FALLBACK_EMAIL = "venda-loja@miilo.com.br";
-const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 const MAX_MESSAGE_LENGTH = 500;
-const MAX_TOOL_ITERATIONS = 4;
-const HISTORY_MESSAGES = 12;
 
 // --------------------------------------------------------------------------
 //  Segurança do webhook
@@ -58,134 +63,14 @@ export function verifyMetaSignature(rawBody: string, header: string | null): boo
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
 }
 
-/** Só quem está em WHATSAPP_NOTIFY_NUMBERS pode conversar com o bot. */
+/** Só quem está em WHATSAPP_NOTIFY_NUMBERS conversa com o bot interno. */
 export function isAuthorizedWhatsAppNumber(phone: string): boolean {
   return notifyNumbers().includes(phone);
 }
 
 // --------------------------------------------------------------------------
-//  Memória da conversa (por número)
+//  Períodos (fuso de Brasília)
 // --------------------------------------------------------------------------
-
-type ChatTurn = { role: "user" | "assistant"; content: string };
-
-async function loadHistory(phone: string): Promise<ChatTurn[]> {
-  if (!hasSupabaseAdmin()) return [];
-  try {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from("whatsapp_conversations")
-      .select("role,content")
-      .eq("phone", phone)
-      .order("created_at", { ascending: false })
-      .limit(HISTORY_MESSAGES);
-    if (error) return [];
-    return (data ?? []).reverse() as ChatTurn[];
-  } catch {
-    return [];
-  }
-}
-
-async function saveTurns(phone: string, turns: ChatTurn[]): Promise<void> {
-  if (!hasSupabaseAdmin()) return;
-  try {
-    const admin = createAdminClient();
-    await admin.from("whatsapp_conversations").insert(turns.map((t) => ({ phone, role: t.role, content: t.content })));
-  } catch (err) {
-    console.error("[whatsapp-bot] erro ao salvar memória da conversa", err);
-  }
-}
-
-// --------------------------------------------------------------------------
-//  Casamento com o catálogo (usado por log_sale e get_stock)
-// --------------------------------------------------------------------------
-
-function normalize(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function variantLabel(v: ProductVariant): string {
-  return [v.size, v.color].filter(Boolean).join(" · ");
-}
-
-type MatchResult =
-  | { type: "ok"; product: Product; variant: ProductVariant }
-  | { type: "none" }
-  | { type: "ambiguous_product"; names: string[] }
-  | { type: "ambiguous_variant"; product: Product; options: string[] };
-
-function scoreByTokens(target: string, query: string, queryTokens: string[]): number {
-  if (target === query) return 100;
-  if (target.includes(query)) return 80;
-  const matched = queryTokens.filter((t) => target.includes(t)).length;
-  return matched > 0 ? (matched / queryTokens.length) * 60 : 0;
-}
-
-// Cores como "Azul", "Azul Claro" e "Azul Escuro" convivem no mesmo produto —
-// comparar só contra o rótulo combinado ("P · Azul Claro") faz "azul" bater
-// como substring nas três e empatar sempre. Aqui um match exato na cor OU no
-// tamanho isolados vence antes de cair pro score do rótulo combinado.
-function scoreVariant(v: ProductVariant, query: string, queryTokens: string[]): number {
-  const color = normalize(v.color || "");
-  const size = normalize(v.size || "");
-  const sizeAndColor = normalize([v.size, v.color].filter(Boolean).join(" "));
-  if (color === query || size === query || sizeAndColor === query) return 100;
-  return scoreByTokens(normalize(variantLabel(v)), query, queryTokens);
-}
-
-function matchProduct(products: Product[], productText: string, variantText?: string): MatchResult {
-  const q = normalize(productText);
-  const qTokens = q.split(/\s+/).filter(Boolean);
-
-  const scored = products
-    .filter((p) => p.active)
-    .map((p) => ({ product: p, score: scoreByTokens(normalize(p.name), q, qTokens) }))
-    .filter((s) => s.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  if (scored.length === 0) return { type: "none" };
-
-  const top = scored[0].score;
-  const tied = scored.filter((s) => s.score === top);
-  if (tied.length > 1) {
-    return { type: "ambiguous_product", names: tied.slice(0, 5).map((s) => s.product.name) };
-  }
-
-  const product = scored[0].product;
-  const variants = product.variants.filter((v) => v.active);
-  if (variants.length === 0) return { type: "none" };
-  if (variants.length === 1) return { type: "ok", product, variant: variants[0] };
-
-  if (variantText) {
-    const vq = normalize(variantText);
-    const vTokens = vq.split(/\s+/).filter(Boolean);
-    const vScored = variants
-      .map((v) => ({ variant: v, score: scoreVariant(v, vq, vTokens) }))
-      .filter((s) => s.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    if (vScored.length === 1 || (vScored.length > 1 && vScored[0].score > vScored[1].score)) {
-      return { type: "ok", product, variant: vScored[0].variant };
-    }
-  }
-
-  return {
-    type: "ambiguous_variant",
-    product,
-    options: variants.map((v) => variantLabel(v) || "Único"),
-  };
-}
-
-function matchOrderByNumber(orders: Order[], numberText: string): Order | undefined {
-  const clean = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const q = clean(numberText);
-  if (!q) return undefined;
-  return orders.find((o) => clean(o.number) === q) ?? orders.find((o) => clean(o.number).endsWith(q));
-}
 
 const isSold = (o: Order) =>
   ["paid", "shipped", "delivered"].includes(o.status) ||
@@ -641,34 +526,6 @@ function systemPromptWithDate(): string {
   return `${SYSTEM_PROMPT}\n\nHoje é ${getBrDateLabel(new Date())} (horário de Brasília).`;
 }
 
-async function callClaude(messages: any[]): Promise<any | null> {
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: 500,
-        system: systemPromptWithDate(),
-        messages,
-        tools: TOOLS,
-      }),
-    });
-    if (!res.ok) {
-      console.error("[whatsapp-bot] Anthropic respondeu", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    return await res.json();
-  } catch (err) {
-    console.error("[whatsapp-bot] erro ao chamar Claude", err);
-    return null;
-  }
-}
-
 // --------------------------------------------------------------------------
 //  Ponto de entrada
 // --------------------------------------------------------------------------
@@ -682,59 +539,37 @@ export async function handleWhatsAppMessage(text: string, phone: string): Promis
   if (!process.env.ANTHROPIC_API_KEY) return HELP_TEXT;
 
   const history = await loadHistory(phone);
-  const messages: any[] = [...history, { role: "user", content: trimmed }];
+  const { finalText, calls } = await runToolLoop({
+    messages: [...history, { role: "user", content: trimmed }],
+    systemPrompt: systemPromptWithDate(),
+    tools: TOOLS,
+    executeTool,
+  });
 
-  let finalText = HELP_TEXT;
-  let saleConfirmed = false;
-  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const res = await callClaude(messages);
-    if (!res) break;
-
-    const blocks: any[] = res.content ?? [];
-    const toolUses = blocks.filter((b) => b.type === "tool_use");
-    const textOut = blocks
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-
-    if (toolUses.length === 0) {
-      finalText = textOut || HELP_TEXT;
-      break;
-    }
-
-    if (textOut) finalText = textOut;
-    messages.push({ role: "assistant", content: blocks });
-
-    const toolResults = [];
-    for (const tu of toolUses) {
-      const result = await executeTool(tu.name, tu.input);
-      if (tu.name === "log_sale" && (result as { ok?: boolean }).ok === true) saleConfirmed = true;
-      toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: JSON.stringify(result) });
-    }
-    messages.push({ role: "user", content: toolResults });
-  }
+  let reply = finalText ?? HELP_TEXT;
 
   // Trava de segurança: NUNCA deixar passar uma resposta que pareça confirmar
   // uma venda (o "✅" que o prompt reserva pra isso) se log_sale não voltou
   // ok:true de verdade nesse turno — evita o bot "alucinar" um pedido que não
   // existe (já aconteceu: Claude respondeu com confirmação sem chamar a
   // ferramenta nenhuma vez).
-  if (finalText.includes("✅") && !saleConfirmed) {
+  const saleConfirmed = calls.some((c) => c.name === "log_sale" && (c.result as { ok?: boolean })?.ok === true);
+  if (reply.includes("✅") && !saleConfirmed) {
     console.error("[whatsapp-bot] resposta parecia confirmar venda sem log_sale ok:true — bloqueada", {
       phone,
       trimmed,
-      finalText,
+      reply,
     });
-    finalText =
+    reply =
       "Peraí, não registrei nenhuma venda ainda — deu uma falha aqui do meu lado antes de confirmar. " +
       'Manda de novo, tipo "vendi 1 body canelado azul pra Priscila"?';
   }
 
   await saveTurns(phone, [
     { role: "user", content: trimmed },
-    { role: "assistant", content: finalText },
+    { role: "assistant", content: reply },
   ]);
 
-  return finalText;
+  return reply;
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */

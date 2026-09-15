@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { verifyMetaSignature, isAuthorizedWhatsAppNumber, handleWhatsAppMessage } from "@/lib/whatsapp-bot";
+import { handlePublicMessage } from "@/lib/whatsapp-public-bot";
 import { sendWhatsAppText } from "@/lib/whatsapp";
 
 /**
  * Webhook do WhatsApp Cloud API (Meta) — GET faz a verificação inicial que a
  * Meta pede ao cadastrar a URL; POST recebe as mensagens de verdade.
+ *
+ * Roteamento: número confiável (WHATSAPP_NOTIFY_NUMBERS) cai no bot interno
+ * (lib/whatsapp-bot.ts — vendas, estoque exato, pedidos, ranking); qualquer
+ * outro número cai no bot público (lib/whatsapp-public-bot.ts — atendimento
+ * ao cliente, sem acesso a nada interno).
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -44,14 +50,10 @@ export async function POST(request: Request) {
     if (msg?.type !== "text" || typeof msg.text?.body !== "string") continue;
     const from = String(msg.from ?? "");
 
-    if (!isAuthorizedWhatsAppNumber(from)) {
-      // não revela nem responde pra número que não está na lista
-      console.warn(`[whatsapp webhook] número não autorizado tentou comandar o bot: ${from}`);
-      continue;
-    }
-
     try {
-      const reply = await handleWhatsAppMessage(msg.text.body, from);
+      const reply = isAuthorizedWhatsAppNumber(from)
+        ? await handleWhatsAppMessage(msg.text.body, from)
+        : await handlePublicMessage(msg.text.body, from);
       await sendWhatsAppText(from, reply);
     } catch (err) {
       console.error("[whatsapp webhook] erro ao processar mensagem", err);
