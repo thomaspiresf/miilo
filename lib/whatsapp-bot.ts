@@ -3,35 +3,45 @@ import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { formatBRL } from "@/lib/format";
 import { notifyNumbers } from "@/lib/whatsapp";
+import { hasSupabaseAdmin } from "@/lib/env";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { adminListProducts } from "@/lib/data/admin";
 import { createOrder, approveOrder, listAllOrders } from "@/lib/data/orders";
 import { logAction } from "@/lib/data/audit";
 import type { Order, Product, ProductVariant } from "@/lib/types";
 
 /**
- * Bot de comandos por WhatsApp: "vendi 1 body canelado azul pra Priscila"
- * registra a venda (mesmo caminho do PDV, pagamento "dinheiro"), "quanto
- * vendi hoje?" responde o total do período. Webhook em
+ * Bot conversacional de WhatsApp pro dono/admins da loja: pode registrar
+ * venda ("vendi 1 body canelado azul pra Priscila"), consultar vendas por
+ * período, estoque, detalhes de um pedido e ranking de mais vendidos —
+ * e lembra da conversa pra responder perguntas de acompanhamento
+ * ("e quais foram os itens?"). Webhook em
  * app/api/webhooks/whatsapp/route.ts recebe a mensagem e chama
  * handleWhatsAppMessage() aqui.
  *
- * Duas camadas de segurança (o webhook cria pedido/baixa estoque, então
- * NENHUMA das duas é opcional):
+ * Duas camadas de segurança (o bot cria pedido/baixa estoque e expõe dados
+ * internos, então NENHUMA das duas é opcional):
  *  1. verifyMetaSignature() prova que o payload realmente veio da Meta
  *     (sem isso, qualquer um poderia forjar "de: seu número").
  *  2. isAuthorizedWhatsAppNumber() só deixa passar quem está em
  *     WHATSAPP_NOTIFY_NUMBERS (os mesmos números que recebem o aviso de
- *     venda — reaproveitado aqui como lista de quem pode comandar o bot).
+ *     venda — reaproveitado aqui como lista de quem pode conversar com o bot).
  *
- * A interpretação da mensagem usa a API da Claude (Haiku, barato) só pra
- * extrair intenção/entidades — o CASAMENTO com o catálogo real (produto,
- * cor, tamanho, estoque) é feito aqui em código, não pela IA, pra manter
- * controle sobre o que efetivamente cria um pedido.
+ * Arquitetura: Claude (Haiku) conduz a conversa e decide quando chamar uma
+ * das "ferramentas" abaixo — mas o CASAMENTO com o catálogo real (produto,
+ * cor, tamanho, estoque) e a criação do pedido continuam em código, não na
+ * IA, pra manter controle sobre o que efetivamente mexe em dinheiro/estoque.
+ * As ferramentas de consulta (vendas, estoque, pedido, ranking) devolvem
+ * dados estruturados — quem escreve a frase final é o Claude, usando o
+ * histórico da conversa (guardado em `whatsapp_conversations`) pra manter
+ * contexto entre mensagens.
  */
 
 const POS_FALLBACK_EMAIL = "venda-loja@miilo.com.br";
 const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
 const MAX_MESSAGE_LENGTH = 500;
+const MAX_TOOL_ITERATIONS = 4;
+const HISTORY_MESSAGES = 12;
 
 // --------------------------------------------------------------------------
 //  Segurança do webhook
@@ -47,99 +57,46 @@ export function verifyMetaSignature(rawBody: string, header: string | null): boo
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
 }
 
-/** Só quem está em WHATSAPP_NOTIFY_NUMBERS pode comandar o bot. */
+/** Só quem está em WHATSAPP_NOTIFY_NUMBERS pode conversar com o bot. */
 export function isAuthorizedWhatsAppNumber(phone: string): boolean {
   return notifyNumbers().includes(phone);
 }
 
 // --------------------------------------------------------------------------
-//  Interpretação da mensagem (Claude)
+//  Memória da conversa (por número)
 // --------------------------------------------------------------------------
 
-type Intent =
-  | {
-      intent: "log_sale";
-      product_text?: string;
-      variant_text?: string;
-      qty?: number;
-      customer_name?: string;
-    }
-  | { intent: "query_sales"; period?: "today" | "yesterday" | "week" | "month" }
-  | { intent: "unknown" };
+type ChatTurn = { role: "user" | "assistant"; content: string };
 
-const INTERPRET_TOOL = {
-  name: "interpret_message",
-  description: "Registra a interpretação estruturada da mensagem do lojista.",
-  input_schema: {
-    type: "object",
-    properties: {
-      intent: {
-        type: "string",
-        enum: ["log_sale", "query_sales", "unknown"],
-        description:
-          "log_sale = a pessoa está avisando que vendeu algo. query_sales = está perguntando " +
-          "quanto vendeu. unknown = não deu pra entender.",
-      },
-      product_text: {
-        type: "string",
-        description: "Trecho que descreve o produto vendido, ex.: 'body canelado'.",
-      },
-      variant_text: {
-        type: "string",
-        description: "Cor e/ou tamanho mencionados, ex.: 'azul claro P'.",
-      },
-      qty: { type: "integer", description: "Quantidade vendida (padrão 1 se não especificada)." },
-      customer_name: { type: "string", description: "Nome do cliente, se mencionado." },
-      period: {
-        type: "string",
-        enum: ["today", "yesterday", "week", "month"],
-        description: "Período perguntado numa query_sales (padrão 'today').",
-      },
-    },
-    required: ["intent"],
-  },
-};
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-async function interpretMessage(text: string): Promise<Intent> {
-  if (!process.env.ANTHROPIC_API_KEY) return { intent: "unknown" };
+async function loadHistory(phone: string): Promise<ChatTurn[]> {
+  if (!hasSupabaseAdmin()) return [];
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: 300,
-        system:
-          "Você extrai dados de mensagens curtas de WhatsApp de quem vende numa lojinha infantil " +
-          "(roupas, brinquedos e livros). Duas intenções possíveis: 'log_sale' (avisando que vendeu " +
-          "algo) ou 'query_sales' (perguntando quanto vendeu). Se não der pra entender, use 'unknown'. " +
-          "Nunca invente produto, quantidade ou nome de cliente que não estejam escritos na mensagem.",
-        messages: [{ role: "user", content: text }],
-        tools: [INTERPRET_TOOL],
-        tool_choice: { type: "tool", name: "interpret_message" },
-      }),
-    });
-    if (!res.ok) {
-      console.error("[whatsapp-bot] Anthropic respondeu", res.status, await res.text().catch(() => ""));
-      return { intent: "unknown" };
-    }
-    const data = await res.json();
-    const toolUse = data.content?.find((b: any) => b.type === "tool_use");
-    return toolUse?.input ? (toolUse.input as Intent) : { intent: "unknown" };
-  } catch (err) {
-    console.error("[whatsapp-bot] erro ao interpretar mensagem", err);
-    return { intent: "unknown" };
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("whatsapp_conversations")
+      .select("role,content")
+      .eq("phone", phone)
+      .order("created_at", { ascending: false })
+      .limit(HISTORY_MESSAGES);
+    if (error) return [];
+    return (data ?? []).reverse() as ChatTurn[];
+  } catch {
+    return [];
   }
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
+
+async function saveTurns(phone: string, turns: ChatTurn[]): Promise<void> {
+  if (!hasSupabaseAdmin()) return;
+  try {
+    const admin = createAdminClient();
+    await admin.from("whatsapp_conversations").insert(turns.map((t) => ({ phone, role: t.role, content: t.content })));
+  } catch (err) {
+    console.error("[whatsapp-bot] erro ao salvar memória da conversa", err);
+  }
+}
 
 // --------------------------------------------------------------------------
-//  Casamento com o catálogo
+//  Casamento com o catálogo (usado por log_sale e get_stock)
 // --------------------------------------------------------------------------
 
 function normalize(s: string): string {
@@ -210,72 +167,11 @@ function matchProduct(products: Product[], productText: string, variantText?: st
   };
 }
 
-// --------------------------------------------------------------------------
-//  Ações
-// --------------------------------------------------------------------------
-
-async function logSaleFromWhatsApp(parsed: Extract<Intent, { intent: "log_sale" }>): Promise<string> {
-  if (!parsed.product_text) {
-    return 'Não entendi qual produto foi vendido. Pode mandar de novo, tipo "vendi 1 body canelado azul pra Priscila"?';
-  }
-  const qty = parsed.qty && parsed.qty > 0 ? Math.floor(parsed.qty) : 1;
-
-  const products = await adminListProducts();
-  const match = matchProduct(products, parsed.product_text, parsed.variant_text);
-
-  if (match.type === "none") {
-    return `Não achei nenhum produto parecido com "${parsed.product_text}". Confere o nome?`;
-  }
-  if (match.type === "ambiguous_product") {
-    return `Achei mais de um produto parecido: ${match.names.join(", ")}. Qual deles?`;
-  }
-  if (match.type === "ambiguous_variant") {
-    return `"${match.product.name}" tem mais de uma variação: ${match.options.join(", ")}. Qual delas?`;
-  }
-
-  const { product, variant } = match;
-  const label = variantLabel(variant);
-  if (variant.stock < qty) {
-    return `Só tem ${variant.stock} em estoque de ${product.name}${label ? ` (${label})` : ""}. Confirma a quantidade?`;
-  }
-
-  try {
-    const order = await createOrder({
-      email: POS_FALLBACK_EMAIL,
-      name: parsed.customer_name?.trim() || "Cliente da loja",
-      phone: null,
-      userId: null,
-      deliveryMode: "pickup",
-      address: null,
-      shipping: { company: "", service: "Venda na loja", price: 0 },
-      lines: [{ variantId: variant.id, qty }],
-      channel: "pos",
-      notes: "Registrado via WhatsApp",
-      posPayMode: "cash",
-    });
-    await approveOrder(order.id, { mpStatus: "manual", method: "dinheiro" });
-    await logAction({
-      action: "pos.sale",
-      entity: "order",
-      entityId: order.id,
-      summary: `Venda na loja ${order.number} — ${formatBRL(order.total)} (via WhatsApp)`,
-    });
-    revalidatePath("/admin/pdv");
-    revalidatePath("/admin/pedidos");
-    revalidatePath("/admin");
-
-    return [
-      "✅ Venda registrada!",
-      `Pedido ${order.number} — ${formatBRL(order.total)}`,
-      `${qty}x ${product.name}${label ? ` (${label})` : ""}`,
-      parsed.customer_name ? `Cliente: ${parsed.customer_name}` : null,
-    ]
-      .filter(Boolean)
-      .join("\n");
-  } catch (err) {
-    console.error("[whatsapp-bot] erro ao registrar venda", err);
-    return "Deu erro ao registrar a venda. Tenta de novo ou usa o painel.";
-  }
+function matchOrderByNumber(orders: Order[], numberText: string): Order | undefined {
+  const clean = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const q = clean(numberText);
+  if (!q) return undefined;
+  return orders.find((o) => clean(o.number) === q) ?? orders.find((o) => clean(o.number).endsWith(q));
 }
 
 const isSold = (o: Order) =>
@@ -315,7 +211,84 @@ function rangeFor(period: string): { start: Date; end: Date; label: string } {
   return { start: startOfBrDay(now), end: new Date(now.getTime() + 1), label: "hoje" };
 }
 
-async function answerSalesQuery(period: string): Promise<string> {
+// --------------------------------------------------------------------------
+//  Ferramentas (executadas em código, resultado estruturado pro Claude)
+// --------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+async function toolLogSale(input: any): Promise<object> {
+  const productText = typeof input.product_text === "string" ? input.product_text : "";
+  if (!productText) return { ok: false, reason: "missing_product" };
+  const qty = Number.isFinite(input.qty) && input.qty > 0 ? Math.floor(input.qty) : 1;
+  const customerName = typeof input.customer_name === "string" ? input.customer_name.trim() : "";
+  const variantText = typeof input.variant_text === "string" ? input.variant_text : undefined;
+
+  const products = await adminListProducts();
+  const match = matchProduct(products, productText, variantText);
+
+  if (match.type === "none") return { ok: false, reason: "not_found", query: productText };
+  if (match.type === "ambiguous_product") return { ok: false, reason: "ambiguous_product", options: match.names };
+  if (match.type === "ambiguous_variant") {
+    return { ok: false, reason: "ambiguous_variant", product_name: match.product.name, options: match.options };
+  }
+
+  const { product, variant } = match;
+  const label = variantLabel(variant);
+  if (variant.stock < qty) {
+    return {
+      ok: false,
+      reason: "insufficient_stock",
+      product_name: product.name,
+      variant_label: label || null,
+      available: variant.stock,
+      requested: qty,
+    };
+  }
+
+  try {
+    const order = await createOrder({
+      email: POS_FALLBACK_EMAIL,
+      name: customerName || "Cliente da loja",
+      phone: null,
+      userId: null,
+      deliveryMode: "pickup",
+      address: null,
+      shipping: { company: "", service: "Venda na loja", price: 0 },
+      lines: [{ variantId: variant.id, qty }],
+      channel: "pos",
+      notes: "Registrado via WhatsApp",
+      posPayMode: "cash",
+    });
+    await approveOrder(order.id, { mpStatus: "manual", method: "dinheiro" });
+    await logAction({
+      action: "pos.sale",
+      entity: "order",
+      entityId: order.id,
+      summary: `Venda na loja ${order.number} — ${formatBRL(order.total)} (via WhatsApp)`,
+    });
+    revalidatePath("/admin/pdv");
+    revalidatePath("/admin/pedidos");
+    revalidatePath("/admin");
+
+    return {
+      ok: true,
+      order_number: order.number,
+      total: order.total,
+      total_formatted: formatBRL(order.total),
+      qty,
+      product_name: product.name,
+      variant_label: label || null,
+      customer_name: customerName || null,
+    };
+  } catch (err) {
+    console.error("[whatsapp-bot] erro ao registrar venda", err);
+    return { ok: false, reason: "error" };
+  }
+}
+
+async function toolGetSalesTotal(input: any): Promise<object> {
+  const period = typeof input.period === "string" ? input.period : "today";
   const { start, end, label } = rangeFor(period);
   const orders = await listAllOrders();
   const inRange = orders.filter((o) => {
@@ -323,9 +296,231 @@ async function answerSalesQuery(period: string): Promise<string> {
     const created = new Date(o.created_at);
     return created >= start && created < end;
   });
-  if (inRange.length === 0) return `Nenhuma venda ${label}.`;
   const total = inRange.reduce((s, o) => s + o.total, 0);
-  return `📊 Vendido ${label}: ${formatBRL(total)} em ${inRange.length} pedido${inRange.length > 1 ? "s" : ""}.`;
+  return {
+    period_label: label,
+    total,
+    total_formatted: formatBRL(total),
+    order_count: inRange.length,
+    orders: inRange.map((o) => ({
+      number: o.number,
+      total_formatted: formatBRL(o.total),
+      customer_name: o.customer_name,
+      created_at: o.created_at,
+      items: o.items.map((it) => ({ product_name: it.product_name, variant_label: it.variant_label, qty: it.qty })),
+    })),
+  };
+}
+
+async function toolGetStock(input: any): Promise<object> {
+  const productText = typeof input.product_text === "string" ? input.product_text : "";
+  if (!productText) return { found: false, reason: "missing_product" };
+  const variantText = typeof input.variant_text === "string" ? input.variant_text : undefined;
+  const products = await adminListProducts();
+  const match = matchProduct(products, productText, variantText);
+  if (match.type === "ok") {
+    return {
+      found: true,
+      product_name: match.product.name,
+      variant_label: variantLabel(match.variant) || null,
+      stock: match.variant.stock,
+    };
+  }
+  if (match.type === "ambiguous_product") return { found: false, reason: "ambiguous_product", options: match.names };
+  if (match.type === "ambiguous_variant") {
+    return { found: false, reason: "ambiguous_variant", product_name: match.product.name, options: match.options };
+  }
+  return { found: false, reason: "not_found", query: productText };
+}
+
+async function toolGetOrder(input: any): Promise<object> {
+  const orderNumber = typeof input.order_number === "string" ? input.order_number : "";
+  if (!orderNumber) return { found: false, reason: "missing_order_number" };
+  const orders = await listAllOrders();
+  const order = matchOrderByNumber(orders, orderNumber);
+  if (!order) return { found: false, reason: "not_found", query: orderNumber };
+  return {
+    found: true,
+    number: order.number,
+    status: order.status,
+    channel: order.channel,
+    total_formatted: formatBRL(order.total),
+    customer_name: order.customer_name,
+    email: order.email,
+    created_at: order.created_at,
+    items: order.items.map((it) => ({
+      product_name: it.product_name,
+      variant_label: it.variant_label,
+      qty: it.qty,
+      unit_price_formatted: formatBRL(it.unit_price),
+    })),
+  };
+}
+
+async function toolGetTopProducts(input: any): Promise<object> {
+  const period = typeof input.period === "string" ? input.period : "month";
+  const limit = Number.isFinite(input.limit) && input.limit > 0 ? Math.min(Math.floor(input.limit), 20) : 5;
+
+  const orders = await listAllOrders();
+  let filtered = orders.filter(isSold);
+  let label = "no total";
+  if (period !== "all") {
+    const r = rangeFor(period);
+    label = r.label;
+    filtered = filtered.filter((o) => {
+      const created = new Date(o.created_at);
+      return created >= r.start && created < r.end;
+    });
+  }
+
+  const agg = new Map<string, { product_name: string; variant_label: string | null; qty: number; revenue: number }>();
+  for (const o of filtered) {
+    for (const it of o.items) {
+      const key = `${it.product_name}|${it.variant_label ?? ""}`;
+      const cur = agg.get(key) ?? { product_name: it.product_name, variant_label: it.variant_label ?? null, qty: 0, revenue: 0 };
+      cur.qty += it.qty;
+      cur.revenue += it.unit_price * it.qty;
+      agg.set(key, cur);
+    }
+  }
+
+  const items = [...agg.values()]
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, limit)
+    .map((i) => ({ ...i, revenue_formatted: formatBRL(i.revenue) }));
+
+  return { period_label: label, items };
+}
+
+async function executeTool(name: string, input: any): Promise<object> {
+  switch (name) {
+    case "log_sale":
+      return toolLogSale(input ?? {});
+    case "get_sales_total":
+      return toolGetSalesTotal(input ?? {});
+    case "get_stock":
+      return toolGetStock(input ?? {});
+    case "get_order":
+      return toolGetOrder(input ?? {});
+    case "get_top_products":
+      return toolGetTopProducts(input ?? {});
+    default:
+      return { error: "unknown_tool" };
+  }
+}
+
+const TOOLS = [
+  {
+    name: "log_sale",
+    description: "Registra que um produto foi vendido na loja (baixa estoque, cria o pedido).",
+    input_schema: {
+      type: "object",
+      properties: {
+        product_text: { type: "string", description: "Nome/descrição do produto, ex.: 'body canelado'." },
+        variant_text: { type: "string", description: "Cor e/ou tamanho, ex.: 'azul claro P'." },
+        qty: { type: "integer", description: "Quantidade vendida (padrão 1)." },
+        customer_name: { type: "string", description: "Nome do cliente, se mencionado." },
+      },
+      required: ["product_text"],
+    },
+  },
+  {
+    name: "get_sales_total",
+    description: "Consulta o total vendido (pedidos pagos) num período.",
+    input_schema: {
+      type: "object",
+      properties: {
+        period: { type: "string", enum: ["today", "yesterday", "week", "month"], description: "Período (padrão today)." },
+      },
+      required: ["period"],
+    },
+  },
+  {
+    name: "get_stock",
+    description: "Consulta o estoque disponível de um produto/variação no catálogo.",
+    input_schema: {
+      type: "object",
+      properties: {
+        product_text: { type: "string", description: "Nome/descrição do produto." },
+        variant_text: { type: "string", description: "Cor e/ou tamanho, se mencionado." },
+      },
+      required: ["product_text"],
+    },
+  },
+  {
+    name: "get_order",
+    description: "Busca os detalhes de um pedido específico pelo número (ex.: 'MI-001070' ou só '1070').",
+    input_schema: {
+      type: "object",
+      properties: {
+        order_number: { type: "string", description: "Número do pedido, com ou sem o prefixo MI-." },
+      },
+      required: ["order_number"],
+    },
+  },
+  {
+    name: "get_top_products",
+    description: "Lista os produtos mais vendidos (por quantidade) num período.",
+    input_schema: {
+      type: "object",
+      properties: {
+        period: { type: "string", enum: ["today", "week", "month", "all"], description: "Período (padrão month)." },
+        limit: { type: "integer", description: "Quantos itens listar (padrão 5)." },
+      },
+    },
+  },
+];
+
+// --------------------------------------------------------------------------
+//  Conversa com o Claude
+// --------------------------------------------------------------------------
+
+const SYSTEM_PROMPT = `Você é o assistente interno da miilo, uma lojinha de roupas, brinquedos e livros \
+infantis, respondendo por WhatsApp só para os admins da loja (não é atendimento ao cliente).
+
+Regras:
+- Respostas curtas e diretas — é WhatsApp, não e-mail. Sem saudação longa nem assinatura.
+- Tom informal e direto, em português do Brasil.
+- Emojis com moderação: ✅ pra confirmação de venda, 📊 pra números, 🤔 quando não entender.
+- Use as ferramentas disponíveis pra QUALQUER pergunta sobre vendas, estoque ou pedidos — nunca \
+invente números, produtos ou valores.
+- Sempre que uma ferramenta devolver um campo "*_formatted" (já em R$, formato brasileiro), use \
+esse valor exatamente como veio — não recalcule nem arredonde.
+- Ao responder sobre vendas de um período, cite os pedidos/itens de forma resumida (não precisa \
+listar tudo em detalhe) pra que perguntas de acompanhamento na mesma conversa (ex.: "e quais foram \
+os itens?", "só teve esse pedido?") possam ser respondidas usando o que você já disse, sem precisar \
+repetir a consulta.
+- Se o pedido de venda (log_sale) vier ambíguo ou faltando informação, pergunte de volta em vez de \
+adivinhar.
+- Se a pergunta não tiver nada a ver com a loja (vendas, estoque, pedidos), diga educadamente que só \
+ajuda com esses assuntos.`;
+
+async function callClaude(messages: any[]): Promise<any | null> {
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 500,
+        system: SYSTEM_PROMPT,
+        messages,
+        tools: TOOLS,
+      }),
+    });
+    if (!res.ok) {
+      console.error("[whatsapp-bot] Anthropic respondeu", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    console.error("[whatsapp-bot] erro ao chamar Claude", err);
+    return null;
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -335,12 +530,47 @@ async function answerSalesQuery(period: string): Promise<string> {
 const HELP_TEXT =
   'Não entendi 🤔 Manda algo tipo "vendi 1 body canelado azul pra Priscila" ou "quanto vendi hoje?".';
 
-export async function handleWhatsAppMessage(text: string): Promise<string> {
+export async function handleWhatsAppMessage(text: string, phone: string): Promise<string> {
   const trimmed = text.trim().slice(0, MAX_MESSAGE_LENGTH);
   if (!trimmed) return HELP_TEXT;
+  if (!process.env.ANTHROPIC_API_KEY) return HELP_TEXT;
 
-  const parsed = await interpretMessage(trimmed);
-  if (parsed.intent === "query_sales") return answerSalesQuery(parsed.period ?? "today");
-  if (parsed.intent === "log_sale") return logSaleFromWhatsApp(parsed);
-  return HELP_TEXT;
+  const history = await loadHistory(phone);
+  const messages: any[] = [...history, { role: "user", content: trimmed }];
+
+  let finalText = HELP_TEXT;
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const res = await callClaude(messages);
+    if (!res) break;
+
+    const blocks: any[] = res.content ?? [];
+    const toolUses = blocks.filter((b) => b.type === "tool_use");
+    const textOut = blocks
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+
+    if (toolUses.length === 0) {
+      finalText = textOut || HELP_TEXT;
+      break;
+    }
+
+    if (textOut) finalText = textOut;
+    messages.push({ role: "assistant", content: blocks });
+
+    const toolResults = [];
+    for (const tu of toolUses) {
+      const result = await executeTool(tu.name, tu.input);
+      toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: JSON.stringify(result) });
+    }
+    messages.push({ role: "user", content: toolResults });
+  }
+
+  await saveTurns(phone, [
+    { role: "user", content: trimmed },
+    { role: "assistant", content: finalText },
+  ]);
+
+  return finalText;
 }

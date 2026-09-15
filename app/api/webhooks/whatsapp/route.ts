@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      const reply = await handleWhatsAppMessage(msg.text.body);
+      const reply = await handleWhatsAppMessage(msg.text.body, from);
       await sendWhatsAppText(from, reply);
     } catch (err) {
       console.error("[whatsapp webhook] erro ao processar mensagem", err);
