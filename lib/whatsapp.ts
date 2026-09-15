@@ -128,15 +128,15 @@ async function sendWhatsAppTemplate(to: string, params: string[]): Promise<boole
 
 /**
  * Parâmetros do template "nova_venda" (ver instruções de cadastro no chat):
- * {{1}} número do pedido · {{2}} valor total · {{3}} canal · {{4}} itens.
+ * {{1}} número do pedido · {{2}} valor total · {{3}} nome do cliente ·
+ * {{4}} e-mail do cliente · {{5}} itens.
  */
 function saleTemplateParams(order: Order): string[] {
-  const canal = order.channel === "pos" ? "Venda na loja" : "Loja online";
   const itens = order.items
     .map((it) => `${it.qty}x ${it.product_name}${it.variant_label ? ` (${it.variant_label})` : ""}`)
     .join(" · ");
 
-  return [order.number, formatBRL(order.total), canal, itens];
+  return [order.number, formatBRL(order.total), order.customer_name || "Cliente da loja", order.email, itens];
 }
 
 /** Avisa o(s) número(s) configurado(s) que um pedido acabou de ser pago. */

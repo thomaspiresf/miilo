@@ -282,35 +282,37 @@ const isSold = (o: Order) =>
   ["paid", "shipped", "delivered"].includes(o.status) ||
   (o.channel === "pos" && o.status === "pending");
 
+// O servidor roda em UTC — usar setHours() daria meia-noite em UTC (21h em
+// Brasília), não meia-noite local. Todo cálculo de dia aqui é feito no
+// relógio de Brasília (UTC-3, sem horário de verão desde 2019).
+const BR_OFFSET_MS = 3 * 60 * 60 * 1000;
+const toBrWallClock = (d: Date) => new Date(d.getTime() - BR_OFFSET_MS);
+const fromBrWallClock = (d: Date) => new Date(d.getTime() + BR_OFFSET_MS);
+const startOfBrDay = (d: Date) => {
+  const wall = toBrWallClock(d);
+  wall.setUTCHours(0, 0, 0, 0);
+  return fromBrWallClock(wall);
+};
+
 function rangeFor(period: string): { start: Date; end: Date; label: string } {
   const now = new Date();
-  const startOfDay = (d: Date) => {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x;
-  };
   if (period === "yesterday") {
-    return {
-      start: startOfDay(new Date(now.getTime() - 86_400_000)),
-      end: startOfDay(now),
-      label: "ontem",
-    };
+    const todayStart = startOfBrDay(now);
+    return { start: new Date(todayStart.getTime() - 86_400_000), end: todayStart, label: "ontem" };
   }
   if (period === "week") {
     return {
-      start: startOfDay(new Date(now.getTime() - 6 * 86_400_000)),
+      start: startOfBrDay(new Date(now.getTime() - 6 * 86_400_000)),
       end: new Date(now.getTime() + 1),
       label: "nos últimos 7 dias",
     };
   }
   if (period === "month") {
-    return {
-      start: new Date(now.getFullYear(), now.getMonth(), 1),
-      end: new Date(now.getTime() + 1),
-      label: "neste mês",
-    };
+    const wall = toBrWallClock(now);
+    const firstOfMonth = new Date(Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), 1));
+    return { start: fromBrWallClock(firstOfMonth), end: new Date(now.getTime() + 1), label: "neste mês" };
   }
-  return { start: startOfDay(now), end: new Date(now.getTime() + 1), label: "hoje" };
+  return { start: startOfBrDay(now), end: new Date(now.getTime() + 1), label: "hoje" };
 }
 
 async function answerSalesQuery(period: string): Promise<string> {
