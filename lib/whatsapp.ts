@@ -1,5 +1,6 @@
 import "server-only";
 import { formatBRL } from "@/lib/format";
+import { hasOpenServiceWindow } from "@/lib/whatsapp-shared";
 import type { Order } from "@/lib/types";
 
 /**
@@ -143,10 +144,34 @@ function saleTemplateParams(order: Order): string[] {
   return [order.number, formatBRL(order.total), order.customer_name || "Cliente da loja", order.email, itens];
 }
 
-/** Avisa o(s) número(s) configurado(s) que um pedido acabou de ser pago. */
+/** Mesmo texto do template "nova_venda", mas como mensagem livre (ver notifySale). */
+function saleMessageText(order: Order): string {
+  const [number, total, customer, email, itens] = saleTemplateParams(order);
+  return `🛍️ Nova venda confirmada na loja miilo! Pedido número ${number}, no valor total de ${total}. Comprado por ${customer}, e-mail de contato ${email}. Item vendido: ${itens}. Obrigado por mais essa venda!`;
+}
+
+/**
+ * Avisa o(s) número(s) configurado(s) que um pedido acabou de ser pago.
+ *
+ * Prioriza texto livre (sendWhatsAppText) quando o número já tem uma janela
+ * de 24h aberta (mandou mensagem pro bot recentemente) — funciona sem
+ * template aprovado nem forma de pagamento cadastrada na Meta, então o
+ * aviso já sai mesmo enquanto o "nova_venda" ainda não foi aprovado. Fora da
+ * janela, cai pro template (única forma de iniciar conversa fora dela).
+ */
 export async function notifySale(order: Order): Promise<void> {
   const numbers = notifyNumbers();
   if (numbers.length === 0) return;
   const params = saleTemplateParams(order);
-  await Promise.all(numbers.map((to) => sendWhatsAppTemplate(to, params)));
+  const text = saleMessageText(order);
+
+  await Promise.all(
+    numbers.map(async (to) => {
+      if (await hasOpenServiceWindow(to)) {
+        const sent = await sendWhatsAppText(to, text);
+        if (sent.ok) return;
+      }
+      await sendWhatsAppTemplate(to, params);
+    }),
+  );
 }

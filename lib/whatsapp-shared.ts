@@ -103,6 +103,34 @@ export async function attachWamid(phone: string, wamid: string): Promise<void> {
   }
 }
 
+const SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A Cloud API só deixa mandar texto livre (sem template aprovado) dentro da
+ * janela de 24h aberta pela ÚLTIMA mensagem que esse número mandou pro bot —
+ * fora dela, só mensagem de template. Usado pelo aviso de venda
+ * (lib/whatsapp.ts notifySale) pra mandar texto livre quando dá, em vez de
+ * depender só do template (que pode ainda não estar aprovado).
+ */
+export async function hasOpenServiceWindow(phone: string): Promise<boolean> {
+  if (!hasSupabaseAdmin()) return false;
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("whatsapp_conversations")
+      .select("created_at")
+      .eq("phone", phone)
+      .eq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return false;
+    return Date.now() - new Date(data.created_at).getTime() < SERVICE_WINDOW_MS;
+  } catch {
+    return false;
+  }
+}
+
 const VALID_STATUSES = new Set(["sent", "delivered", "read", "failed"]);
 
 /** Chamado pelo webhook quando a Meta manda uma atualização de status (entregue/lida/falhou). */
