@@ -422,6 +422,7 @@ async function toolGetOrder(input: any): Promise<object> {
 async function toolGetTopProducts(input: any): Promise<object> {
   const period = typeof input.period === "string" ? input.period : "month";
   const limit = Number.isFinite(input.limit) && input.limit > 0 ? Math.min(Math.floor(input.limit), 20) : 5;
+  const category = typeof input.category === "string" ? input.category : null;
 
   const orders = await listAllOrders();
   let filtered = orders.filter(isSold);
@@ -435,23 +436,48 @@ async function toolGetTopProducts(input: any): Promise<object> {
     });
   }
 
-  const agg = new Map<string, { product_name: string; variant_label: string | null; qty: number; revenue: number }>();
+  // Ranking é por PRODUTO (soma todas as variações) — agrupar por
+  // produto+variação fazia um item popular com várias cores/tamanhos
+  // (poucas unidades cada) ficar escondido atrás de um item de variação
+  // única com menos vendas no total.
+  let categoryByName: Map<string, string> | null = null;
+  if (category) {
+    const products = await adminListProducts();
+    categoryByName = new Map(products.map((p) => [normalize(p.name), p.category?.kind ?? ""]));
+  }
+
+  const agg = new Map<
+    string,
+    { product_name: string; qty: number; revenue: number; variants: Map<string, number> }
+  >();
   for (const o of filtered) {
     for (const it of o.items) {
-      const key = `${it.product_name}|${it.variant_label ?? ""}`;
-      const cur = agg.get(key) ?? { product_name: it.product_name, variant_label: it.variant_label ?? null, qty: 0, revenue: 0 };
+      if (categoryByName && categoryByName.get(normalize(it.product_name)) !== category) continue;
+      const cur = agg.get(it.product_name) ?? {
+        product_name: it.product_name,
+        qty: 0,
+        revenue: 0,
+        variants: new Map<string, number>(),
+      };
       cur.qty += it.qty;
       cur.revenue += it.unit_price * it.qty;
-      agg.set(key, cur);
+      const vLabel = it.variant_label || "Único";
+      cur.variants.set(vLabel, (cur.variants.get(vLabel) ?? 0) + it.qty);
+      agg.set(it.product_name, cur);
     }
   }
 
   const items = [...agg.values()]
     .sort((a, b) => b.qty - a.qty)
     .slice(0, limit)
-    .map((i) => ({ ...i, revenue_formatted: formatBRL(i.revenue) }));
+    .map((i) => ({
+      product_name: i.product_name,
+      qty: i.qty,
+      revenue_formatted: formatBRL(i.revenue),
+      variants: [...i.variants.entries()].map(([variant_label, qty]) => ({ variant_label, qty })),
+    }));
 
-  return { period_label: label, items };
+  return { period_label: label, category, items };
 }
 
 async function executeTool(name: string, input: any): Promise<object> {
@@ -551,12 +577,19 @@ const TOOLS = [
   },
   {
     name: "get_top_products",
-    description: "Lista os produtos mais vendidos (por quantidade) num período.",
+    description:
+      "Lista os produtos mais vendidos (por quantidade, somando todas as variações de cada produto) " +
+      "num período — opcionalmente filtrando por categoria (roupas/brinquedos/livros).",
     input_schema: {
       type: "object",
       properties: {
         period: { type: "string", enum: ["today", "week", "month", "all"], description: "Período (padrão month)." },
         limit: { type: "integer", description: "Quantos itens listar (padrão 5)." },
+        category: {
+          type: "string",
+          enum: ["roupas", "brinquedos", "livros"],
+          description: "Filtra só essa categoria — use quando a pessoa perguntar 'e as roupas?' etc.",
+        },
       },
     },
   },
@@ -599,7 +632,10 @@ e recebido ok:true na resposta dessa mesma mensagem — mesmo que a conversa já
 que a pessoa quer. "Confirmar" um pedido de venda sem chamar a ferramenta é o pior erro possível aqui \
 (mexe com dinheiro e estoque de verdade).
 - Se perguntarem por um dia específico ("quanto vendi dia 13?"), use get_sales_total com o campo \
-"date" (AAAA-MM-DD) em vez de "period" — assuma o mês/ano atual quando só o dia for dito.`;
+"date" (AAAA-MM-DD) em vez de "period" — assuma o mês/ano atual quando só o dia for dito.
+- Se, depois de um ranking de mais vendidos, perguntarem sobre uma categoria específica ("e as \
+roupas?", "e os brinquedos?"), chame get_top_products DE NOVO com o campo "category" — não tente \
+adivinhar a partir da lista que você já mostrou (ela pode não ter nenhum item dessa categoria).`;
 
 function systemPromptWithDate(): string {
   return `${SYSTEM_PROMPT}\n\nHoje é ${getBrDateLabel(new Date())} (horário de Brasília).`;
