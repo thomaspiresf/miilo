@@ -532,7 +532,11 @@ pergunte de volta em vez de adivinhar — e quando a pessoa responder qual das o
 chame a MESMA ferramenta de novo imediatamente com o produto e a opção escolhida (copie o texto da \
 opção exatamente como veio na lista), em vez de repetir a mesma pergunta.
 - Se a pergunta não tiver nada a ver com a loja (vendas, estoque, pedidos), diga educadamente que só \
-ajuda com esses assuntos.`;
+ajuda com esses assuntos.
+- NUNCA diga que uma venda foi registrada, nem invente um número de pedido, sem ter chamado log_sale \
+e recebido ok:true na resposta dessa mesma mensagem — mesmo que a conversa já tenha deixado claro o \
+que a pessoa quer. "Confirmar" um pedido de venda sem chamar a ferramenta é o pior erro possível aqui \
+(mexe com dinheiro e estoque de verdade).`;
 
 async function callClaude(messages: any[]): Promise<any | null> {
   try {
@@ -578,6 +582,7 @@ export async function handleWhatsAppMessage(text: string, phone: string): Promis
   const messages: any[] = [...history, { role: "user", content: trimmed }];
 
   let finalText = HELP_TEXT;
+  let saleConfirmed = false;
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const res = await callClaude(messages);
     if (!res) break;
@@ -601,9 +606,26 @@ export async function handleWhatsAppMessage(text: string, phone: string): Promis
     const toolResults = [];
     for (const tu of toolUses) {
       const result = await executeTool(tu.name, tu.input);
+      if (tu.name === "log_sale" && (result as { ok?: boolean }).ok === true) saleConfirmed = true;
       toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: JSON.stringify(result) });
     }
     messages.push({ role: "user", content: toolResults });
+  }
+
+  // Trava de segurança: NUNCA deixar passar uma resposta que pareça confirmar
+  // uma venda (o "✅" que o prompt reserva pra isso) se log_sale não voltou
+  // ok:true de verdade nesse turno — evita o bot "alucinar" um pedido que não
+  // existe (já aconteceu: Claude respondeu com confirmação sem chamar a
+  // ferramenta nenhuma vez).
+  if (finalText.includes("✅") && !saleConfirmed) {
+    console.error("[whatsapp-bot] resposta parecia confirmar venda sem log_sale ok:true — bloqueada", {
+      phone,
+      trimmed,
+      finalText,
+    });
+    finalText =
+      "Peraí, não registrei nenhuma venda ainda — deu uma falha aqui do meu lado antes de confirmar. " +
+      'Manda de novo, tipo "vendi 1 body canelado azul pra Priscila"?';
   }
 
   await saveTurns(phone, [
