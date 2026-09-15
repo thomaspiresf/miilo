@@ -105,6 +105,17 @@ export async function attachWamid(phone: string, wamid: string): Promise<void> {
 
 const SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// Celular BR tem 9 dígitos locais desde a migração do "nono dígito", mas o
+// número configurado à mão (WHATSAPP_NOTIFY_NUMBERS) e o wa_id que a Meta
+// manda no webhook (whatsapp_conversations.phone) nem sempre concordam nessa
+// contagem pro mesmo número físico — gera as duas variantes pra comparar.
+function brPhoneVariants(phone: string): string[] {
+  const m = /^55(\d{2})(\d{8,9})$/.exec(phone);
+  if (!m) return [phone];
+  const [, ddd, local] = m;
+  return local.length === 9 ? [phone, `55${ddd}${local.slice(1)}`] : [phone, `55${ddd}9${local}`];
+}
+
 /**
  * A Cloud API só deixa mandar texto livre (sem template aprovado) dentro da
  * janela de 24h aberta pela ÚLTIMA mensagem que esse número mandou pro bot —
@@ -119,7 +130,7 @@ export async function hasOpenServiceWindow(phone: string): Promise<boolean> {
     const { data } = await admin
       .from("whatsapp_conversations")
       .select("created_at")
-      .eq("phone", phone)
+      .in("phone", brPhoneVariants(phone))
       .eq("role", "user")
       .order("created_at", { ascending: false })
       .limit(1)
