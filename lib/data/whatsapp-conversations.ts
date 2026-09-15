@@ -18,12 +18,14 @@ export type ConversationMessage = {
   role: "user" | "assistant";
   content: string;
   sender: "bot" | "human" | null;
+  actor_name: string | null;
   status: MessageStatus;
   created_at: string;
 };
 
 export type ConversationSummary = {
   phone: string;
+  contactName: string | null;
   lastMessage: string;
   lastRole: "user" | "assistant";
   lastAt: string;
@@ -51,6 +53,7 @@ export async function listConversationThreads(): Promise<ConversationSummary[]> 
     if (!existing) {
       byPhone.set(row.phone, {
         phone: row.phone,
+        contactName: null,
         lastMessage: row.content,
         lastRole: row.role,
         lastAt: row.created_at,
@@ -62,9 +65,16 @@ export async function listConversationThreads(): Promise<ConversationSummary[]> 
     }
   }
 
-  const { data: pauses } = await admin.from("whatsapp_bot_pauses").select("phone");
+  const [{ data: pauses }, { data: contacts }] = await Promise.all([
+    admin.from("whatsapp_bot_pauses").select("phone"),
+    admin.from("whatsapp_contacts").select("phone, name").in("phone", [...byPhone.keys()]),
+  ]);
   const pausedSet = new Set((pauses ?? []).map((p) => p.phone as string));
-  for (const thread of byPhone.values()) thread.paused = pausedSet.has(thread.phone);
+  const nameByPhone = new Map((contacts ?? []).map((c) => [c.phone as string, c.name as string | null]));
+  for (const thread of byPhone.values()) {
+    thread.paused = pausedSet.has(thread.phone);
+    thread.contactName = nameByPhone.get(thread.phone) ?? null;
+  }
 
   return [...byPhone.values()].sort((a, b) => (a.lastAt < b.lastAt ? 1 : -1));
 }
@@ -74,12 +84,20 @@ export async function getConversationMessages(phone: string): Promise<Conversati
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("whatsapp_conversations")
-    .select("id, role, content, sender, status, created_at")
+    .select("id, role, content, sender, actor_name, status, created_at")
     .eq("phone", phone)
     .order("created_at", { ascending: true })
     .limit(500);
   if (error || !data) return [];
   return data as ConversationMessage[];
+}
+
+/** Nome de exibição do WhatsApp da pessoa (visto no webhook), se já tiver chegado alguma mensagem dela. */
+export async function getContactName(phone: string): Promise<string | null> {
+  if (!hasSupabaseAdmin()) return null;
+  const admin = createAdminClient();
+  const { data } = await admin.from("whatsapp_contacts").select("name").eq("phone", phone).maybeSingle();
+  return data?.name ?? null;
 }
 
 export async function isConversationPaused(phone: string): Promise<boolean> {
@@ -107,7 +125,7 @@ export async function resumeConversation(phone: string): Promise<void> {
 export async function sendManualReply(
   phone: string,
   text: string,
-  actorEmail?: string | null,
+  actor?: { email: string; name: string | null },
 ): Promise<{ ok: boolean }> {
   if (!hasSupabaseAdmin()) return { ok: false };
   const sent = await sendWhatsAppText(phone, text);
@@ -118,9 +136,10 @@ export async function sendManualReply(
     role: "assistant",
     content: text,
     sender: "human",
+    actor_name: actor?.name || actor?.email || null,
     wamid: sent.id,
     status: sent.id ? "sent" : null,
   });
-  await pauseConversation(phone, actorEmail);
+  await pauseConversation(phone, actor?.email);
   return { ok: true };
 }

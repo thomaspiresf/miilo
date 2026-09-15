@@ -116,6 +116,22 @@ export async function updateMessageStatus(wamid: string, status: string): Promis
   }
 }
 
+/**
+ * O payload do webhook traz o nome de exibição do WhatsApp de quem mandou a
+ * mensagem (contacts[0].profile.name) — não é uma foto (a Cloud API não
+ * expõe foto de perfil de terceiros, só o nome), mas dá pra mostrar esse
+ * nome no painel em vez de só o número. Guardamos a última versão vista.
+ */
+export async function upsertContactName(phone: string, name: string | undefined | null): Promise<void> {
+  if (!hasSupabaseAdmin() || !name) return;
+  try {
+    const admin = createAdminClient();
+    await admin.from("whatsapp_contacts").upsert({ phone, name, updated_at: new Date().toISOString() });
+  } catch (err) {
+    console.error("[whatsapp] erro ao salvar nome do contato", err);
+  }
+}
+
 // --------------------------------------------------------------------------
 //  Casamento com o catálogo
 // --------------------------------------------------------------------------

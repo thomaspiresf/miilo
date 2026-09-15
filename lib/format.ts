@@ -43,6 +43,12 @@ const DATETIME = new Intl.DateTimeFormat("pt-BR", {
   timeZone: BR_TIME_ZONE,
 });
 
+const TIME = new Intl.DateTimeFormat("pt-BR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: BR_TIME_ZONE,
+});
+
 export function formatDate(value: string | Date | null | undefined) {
   if (!value) return "—";
   return DATE.format(new Date(value));
@@ -51,6 +57,12 @@ export function formatDate(value: string | Date | null | undefined) {
 export function formatDateTime(value: string | Date | null | undefined) {
   if (!value) return "—";
   return DATETIME.format(new Date(value));
+}
+
+/** Só hora:minuto (estilo balão de chat, ex.: "14:32") — em horário de Brasília. */
+export function formatTime(value: string | Date | null | undefined) {
+  if (!value) return "—";
+  return TIME.format(new Date(value));
 }
 
 export function discountPercent(price: number, compareAt: number | null | undefined) {

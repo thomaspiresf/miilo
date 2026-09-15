@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { listConversationThreads } from "@/lib/data/whatsapp-conversations";
 import { formatDateTime, formatWhatsAppPhone } from "@/lib/format";
+import { ContactAvatar } from "@/components/admin/contact-avatar";
 
 export default async function ConversasPage() {
   await requireAdmin();
@@ -28,23 +29,25 @@ export default async function ConversasPage() {
             <li key={t.phone}>
               <Link
                 href={`/admin/conversas/${t.phone}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-black/[0.02]"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02]"
               >
-                <div className="min-w-0">
+                <ContactAvatar name={t.contactName} phone={t.phone} size={44} />
+                <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 text-sm font-semibold">
-                    {formatWhatsAppPhone(t.phone)}
+                    <span className="truncate">{t.contactName || formatWhatsAppPhone(t.phone)}</span>
                     {t.paused && (
-                      <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
+                      <span className="shrink-0 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
                         Bot pausado
                       </span>
                     )}
                   </p>
+                  {t.contactName && <p className="text-xs text-muted">{formatWhatsAppPhone(t.phone)}</p>}
                   <p className="mt-0.5 truncate text-sm text-muted">
                     {t.lastRole === "assistant" ? "Você: " : ""}
                     {t.lastMessage}
                   </p>
                 </div>
-                <span className="shrink-0 text-xs text-muted">{formatDateTime(t.lastAt)}</span>
+                <span className="shrink-0 self-start text-xs text-muted">{formatDateTime(t.lastAt)}</span>
               </Link>
             </li>
           ))}

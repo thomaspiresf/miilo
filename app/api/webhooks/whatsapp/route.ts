@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyMetaSignature, isAuthorizedWhatsAppNumber, handleWhatsAppMessage } from "@/lib/whatsapp-bot";
 import { handlePublicMessage } from "@/lib/whatsapp-public-bot";
-import { attachWamid, updateMessageStatus } from "@/lib/whatsapp-shared";
+import { attachWamid, updateMessageStatus, upsertContactName } from "@/lib/whatsapp-shared";
 import { sendWhatsAppText } from "@/lib/whatsapp";
 
 /**
@@ -60,9 +60,13 @@ export async function POST(request: Request) {
   const messages = value?.messages as any[] | undefined;
   if (!messages?.length) return NextResponse.json({ ok: true });
 
+  const contacts = value?.contacts as any[] | undefined;
+  const contactName = contacts?.[0]?.profile?.name as string | undefined;
+
   for (const msg of messages) {
     if (msg?.type !== "text" || typeof msg.text?.body !== "string") continue;
     const from = String(msg.from ?? "");
+    await upsertContactName(from, contactName);
 
     try {
       const reply = isAuthorizedWhatsAppNumber(from)

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { getConversationMessages, isConversationPaused } from "@/lib/data/whatsapp-conversations";
+import { getConversationMessages, getContactName, isConversationPaused } from "@/lib/data/whatsapp-conversations";
 import { ConversationThread } from "@/components/admin/conversation-thread";
 
 export default async function ConversationDetailPage({
@@ -11,8 +11,14 @@ export default async function ConversationDetailPage({
   await requireAdmin();
   const { phone } = await params;
 
-  const [messages, paused] = await Promise.all([getConversationMessages(phone), isConversationPaused(phone)]);
+  const [messages, paused, contactName] = await Promise.all([
+    getConversationMessages(phone),
+    isConversationPaused(phone),
+    getContactName(phone),
+  ]);
   if (messages.length === 0) notFound();
 
-  return <ConversationThread phone={phone} initialMessages={messages} initialPaused={paused} />;
+  return (
+    <ConversationThread phone={phone} contactName={contactName} initialMessages={messages} initialPaused={paused} />
+  );
 }

@@ -5,13 +5,14 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, CheckCheck, Clock, SmilePlus, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatDateTime, formatWhatsAppPhone } from "@/lib/format";
+import { formatTime, formatWhatsAppPhone } from "@/lib/format";
 import {
   sendManualReplyAction,
   pauseConversationAction,
   resumeConversationAction,
 } from "@/app/admin/conversas/actions";
 import type { ConversationMessage } from "@/lib/data/whatsapp-conversations";
+import { ContactAvatar } from "@/components/admin/contact-avatar";
 
 const POLL_MS = 6000;
 
@@ -26,18 +27,32 @@ const EMOJIS = [
 
 function MessageStatusIcon({ status }: { status: ConversationMessage["status"] }) {
   if (status === "read") return <CheckCheck className="h-3.5 w-3.5 text-sky-500" />;
-  if (status === "delivered") return <CheckCheck className="h-3.5 w-3.5 text-muted" />;
-  if (status === "sent") return <Check className="h-3.5 w-3.5 text-muted" />;
+  if (status === "delivered") return <CheckCheck className="h-3.5 w-3.5 text-black/40" />;
+  if (status === "sent") return <Check className="h-3.5 w-3.5 text-black/40" />;
   if (status === "failed") return <TriangleAlert className="h-3.5 w-3.5 text-danger" />;
   return null;
 }
 
+/** "Hoje" / "Ontem" / "12/09/2026" — separador de dia, como no WhatsApp. */
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const fmt = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" });
+  const today = fmt.format(new Date());
+  const yesterday = fmt.format(new Date(Date.now() - 86400000));
+  const label = fmt.format(d);
+  if (label === today) return "Hoje";
+  if (label === yesterday) return "Ontem";
+  return label;
+}
+
 export function ConversationThread({
   phone,
+  contactName,
   initialMessages,
   initialPaused,
 }: {
   phone: string;
+  contactName: string | null;
   initialMessages: ConversationMessage[];
   initialPaused: boolean;
 }) {
@@ -118,16 +133,26 @@ export function ConversationThread({
     });
   }
 
+  const messagesWithDay = initialMessages.map((m, i) => {
+    const day = dayLabel(m.created_at);
+    const prevDay = i > 0 ? dayLabel(initialMessages[i - 1].created_at) : "";
+    return { m, day, showDaySeparator: day !== prevDay };
+  });
+
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Link href="/admin/conversas" className="text-muted hover:text-foreground" aria-label="Voltar">
             <ArrowLeft className="h-5 w-5" />
           </Link>
+          <ContactAvatar name={contactName} phone={phone} size={40} />
           <div>
-            <h1 className="text-lg font-black">{formatWhatsAppPhone(phone)}</h1>
-            <p className="text-xs text-muted">{paused ? "Bot pausado — você está no controle" : "Bot ativo"}</p>
+            <h1 className="text-lg font-black leading-tight">{contactName || formatWhatsAppPhone(phone)}</h1>
+            <p className="text-xs text-muted">
+              {contactName && `${formatWhatsAppPhone(phone)} · `}
+              {paused ? "Bot pausado — você está no controle" : "Bot ativo"}
+            </p>
           </div>
         </div>
         <Button variant={paused ? "primary" : "outline"} size="sm" onClick={handleTogglePause} disabled={pending}>
@@ -135,23 +160,43 @@ export function ConversationThread({
         </Button>
       </div>
 
-      <div className="flex-1 space-y-2 overflow-y-auto rounded-2xl border border-border bg-surface p-4">
-        {initialMessages.map((m) => (
-          <div key={m.id} className={`flex ${m.role === "user" ? "justify-start" : "justify-end"}`}>
-            <div
-              className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                m.role === "user" ? "bg-black/5" : m.sender === "human" ? "bg-primary/20" : "bg-primary/10"
-              }`}
-            >
-              <p className="whitespace-pre-wrap">{m.content}</p>
-              <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted">
-                {m.role === "assistant" && (m.sender === "human" ? "Você · " : "Bot · ")}
-                {formatDateTime(m.created_at)}
-                {m.role === "assistant" && <MessageStatusIcon status={m.status} />}
-              </p>
+      <div
+        className="flex-1 space-y-1 overflow-y-auto rounded-2xl border border-border p-4"
+        style={{ backgroundColor: "#e9ddce" }}
+      >
+        {messagesWithDay.map(({ m, day, showDaySeparator }) => {
+          const outgoing = m.role === "assistant";
+          const fromHuman = outgoing && m.sender === "human";
+
+          return (
+            <div key={m.id}>
+              {showDaySeparator && (
+                <div className="my-3 flex justify-center">
+                  <span className="rounded-lg bg-white/70 px-3 py-1 text-[11px] font-medium text-muted shadow-sm">
+                    {day}
+                  </span>
+                </div>
+              )}
+              <div className={`flex ${outgoing ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[78%] rounded-lg px-3 py-2 text-sm shadow-sm ${
+                    outgoing ? "rounded-tr-none" : "rounded-tl-none"
+                  }`}
+                  style={{ backgroundColor: outgoing ? "#d9fdd3" : "#ffffff" }}
+                >
+                  {fromHuman && (
+                    <p className="mb-0.5 text-xs font-semibold text-emerald-700">{m.actor_name || "Você"}</p>
+                  )}
+                  <p className="whitespace-pre-wrap break-words text-foreground">{m.content}</p>
+                  <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-black/40">
+                    {formatTime(m.created_at)}
+                    {outgoing && <MessageStatusIcon status={m.status} />}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 

@@ -14,7 +14,7 @@ export async function sendManualReplyAction(
   if (!trimmed) return { ok: false, error: "Mensagem vazia." };
 
   const actor = await currentActor();
-  const result = await sendManualReply(phone, trimmed, actor.email);
+  const result = await sendManualReply(phone, trimmed, actor);
   if (!result.ok) {
     return { ok: false, error: "Não consegui enviar — confere se as credenciais do WhatsApp estão ok." };
   }
