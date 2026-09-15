@@ -54,7 +54,9 @@ export async function POST(request: Request) {
       const reply = isAuthorizedWhatsAppNumber(from)
         ? await handleWhatsAppMessage(msg.text.body, from)
         : await handlePublicMessage(msg.text.body, from);
-      await sendWhatsAppText(from, reply);
+      // null = conversa pausada (admin assumiu em /admin/conversas) — a
+      // mensagem já foi registrada, só não responde por cima.
+      if (reply) await sendWhatsAppText(from, reply);
     } catch (err) {
       console.error("[whatsapp webhook] erro ao processar mensagem", err);
       await sendWhatsAppText(from, "Deu um erro aqui do meu lado. Tenta de novo em instantes.").catch(

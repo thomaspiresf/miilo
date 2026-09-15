@@ -51,6 +51,13 @@ export function discountPercent(price: number, compareAt: number | null | undefi
   return Math.round((1 - price / compareAt) * 100);
 }
 
+/** "5515991295541" -> "+55 (15) 99129-5541" (formato que a Meta manda o "from" do webhook). */
+export function formatWhatsAppPhone(phone: string) {
+  const m = /^55(\d{2})(\d{4,5})(\d{4})$/.exec(phone);
+  if (!m) return `+${phone}`;
+  return `+55 (${m[1]}) ${m[2]}-${m[3]}`;
+}
+
 export function formatCep(cep: string) {
   const d = (cep || "").replace(/\D/g, "").slice(0, 8);
   if (d.length <= 5) return d;

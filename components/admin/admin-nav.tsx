@@ -8,6 +8,7 @@ import {
   Boxes,
   Calculator,
   LayoutDashboard,
+  MessageCircle,
   Package,
   Receipt,
   Store,
@@ -38,6 +39,7 @@ const LINKS: NavLink[] = [
   { href: "/admin/precificacao", label: "Precificação", icon: Calculator },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/pedidos", label: "Pedidos", icon: Receipt },
+  { href: "/admin/conversas", label: "Conversas", icon: MessageCircle },
   { href: "/admin/atividade", label: "Atividade", icon: Activity },
 ];
 

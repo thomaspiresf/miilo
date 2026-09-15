@@ -53,6 +53,23 @@ export async function saveTurns(phone: string, turns: ChatTurn[]): Promise<void>
   }
 }
 
+/**
+ * Um admin pode "assumir" uma conversa em /admin/conversas — enquanto
+ * pausada, os dois bots continuam registrando a mensagem do cliente (pra
+ * aparecer no painel) mas não respondem sozinhos, evitando bot e humano
+ * falando ao mesmo tempo.
+ */
+export async function isBotPaused(phone: string): Promise<boolean> {
+  if (!hasSupabaseAdmin()) return false;
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.from("whatsapp_bot_pauses").select("phone").eq("phone", phone).maybeSingle();
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
 // --------------------------------------------------------------------------
 //  Casamento com o catálogo
 // --------------------------------------------------------------------------

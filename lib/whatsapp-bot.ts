@@ -18,6 +18,7 @@ import {
   runToolLoop,
   fillLinkPlaceholders,
   sanitizeWhatsAppFormatting,
+  isBotPaused,
 } from "@/lib/whatsapp-shared";
 
 /**
@@ -539,9 +540,17 @@ function systemPromptWithDate(): string {
 const HELP_TEXT =
   'Não entendi 🤔 Manda algo tipo "vendi 1 body canelado azul pra Priscila" ou "quanto vendi hoje?".';
 
-export async function handleWhatsAppMessage(text: string, phone: string): Promise<string> {
+export async function handleWhatsAppMessage(text: string, phone: string): Promise<string | null> {
   const trimmed = text.trim().slice(0, MAX_MESSAGE_LENGTH);
   if (!trimmed) return HELP_TEXT;
+
+  // Admin assumiu essa conversa em /admin/conversas — só registra a
+  // mensagem (pra aparecer no painel) e não responde por cima.
+  if (await isBotPaused(phone)) {
+    await saveTurns(phone, [{ role: "user", content: trimmed }]);
+    return null;
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) return HELP_TEXT;
 
   const history = await loadHistory(phone);
