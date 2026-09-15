@@ -1,6 +1,6 @@
 import "server-only";
 import { formatBRL } from "@/lib/format";
-import { hasOpenServiceWindow } from "@/lib/whatsapp-shared";
+import { attachWamid, hasOpenServiceWindow, saveTurns } from "@/lib/whatsapp-shared";
 import type { Order } from "@/lib/types";
 
 /**
@@ -92,10 +92,10 @@ export async function sendWhatsAppText(to: string, message: string): Promise<Sen
  * Manda a mensagem-modelo pra um número. `params` preenche as variáveis
  * {{1}}, {{2}}... do corpo do template, na ordem.
  */
-async function sendWhatsAppTemplate(to: string, params: string[]): Promise<boolean> {
+async function sendWhatsAppTemplate(to: string, params: string[]): Promise<SendResult> {
   if (!whatsappEnabled()) {
     console.info(`[whatsapp] desativado (faltam credenciais/template da Meta) — mensagem pra ${to} não enviada`);
-    return false;
+    return { ok: false, id: null };
   }
   try {
     const res = await fetch(graphUrl(), {
@@ -122,12 +122,14 @@ async function sendWhatsAppTemplate(to: string, params: string[]): Promise<boole
     });
     if (!res.ok) {
       console.error("[whatsapp] Meta respondeu", res.status, await res.text().catch(() => ""));
-      return false;
+      return { ok: false, id: null };
     }
-    return true;
+    const data = await res.json().catch(() => null);
+    const id = typeof data?.messages?.[0]?.id === "string" ? data.messages[0].id : null;
+    return { ok: true, id };
   } catch (err) {
     console.error("[whatsapp] erro ao enviar", err);
-    return false;
+    return { ok: false, id: null };
   }
 }
 
@@ -151,6 +153,16 @@ function saleMessageText(order: Order): string {
 }
 
 /**
+ * Registra o aviso de venda na mesma tabela que o painel /admin/conversas
+ * lê — sem isso a mensagem realmente sai pro WhatsApp mas fica invisível no
+ * histórico ali (só as respostas do bot/humano passavam por saveTurns).
+ */
+async function recordSaleNotification(phone: string, text: string, wamid: string | null): Promise<void> {
+  await saveTurns(phone, [{ role: "assistant", content: text }]);
+  if (wamid) await attachWamid(phone, wamid);
+}
+
+/**
  * Avisa o(s) número(s) configurado(s) que um pedido acabou de ser pago.
  *
  * Prioriza texto livre (sendWhatsAppText) quando o número já tem uma janela
@@ -169,9 +181,13 @@ export async function notifySale(order: Order): Promise<void> {
     numbers.map(async (to) => {
       if (await hasOpenServiceWindow(to)) {
         const sent = await sendWhatsAppText(to, text);
-        if (sent.ok) return;
+        if (sent.ok) {
+          await recordSaleNotification(to, text, sent.id);
+          return;
+        }
       }
-      await sendWhatsAppTemplate(to, params);
+      const sent = await sendWhatsAppTemplate(to, params);
+      if (sent.ok) await recordSaleNotification(to, text, sent.id);
     }),
   );
 }
