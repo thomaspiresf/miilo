@@ -17,6 +17,7 @@ import {
   matchOrderByNumber,
   runToolLoop,
   fillLinkPlaceholders,
+  sanitizeWhatsAppFormatting,
 } from "@/lib/whatsapp-shared";
 
 /**
@@ -492,6 +493,8 @@ Regras:
 - Respostas curtas e diretas — é WhatsApp, não e-mail. Sem saudação longa nem assinatura.
 - Tom informal e direto, em português do Brasil.
 - Emojis com moderação: ✅ pra confirmação de venda, 📊 pra números, 🤔 quando não entender.
+- Negrito no WhatsApp é com *um* asterisco de cada lado, nunca **dois**. E nunca cole asterisco ou \
+qualquer símbolo direto numa URL — isso quebra o link.
 - Use as ferramentas disponíveis pra QUALQUER pergunta sobre vendas, estoque ou pedidos — nunca \
 invente números, produtos ou valores.
 - Sempre que uma ferramenta devolver um campo "*_formatted" (já em R$, formato brasileiro), use \
@@ -549,7 +552,7 @@ export async function handleWhatsAppMessage(text: string, phone: string): Promis
     executeTool,
   });
 
-  let reply = fillLinkPlaceholders(finalText ?? HELP_TEXT, calls, site.url);
+  let reply = sanitizeWhatsAppFormatting(fillLinkPlaceholders(finalText ?? HELP_TEXT, calls, site.url));
 
   // Trava de segurança: NUNCA deixar passar uma resposta que pareça confirmar
   // uma venda (o "✅" que o prompt reserva pra isso) se log_sale não voltou

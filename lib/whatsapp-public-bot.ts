@@ -13,6 +13,7 @@ import {
   matchOrderByNumber,
   runToolLoop,
   fillLinkPlaceholders,
+  sanitizeWhatsAppFormatting,
 } from "@/lib/whatsapp-shared";
 
 /**
@@ -194,6 +195,8 @@ de opções.
 - Nunca liste campos técnicos como se fossem a resposta (não diga "availability: disponível" — diga \
 "tem sim!" ou "só restam poucas unidades, se quiser"). Traduza sempre pra uma frase normal.
 - Emojis com moderação, só quando fizer sentido — não em toda mensagem.
+- Negrito no WhatsApp é com *um* asterisco de cada lado, nunca **dois**. E nunca cole asterisco ou \
+qualquer símbolo direto numa URL — isso quebra o link.
 - Se alguém quiser ver o catálogo, um produto específico, cores/tamanhos, ou "dar uma olhada": manda \
 o link. IMPORTANTE: nunca escreva a URL você mesmo (nem de memória, nem "adivinhando" o formato) — \
 escreva exatamente o token [[LINK]] no lugar onde o link deveria aparecer, tipo "Dá uma olhada aqui: \
@@ -237,7 +240,7 @@ export async function handlePublicMessage(text: string, phone: string): Promise<
     executeTool: (name, input) => executeTool(name, input, phone),
   });
 
-  const reply = fillLinkPlaceholders(finalText ?? HELP_TEXT, calls, site.url);
+  const reply = sanitizeWhatsAppFormatting(fillLinkPlaceholders(finalText ?? HELP_TEXT, calls, site.url));
 
   await saveTurns(phone, [
     { role: "user", content: trimmed },

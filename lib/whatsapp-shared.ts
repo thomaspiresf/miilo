@@ -170,6 +170,21 @@ export function fillLinkPlaceholders(text: string, calls: ToolCallRecord[], fall
   return text.replace(/\[\[LINK\]\]/g, () => urls[i++] ?? fallbackUrl);
 }
 
+/**
+ * O Claude escreve negrito em markdown padrão (**assim**), mas o WhatsApp só
+ * reconhece *um* asterisco de cada lado — o resultado é o "**" aparecendo
+ * literal na mensagem, e pior, quando cola direto num link (**link**) o
+ * WhatsApp para de reconhecer a URL como link clicável. Aplique sempre no
+ * texto final, depois de fillLinkPlaceholders.
+ */
+export function sanitizeWhatsAppFormatting(text: string): string {
+  let out = text.replace(/\*\*/g, "*");
+  // Garante que nenhum asterisco fique colado numa URL, mesmo que tenha
+  // sobrado um único depois da troca acima.
+  out = out.replace(/\*+(https?:\/\/\S+?)\*+/g, "$1");
+  return out;
+}
+
 export async function runToolLoop(opts: {
   messages: any[];
   systemPrompt: string;
