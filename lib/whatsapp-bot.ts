@@ -230,32 +230,40 @@ function rangeFor(period: string): { start: Date; end: Date; label: string } {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 async function toolLogSale(input: any): Promise<object> {
-  const productText = typeof input.product_text === "string" ? input.product_text : "";
-  if (!productText) return { ok: false, reason: "missing_product" };
-  const qty = Number.isFinite(input.qty) && input.qty > 0 ? Math.floor(input.qty) : 1;
+  const rawItems = Array.isArray(input.items) ? input.items : null;
+  if (!rawItems || rawItems.length === 0) return { ok: false, reason: "missing_items" };
   const customerName = typeof input.customer_name === "string" ? input.customer_name.trim() : "";
-  const variantText = typeof input.variant_text === "string" ? input.variant_text : undefined;
 
   const products = await adminListProducts();
-  const match = matchProduct(products, productText, variantText);
 
-  if (match.type === "none") return { ok: false, reason: "not_found", query: productText };
-  if (match.type === "ambiguous_product") return { ok: false, reason: "ambiguous_product", options: match.names };
-  if (match.type === "ambiguous_variant") {
-    return { ok: false, reason: "ambiguous_variant", product_name: match.product.name, options: match.options };
-  }
+  const resolved: { product: Product; variant: ProductVariant; qty: number }[] = [];
+  for (const raw of rawItems) {
+    const productText = typeof raw?.product_text === "string" ? raw.product_text : "";
+    if (!productText) return { ok: false, reason: "missing_product" };
+    const qty = Number.isFinite(raw.qty) && raw.qty > 0 ? Math.floor(raw.qty) : 1;
+    const variantText = typeof raw.variant_text === "string" ? raw.variant_text : undefined;
 
-  const { product, variant } = match;
-  const label = variantLabel(variant);
-  if (variant.stock < qty) {
-    return {
-      ok: false,
-      reason: "insufficient_stock",
-      product_name: product.name,
-      variant_label: label || null,
-      available: variant.stock,
-      requested: qty,
-    };
+    const match = matchProduct(products, productText, variantText);
+    if (match.type === "none") return { ok: false, reason: "not_found", query: productText };
+    if (match.type === "ambiguous_product") {
+      return { ok: false, reason: "ambiguous_product", query: productText, options: match.names };
+    }
+    if (match.type === "ambiguous_variant") {
+      return { ok: false, reason: "ambiguous_variant", product_name: match.product.name, options: match.options };
+    }
+
+    const { product, variant } = match;
+    if (variant.stock < qty) {
+      return {
+        ok: false,
+        reason: "insufficient_stock",
+        product_name: product.name,
+        variant_label: variantLabel(variant) || null,
+        available: variant.stock,
+        requested: qty,
+      };
+    }
+    resolved.push({ product, variant, qty });
   }
 
   try {
@@ -267,7 +275,7 @@ async function toolLogSale(input: any): Promise<object> {
       deliveryMode: "pickup",
       address: null,
       shipping: { company: "", service: "Venda na loja", price: 0 },
-      lines: [{ variantId: variant.id, qty }],
+      lines: resolved.map((r) => ({ variantId: r.variant.id, qty: r.qty })),
       channel: "pos",
       notes: "Registrado via WhatsApp",
       posPayMode: "cash",
@@ -288,10 +296,12 @@ async function toolLogSale(input: any): Promise<object> {
       order_number: order.number,
       total: order.total,
       total_formatted: formatBRL(order.total),
-      qty,
-      product_name: product.name,
-      variant_label: label || null,
       customer_name: customerName || null,
+      items: resolved.map((r) => ({
+        qty: r.qty,
+        product_name: r.product.name,
+        variant_label: variantLabel(r.variant) || null,
+      })),
     };
   } catch (err) {
     console.error("[whatsapp-bot] erro ao registrar venda", err);
@@ -424,16 +434,28 @@ async function executeTool(name: string, input: any): Promise<object> {
 const TOOLS = [
   {
     name: "log_sale",
-    description: "Registra que um produto foi vendido na loja (baixa estoque, cria o pedido).",
+    description:
+      "Registra uma venda na loja (baixa estoque, cria o pedido). Um pedido pode ter mais de um " +
+      "item/variação — ex.: o mesmo produto em duas cores diferentes vai como dois itens no mesmo pedido.",
     input_schema: {
       type: "object",
       properties: {
-        product_text: { type: "string", description: "Nome/descrição do produto, ex.: 'body canelado'." },
-        variant_text: { type: "string", description: "Cor e/ou tamanho, ex.: 'azul claro P'." },
-        qty: { type: "integer", description: "Quantidade vendida (padrão 1)." },
+        items: {
+          type: "array",
+          description: "Um item por produto/variação vendido nesse pedido.",
+          items: {
+            type: "object",
+            properties: {
+              product_text: { type: "string", description: "Nome/descrição do produto, ex.: 'body canelado'." },
+              variant_text: { type: "string", description: "Cor e/ou tamanho, ex.: 'M laranja'." },
+              qty: { type: "integer", description: "Quantidade desse item (padrão 1)." },
+            },
+            required: ["product_text"],
+          },
+        },
         customer_name: { type: "string", description: "Nome do cliente, se mencionado." },
       },
-      required: ["product_text"],
+      required: ["items"],
     },
   },
   {
@@ -502,6 +524,9 @@ esse valor exatamente como veio — não recalcule nem arredonde.
 listar tudo em detalhe) pra que perguntas de acompanhamento na mesma conversa (ex.: "e quais foram \
 os itens?", "só teve esse pedido?") possam ser respondidas usando o que você já disse, sem precisar \
 repetir a consulta.
+- Uma venda pode ter mais de um produto/variação (ex.: cores diferentes do mesmo item, ou produtos \
+diferentes) — junte tudo numa única chamada de log_sale (lista de items), gerando um único pedido, \
+em vez de chamar log_sale várias vezes.
 - Se uma ferramenta (log_sale ou get_stock) vier ambígua (ambiguous_product/ambiguous_variant), \
 pergunte de volta em vez de adivinhar — e quando a pessoa responder qual das opções ela quis dizer, \
 chame a MESMA ferramenta de novo imediatamente com o produto e a opção escolhida (copie o texto da \
