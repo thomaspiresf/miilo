@@ -224,6 +224,24 @@ function rangeFor(period: string): { start: Date; end: Date; label: string } {
   return { start: startOfBrDay(now), end: new Date(now.getTime() + 1), label: "hoje" };
 }
 
+/** "2026-09-13" -> meia-noite desse dia em Brasília, já convertida pro instante UTC real. */
+function rangeForDate(dateStr: string): { start: Date; end: Date; label: string } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!m) return null;
+  const [, y, mo, d] = m;
+  const wallMidnight = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  if (Number.isNaN(wallMidnight.getTime())) return null;
+  const start = fromBrWallClock(wallMidnight);
+  return { start, end: new Date(start.getTime() + 86_400_000), label: `em ${d}/${mo}/${y}` };
+}
+
+function getBrDateLabel(d: Date): string {
+  const wall = toBrWallClock(d);
+  const dd = String(wall.getUTCDate()).padStart(2, "0");
+  const mm = String(wall.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${wall.getUTCFullYear()}`;
+}
+
 // --------------------------------------------------------------------------
 //  Ferramentas (executadas em código, resultado estruturado pro Claude)
 // --------------------------------------------------------------------------
@@ -330,8 +348,10 @@ async function toolLogSale(input: any): Promise<object> {
 }
 
 async function toolGetSalesTotal(input: any): Promise<object> {
-  const period = typeof input.period === "string" ? input.period : "today";
-  const { start, end, label } = rangeFor(period);
+  const range =
+    (typeof input.date === "string" ? rangeForDate(input.date) : null) ??
+    rangeFor(typeof input.period === "string" ? input.period : "today");
+  const { start, end, label } = range;
   const orders = await listAllOrders();
   const inRange = orders.filter((o) => {
     if (!isSold(o)) return false;
@@ -488,13 +508,22 @@ const TOOLS = [
   },
   {
     name: "get_sales_total",
-    description: "Consulta o total vendido (pedidos pagos) num período.",
+    description: "Consulta o total vendido (pedidos pagos) num período OU numa data específica.",
     input_schema: {
       type: "object",
       properties: {
-        period: { type: "string", enum: ["today", "yesterday", "week", "month"], description: "Período (padrão today)." },
+        period: {
+          type: "string",
+          enum: ["today", "yesterday", "week", "month"],
+          description: "Período relativo (padrão today). Não use junto com 'date'.",
+        },
+        date: {
+          type: "string",
+          description:
+            "Data exata no formato AAAA-MM-DD, quando a pessoa perguntar por um dia específico " +
+            "(ex.: 'quanto vendi dia 13?' -> use o mês/ano atual). Se vier preenchido, ignora 'period'.",
+        },
       },
-      required: ["period"],
     },
   },
   {
@@ -568,7 +597,13 @@ ajuda com esses assuntos.
 - NUNCA diga que uma venda foi registrada, nem invente um número de pedido, sem ter chamado log_sale \
 e recebido ok:true na resposta dessa mesma mensagem — mesmo que a conversa já tenha deixado claro o \
 que a pessoa quer. "Confirmar" um pedido de venda sem chamar a ferramenta é o pior erro possível aqui \
-(mexe com dinheiro e estoque de verdade).`;
+(mexe com dinheiro e estoque de verdade).
+- Se perguntarem por um dia específico ("quanto vendi dia 13?"), use get_sales_total com o campo \
+"date" (AAAA-MM-DD) em vez de "period" — assuma o mês/ano atual quando só o dia for dito.`;
+
+function systemPromptWithDate(): string {
+  return `${SYSTEM_PROMPT}\n\nHoje é ${getBrDateLabel(new Date())} (horário de Brasília).`;
+}
 
 async function callClaude(messages: any[]): Promise<any | null> {
   try {
@@ -582,7 +617,7 @@ async function callClaude(messages: any[]): Promise<any | null> {
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
         max_tokens: 500,
-        system: SYSTEM_PROMPT,
+        system: systemPromptWithDate(),
         messages,
         tools: TOOLS,
       }),
