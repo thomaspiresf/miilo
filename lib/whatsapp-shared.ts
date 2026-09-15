@@ -152,6 +152,24 @@ export function matchOrderByNumber(orders: Order[], numberText: string): Order |
 
 export type ToolCallRecord = { name: string; input: any; result: any };
 
+// Modelos (mesmo com instrução explícita no prompt) às vezes "inventam" uma
+// URL plausível em vez de copiar o link real devolvido pela ferramenta — já
+// aconteceu (ex.: "/products/body-canelado" e até o domínio errado). Em vez
+// de confiar que o texto final tem o link certo, o prompt instrui o Claude a
+// escrever o token [[LINK]] no lugar do link, e o código troca aqui pelo
+// link de verdade que a ferramenta devolveu nesse turno — assim o link que
+// chega no WhatsApp nunca passou pela "criatividade" do modelo.
+export function fillLinkPlaceholders(text: string, calls: ToolCallRecord[], fallbackUrl: string): string {
+  const urls: string[] = [];
+  for (const c of calls) {
+    const r = c.result as Record<string, unknown>;
+    const u = typeof r?.url === "string" ? r.url : typeof r?.pay_url === "string" ? r.pay_url : null;
+    if (u) urls.push(u);
+  }
+  let i = 0;
+  return text.replace(/\[\[LINK\]\]/g, () => urls[i++] ?? fallbackUrl);
+}
+
 export async function runToolLoop(opts: {
   messages: any[];
   systemPrompt: string;

@@ -12,6 +12,7 @@ import {
   matchProduct,
   matchOrderByNumber,
   runToolLoop,
+  fillLinkPlaceholders,
 } from "@/lib/whatsapp-shared";
 
 /**
@@ -194,7 +195,9 @@ de opções.
 "tem sim!" ou "só restam poucas unidades, se quiser"). Traduza sempre pra uma frase normal.
 - Emojis com moderação, só quando fizer sentido — não em toda mensagem.
 - Se alguém quiser ver o catálogo, um produto específico, cores/tamanhos, ou "dar uma olhada": manda \
-o link. Ferramentas de produto já devolvem "url" — usa esse link. Pra catálogo geral, manda ${site.url}.
+o link. IMPORTANTE: nunca escreva a URL você mesmo (nem de memória, nem "adivinhando" o formato) — \
+escreva exatamente o token [[LINK]] no lugar onde o link deveria aparecer, tipo "Dá uma olhada aqui: \
+[[LINK]]". O sistema troca automaticamente por um link real e correto depois.
 - Use get_product_info pra QUALQUER pergunta sobre produto, preço ou disponibilidade — nunca invente \
 preço, cor, tamanho ou se tem em estoque.
 - Pode informar o preço exato (campo "*_formatted"). NUNCA informe quantidade exata em estoque — só \
@@ -227,14 +230,14 @@ export async function handlePublicMessage(text: string, phone: string): Promise<
   if (!process.env.ANTHROPIC_API_KEY) return HELP_TEXT;
 
   const history = await loadHistory(phone);
-  const { finalText } = await runToolLoop({
+  const { finalText, calls } = await runToolLoop({
     messages: [...history, { role: "user", content: trimmed }],
     systemPrompt: SYSTEM_PROMPT,
     tools: TOOLS,
     executeTool: (name, input) => executeTool(name, input, phone),
   });
 
-  const reply = finalText ?? HELP_TEXT;
+  const reply = fillLinkPlaceholders(finalText ?? HELP_TEXT, calls, site.url);
 
   await saveTurns(phone, [
     { role: "user", content: trimmed },

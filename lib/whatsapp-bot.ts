@@ -16,6 +16,7 @@ import {
   matchProduct,
   matchOrderByNumber,
   runToolLoop,
+  fillLinkPlaceholders,
 } from "@/lib/whatsapp-shared";
 
 /**
@@ -509,7 +510,9 @@ opção exatamente como veio na lista), em vez de repetir a mesma pergunta.
 - NUNCA assuma que uma venda já foi paga. Se log_sale voltar "need_payment_choice", pergunte se já \
 recebeu (dinheiro/pix/cartão na hora) ou se é pra gerar um link de cobrança pra mandar pro cliente — \
 e só chame log_sale de novo (com o campo payment preenchido) depois que a pessoa responder isso. Se \
-a resposta trouxer "pay_url", inclua o link na sua confirmação.
+a resposta trouxer "pay_url", inclua o link na sua confirmação — mas NUNCA escreva a URL você mesmo, \
+escreva o token [[LINK]] no lugar (ex.: "manda esse link pro cliente: [[LINK]]") que o sistema troca \
+pelo link de verdade depois.
 - Se a pergunta não tiver nada a ver com a loja (vendas, estoque, pedidos), diga educadamente que só \
 ajuda com esses assuntos.
 - NUNCA diga que uma venda foi registrada, nem invente um número de pedido, sem ter chamado log_sale \
@@ -546,7 +549,7 @@ export async function handleWhatsAppMessage(text: string, phone: string): Promis
     executeTool,
   });
 
-  let reply = finalText ?? HELP_TEXT;
+  let reply = fillLinkPlaceholders(finalText ?? HELP_TEXT, calls, site.url);
 
   // Trava de segurança: NUNCA deixar passar uma resposta que pareça confirmar
   // uma venda (o "✅" que o prompt reserva pra isso) se log_sale não voltou
