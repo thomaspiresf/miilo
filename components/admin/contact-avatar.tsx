@@ -20,7 +20,7 @@ function initialsFor(label: string): string {
     .split(/\s+/)
     .filter((p) => /^[\p{L}\p{N}]/u.test(p));
   if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
@@ -33,13 +33,16 @@ export function ContactAvatar({
   phone: string;
   size?: number;
 }) {
-  const label = name?.trim() || phone;
+  // Sem nome salvo ainda, cai pro telefone — mas todo número BR começa com
+  // "55" (código do país), então as 2 primeiras iniciais ficam iguais pra
+  // todo mundo. Usa os 2 últimos dígitos nesse caso, que de fato variam.
+  const initials = name?.trim() ? initialsFor(name) : phone.slice(-2);
   return (
     <div
       className="flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
       style={{ width: size, height: size, background: colorFor(phone), fontSize: size * 0.38 }}
     >
-      {initialsFor(label)}
+      {initials}
     </div>
   );
 }
