@@ -124,6 +124,18 @@ function scoreByTokens(target: string, query: string, queryTokens: string[]): nu
   return matched > 0 ? (matched / queryTokens.length) * 60 : 0;
 }
 
+// Cores como "Azul", "Azul Claro" e "Azul Escuro" convivem no mesmo produto —
+// comparar só contra o rótulo combinado ("P · Azul Claro") faz "azul" bater
+// como substring nas três e empatar sempre. Aqui um match exato na cor OU no
+// tamanho isolados vence antes de cair pro score do rótulo combinado.
+function scoreVariant(v: ProductVariant, query: string, queryTokens: string[]): number {
+  const color = normalize(v.color || "");
+  const size = normalize(v.size || "");
+  const sizeAndColor = normalize([v.size, v.color].filter(Boolean).join(" "));
+  if (color === query || size === query || sizeAndColor === query) return 100;
+  return scoreByTokens(normalize(variantLabel(v)), query, queryTokens);
+}
+
 function matchProduct(products: Product[], productText: string, variantText?: string): MatchResult {
   const q = normalize(productText);
   const qTokens = q.split(/\s+/).filter(Boolean);
@@ -151,7 +163,7 @@ function matchProduct(products: Product[], productText: string, variantText?: st
     const vq = normalize(variantText);
     const vTokens = vq.split(/\s+/).filter(Boolean);
     const vScored = variants
-      .map((v) => ({ variant: v, score: scoreByTokens(normalize(variantLabel(v)), vq, vTokens) }))
+      .map((v) => ({ variant: v, score: scoreVariant(v, vq, vTokens) }))
       .filter((s) => s.score > 0)
       .sort((a, b) => b.score - a.score);
 
@@ -490,8 +502,10 @@ esse valor exatamente como veio — não recalcule nem arredonde.
 listar tudo em detalhe) pra que perguntas de acompanhamento na mesma conversa (ex.: "e quais foram \
 os itens?", "só teve esse pedido?") possam ser respondidas usando o que você já disse, sem precisar \
 repetir a consulta.
-- Se o pedido de venda (log_sale) vier ambíguo ou faltando informação, pergunte de volta em vez de \
-adivinhar.
+- Se uma ferramenta (log_sale ou get_stock) vier ambígua (ambiguous_product/ambiguous_variant), \
+pergunte de volta em vez de adivinhar — e quando a pessoa responder qual das opções ela quis dizer, \
+chame a MESMA ferramenta de novo imediatamente com o produto e a opção escolhida (copie o texto da \
+opção exatamente como veio na lista), em vez de repetir a mesma pergunta.
 - Se a pergunta não tiver nada a ver com a loja (vendas, estoque, pedidos), diga educadamente que só \
 ajuda com esses assuntos.`;
 
