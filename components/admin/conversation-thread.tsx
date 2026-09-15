@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Clock, SmilePlus, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDateTime, formatWhatsAppPhone } from "@/lib/format";
 import {
@@ -14,6 +14,23 @@ import {
 import type { ConversationMessage } from "@/lib/data/whatsapp-conversations";
 
 const POLL_MS = 6000;
+
+// Emojis mais usados numa conversa de loja — não precisa de um seletor
+// completo (nem da dependência extra que isso puxaria) pra cobrir o uso
+// real aqui.
+const EMOJIS = [
+  "😊", "😄", "🙂", "😉", "😍", "🥰", "😘", "🤗",
+  "👍", "🙏", "👏", "🎉", "✅", "❤️", "😢", "😅",
+  "🤔", "😮", "😴", "👋", "🛍️", "📦", "💳", "🔥",
+];
+
+function MessageStatusIcon({ status }: { status: ConversationMessage["status"] }) {
+  if (status === "read") return <CheckCheck className="h-3.5 w-3.5 text-sky-500" />;
+  if (status === "delivered") return <CheckCheck className="h-3.5 w-3.5 text-muted" />;
+  if (status === "sent") return <Check className="h-3.5 w-3.5 text-muted" />;
+  if (status === "failed") return <TriangleAlert className="h-3.5 w-3.5 text-danger" />;
+  return null;
+}
 
 export function ConversationThread({
   phone,
@@ -29,11 +46,15 @@ export function ConversationThread({
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   // Mensagens novas chegam pelo webhook, fora do ciclo de vida dessa página —
   // um refresh simples a cada alguns segundos é suficiente pra "acompanhar"
-  // sem precisar de um canal em tempo real.
+  // (e pra ver o status virar entregue/lida) sem precisar de um canal em
+  // tempo real.
   useEffect(() => {
     const id = setInterval(() => router.refresh(), POLL_MS);
     return () => clearInterval(id);
@@ -42,6 +63,31 @@ export function ConversationThread({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [initialMessages.length]);
+
+  useEffect(() => {
+    if (!emojiOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) setEmojiOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [emojiOpen]);
+
+  function insertEmoji(emoji: string) {
+    const el = textareaRef.current;
+    if (!el) {
+      setText((t) => t + emoji);
+      return;
+    }
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = el.selectionEnd = start + emoji.length;
+    });
+  }
 
   function handleSend() {
     const trimmed = text.trim();
@@ -98,9 +144,10 @@ export function ConversationThread({
               }`}
             >
               <p className="whitespace-pre-wrap">{m.content}</p>
-              <p className="mt-1 text-[10px] text-muted">
+              <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted">
                 {m.role === "assistant" && (m.sender === "human" ? "Você · " : "Bot · ")}
                 {formatDateTime(m.created_at)}
+                {m.role === "assistant" && <MessageStatusIcon status={m.status} />}
               </p>
             </div>
           </div>
@@ -109,9 +156,41 @@ export function ConversationThread({
       </div>
 
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+      {pending && (
+        <p className="mt-2 flex items-center gap-1 text-xs text-muted">
+          <Clock className="h-3 w-3 animate-pulse" /> Enviando...
+        </p>
+      )}
 
-      <div className="mt-3 flex gap-2">
+      <div className="relative mt-3 flex items-end gap-2">
+        {emojiOpen && (
+          <div
+            ref={emojiPickerRef}
+            className="absolute bottom-full left-0 mb-2 grid w-64 grid-cols-8 gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg"
+          >
+            {EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => insertEmoji(emoji)}
+                className="rounded-lg p-1 text-lg hover:bg-black/5"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Emojis"
+          onClick={() => setEmojiOpen((v) => !v)}
+        >
+          <SmilePlus className="h-4 w-4" />
+        </Button>
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

@@ -71,6 +71,52 @@ export async function isBotPaused(phone: string): Promise<boolean> {
 }
 
 // --------------------------------------------------------------------------
+//  Status de entrega/leitura (pro painel /admin/conversas mostrar ✓/✓✓)
+// --------------------------------------------------------------------------
+
+/**
+ * Guarda o wamid (ID que a Meta devolve ao enviar) na resposta do bot que
+ * acabou de ser salva pra esse número — quem manda de fato (route.ts) só
+ * sabe o wamid DEPOIS de já ter chamado handleWhatsAppMessage/
+ * handlePublicMessage, que já salvou a linha. Como não há concorrência real
+ * por número (um webhook por vez), pegar a última linha "assistant" ainda
+ * sem wamid é seguro.
+ */
+export async function attachWamid(phone: string, wamid: string): Promise<void> {
+  if (!hasSupabaseAdmin()) return;
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("whatsapp_conversations")
+      .select("id")
+      .eq("phone", phone)
+      .eq("role", "assistant")
+      .is("wamid", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.id) {
+      await admin.from("whatsapp_conversations").update({ wamid, status: "sent" }).eq("id", data.id);
+    }
+  } catch (err) {
+    console.error("[whatsapp] erro ao anexar wamid", err);
+  }
+}
+
+const VALID_STATUSES = new Set(["sent", "delivered", "read", "failed"]);
+
+/** Chamado pelo webhook quando a Meta manda uma atualização de status (entregue/lida/falhou). */
+export async function updateMessageStatus(wamid: string, status: string): Promise<void> {
+  if (!hasSupabaseAdmin() || !VALID_STATUSES.has(status)) return;
+  try {
+    const admin = createAdminClient();
+    await admin.from("whatsapp_conversations").update({ status }).eq("wamid", wamid);
+  } catch (err) {
+    console.error("[whatsapp] erro ao atualizar status da mensagem", err);
+  }
+}
+
+// --------------------------------------------------------------------------
 //  Casamento com o catálogo
 // --------------------------------------------------------------------------
 

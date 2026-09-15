@@ -22,10 +22,16 @@ export function parseMoney(input: string | number | null | undefined): number | 
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+// timeZone explícito: sem isso, o Intl usa o fuso de onde o código roda — no
+// servidor (Vercel) é UTC, então qualquer data ficava 3h adiantada quando
+// formatada num Server Component. A loja é só no Brasil, então fixa aqui.
+const BR_TIME_ZONE = "America/Sao_Paulo";
+
 const DATE = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
+  timeZone: BR_TIME_ZONE,
 });
 
 const DATETIME = new Intl.DateTimeFormat("pt-BR", {
@@ -34,6 +40,7 @@ const DATETIME = new Intl.DateTimeFormat("pt-BR", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: BR_TIME_ZONE,
 });
 
 export function formatDate(value: string | Date | null | undefined) {

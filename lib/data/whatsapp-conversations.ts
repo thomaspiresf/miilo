@@ -11,11 +11,14 @@ import { sendWhatsAppText } from "@/lib/whatsapp";
  * bot e humano respondendo ao mesmo tempo.
  */
 
+export type MessageStatus = "sent" | "delivered" | "read" | "failed" | null;
+
 export type ConversationMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   sender: "bot" | "human" | null;
+  status: MessageStatus;
   created_at: string;
 };
 
@@ -71,7 +74,7 @@ export async function getConversationMessages(phone: string): Promise<Conversati
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("whatsapp_conversations")
-    .select("id, role, content, sender, created_at")
+    .select("id, role, content, sender, status, created_at")
     .eq("phone", phone)
     .order("created_at", { ascending: true })
     .limit(500);
@@ -108,9 +111,16 @@ export async function sendManualReply(
 ): Promise<{ ok: boolean }> {
   if (!hasSupabaseAdmin()) return { ok: false };
   const sent = await sendWhatsAppText(phone, text);
-  if (!sent) return { ok: false };
+  if (!sent.ok) return { ok: false };
   const admin = createAdminClient();
-  await admin.from("whatsapp_conversations").insert({ phone, role: "assistant", content: text, sender: "human" });
+  await admin.from("whatsapp_conversations").insert({
+    phone,
+    role: "assistant",
+    content: text,
+    sender: "human",
+    wamid: sent.id,
+    status: sent.id ? "sent" : null,
+  });
   await pauseConversation(phone, actorEmail);
   return { ok: true };
 }

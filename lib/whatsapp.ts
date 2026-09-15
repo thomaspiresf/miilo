@@ -53,10 +53,12 @@ export function notifyNumbers(): string[] {
  * conversa que a PESSOA iniciou (ex.: o bot de comandos). Pra mensagem que a
  * loja inicia sozinha, use sendWhatsAppTemplate/notifySale.
  */
-export async function sendWhatsAppText(to: string, message: string): Promise<boolean> {
+export type SendResult = { ok: boolean; id: string | null };
+
+export async function sendWhatsAppText(to: string, message: string): Promise<SendResult> {
   if (!hasWhatsAppCredentials()) {
     console.info(`[whatsapp] desativado (faltam credenciais da Meta) — mensagem pra ${to} não enviada`);
-    return false;
+    return { ok: false, id: null };
   }
   try {
     const res = await fetch(graphUrl(), {
@@ -74,12 +76,14 @@ export async function sendWhatsAppText(to: string, message: string): Promise<boo
     });
     if (!res.ok) {
       console.error("[whatsapp] Meta respondeu", res.status, await res.text().catch(() => ""));
-      return false;
+      return { ok: false, id: null };
     }
-    return true;
+    const data = await res.json().catch(() => null);
+    const id = typeof data?.messages?.[0]?.id === "string" ? data.messages[0].id : null;
+    return { ok: true, id };
   } catch (err) {
     console.error("[whatsapp] erro ao enviar", err);
-    return false;
+    return { ok: false, id: null };
   }
 }
 

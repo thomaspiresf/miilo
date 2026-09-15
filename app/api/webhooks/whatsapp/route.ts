@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyMetaSignature, isAuthorizedWhatsAppNumber, handleWhatsAppMessage } from "@/lib/whatsapp-bot";
 import { handlePublicMessage } from "@/lib/whatsapp-public-bot";
+import { attachWamid, updateMessageStatus } from "@/lib/whatsapp-shared";
 import { sendWhatsAppText } from "@/lib/whatsapp";
 
 /**
@@ -43,7 +44,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const messages = payload?.entry?.[0]?.changes?.[0]?.value?.messages as any[] | undefined;
+  const value = payload?.entry?.[0]?.changes?.[0]?.value;
+
+  // Atualizações de status (enviada/entregue/lida) de mensagens NOSSAS —
+  // chegam num payload separado do das mensagens recebidas.
+  const statuses = value?.statuses as any[] | undefined;
+  if (statuses?.length) {
+    await Promise.all(
+      statuses
+        .filter((s) => typeof s?.id === "string" && typeof s?.status === "string")
+        .map((s) => updateMessageStatus(s.id, s.status)),
+    );
+  }
+
+  const messages = value?.messages as any[] | undefined;
   if (!messages?.length) return NextResponse.json({ ok: true });
 
   for (const msg of messages) {
@@ -56,7 +70,10 @@ export async function POST(request: Request) {
         : await handlePublicMessage(msg.text.body, from);
       // null = conversa pausada (admin assumiu em /admin/conversas) — a
       // mensagem já foi registrada, só não responde por cima.
-      if (reply) await sendWhatsAppText(from, reply);
+      if (reply) {
+        const sent = await sendWhatsAppText(from, reply);
+        if (sent.ok && sent.id) await attachWamid(from, sent.id);
+      }
     } catch (err) {
       console.error("[whatsapp webhook] erro ao processar mensagem", err);
       await sendWhatsAppText(from, "Deu um erro aqui do meu lado. Tenta de novo em instantes.").catch(
