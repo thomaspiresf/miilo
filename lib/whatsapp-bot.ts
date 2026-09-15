@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { formatBRL } from "@/lib/format";
+import { site } from "@/lib/site";
 import { notifyNumbers } from "@/lib/whatsapp";
 import { hasSupabaseAdmin } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -233,6 +234,7 @@ async function toolLogSale(input: any): Promise<object> {
   const rawItems = Array.isArray(input.items) ? input.items : null;
   if (!rawItems || rawItems.length === 0) return { ok: false, reason: "missing_items" };
   const customerName = typeof input.customer_name === "string" ? input.customer_name.trim() : "";
+  const payment = input.payment === "received" || input.payment === "link" ? input.payment : null;
 
   const products = await adminListProducts();
 
@@ -266,6 +268,25 @@ async function toolLogSale(input: any): Promise<object> {
     resolved.push({ product, variant, qty });
   }
 
+  const itemsSummary = resolved.map((r) => ({
+    qty: r.qty,
+    product_name: r.product.name,
+    variant_label: variantLabel(r.variant) || null,
+  }));
+
+  // Nunca assume que já foi pago — só cria o pedido depois que a pessoa disser
+  // se já recebeu (dinheiro/pix na hora) ou se é pra gerar link de cobrança.
+  if (!payment) {
+    const previewTotal = resolved.reduce((s, r) => s + r.variant.price * r.qty, 0);
+    return {
+      ok: false,
+      reason: "need_payment_choice",
+      customer_name: customerName || null,
+      items: itemsSummary,
+      total_formatted: formatBRL(previewTotal),
+    };
+  }
+
   try {
     const order = await createOrder({
       email: POS_FALLBACK_EMAIL,
@@ -278,9 +299,11 @@ async function toolLogSale(input: any): Promise<object> {
       lines: resolved.map((r) => ({ variantId: r.variant.id, qty: r.qty })),
       channel: "pos",
       notes: "Registrado via WhatsApp",
-      posPayMode: "cash",
+      posPayMode: payment === "received" ? "cash" : "link",
     });
-    await approveOrder(order.id, { mpStatus: "manual", method: "dinheiro" });
+    if (payment === "received") {
+      await approveOrder(order.id, { mpStatus: "manual", method: "dinheiro" });
+    }
     await logAction({
       action: "pos.sale",
       entity: "order",
@@ -294,14 +317,11 @@ async function toolLogSale(input: any): Promise<object> {
     return {
       ok: true,
       order_number: order.number,
-      total: order.total,
       total_formatted: formatBRL(order.total),
       customer_name: customerName || null,
-      items: resolved.map((r) => ({
-        qty: r.qty,
-        product_name: r.product.name,
-        variant_label: variantLabel(r.variant) || null,
-      })),
+      payment,
+      pay_url: payment === "link" ? `${site.url}/pagar/${order.id}` : null,
+      items: itemsSummary,
     };
   } catch (err) {
     console.error("[whatsapp-bot] erro ao registrar venda", err);
@@ -454,6 +474,14 @@ const TOOLS = [
           },
         },
         customer_name: { type: "string", description: "Nome do cliente, se mencionado." },
+        payment: {
+          type: "string",
+          enum: ["received", "link"],
+          description:
+            "'received' se a pessoa disse que já recebeu (dinheiro, pix, cartão na hora). 'link' se " +
+            "quer que gere um link de cobrança pra mandar pro cliente. NÃO adivinhe — se a mensagem " +
+            "não deixar isso claro, deixe esse campo de fora que a ferramenta avisa que falta perguntar.",
+        },
       },
       required: ["items"],
     },
@@ -531,6 +559,10 @@ em vez de chamar log_sale várias vezes.
 pergunte de volta em vez de adivinhar — e quando a pessoa responder qual das opções ela quis dizer, \
 chame a MESMA ferramenta de novo imediatamente com o produto e a opção escolhida (copie o texto da \
 opção exatamente como veio na lista), em vez de repetir a mesma pergunta.
+- NUNCA assuma que uma venda já foi paga. Se log_sale voltar "need_payment_choice", pergunte se já \
+recebeu (dinheiro/pix/cartão na hora) ou se é pra gerar um link de cobrança pra mandar pro cliente — \
+e só chame log_sale de novo (com o campo payment preenchido) depois que a pessoa responder isso. Se \
+a resposta trouxer "pay_url", inclua o link na sua confirmação.
 - Se a pergunta não tiver nada a ver com a loja (vendas, estoque, pedidos), diga educadamente que só \
 ajuda com esses assuntos.
 - NUNCA diga que uma venda foi registrada, nem invente um número de pedido, sem ter chamado log_sale \
