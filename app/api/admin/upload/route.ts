@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { adminUploadImage, adminUploadVideo } from "@/lib/data/admin";
 import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
+import { rateLimit, clientIp, tooMany } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return forbiddenCrossOrigin();
+  const rl = rateLimit(`admin-upload:${clientIp(request)}`, 30, 10 * 60_000);
+  if (!rl.ok) return tooMany(rl.retryAfterSeconds);
   await requireAdmin();
 
   const form = await request.formData().catch(() => null);

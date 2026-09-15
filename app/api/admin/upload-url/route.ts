@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseAdmin } from "@/lib/env";
 import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
+import { rateLimit, clientIp, tooMany } from "@/lib/rate-limit";
 
 const BUCKET = "product-images";
 const IMG_EXT = ["jpg", "jpeg", "png", "webp", "avif"];
@@ -14,6 +15,8 @@ const VID_EXT = ["mp4", "webm", "mov"];
  */
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return forbiddenCrossOrigin();
+  const rl = rateLimit(`admin-upload-url:${clientIp(request)}`, 30, 10 * 60_000);
+  if (!rl.ok) return tooMany(rl.retryAfterSeconds);
   await requireAdmin();
 
   if (!hasSupabaseAdmin()) {
