@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/site/header";
 import { Logo } from "@/components/site/logo";
 import { AnalyticsScripts } from "@/components/site/analytics-scripts";
 import { CookieConsent } from "@/components/site/cookie-consent";
+import { WhatsAppButton } from "@/components/site/whatsapp-button";
 import { env } from "@/lib/env";
 import { site } from "@/lib/site";
 
@@ -48,6 +49,7 @@ export default async function LojaLayout({ children }: LayoutProps<"/">) {
       </footer>
       <AnalyticsScripts />
       <CookieConsent />
+      <WhatsAppButton />
     </>
   );
 }
