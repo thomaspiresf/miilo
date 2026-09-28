@@ -11,6 +11,7 @@ import {
   reorderImagesAction,
 } from "@/app/admin/actions";
 import { uploadToStorage } from "@/lib/admin-upload";
+import { resizeImageForUpload } from "@/lib/image-resize";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/misc";
 import type { ProductImage } from "@/lib/types";
@@ -93,7 +94,8 @@ export function ImageUploader({
         if (file.size > MAX_MB * 1024 * 1024) {
           throw new Error(`"${file.name}" passa de ${MAX_MB} MB. Reduza a imagem.`);
         }
-        const path = await uploadToStorage(file, { productId, kind: "image" });
+        const resized = await resizeImageForUpload(file);
+        const path = await uploadToStorage(resized, { productId, kind: "image" });
         const fd = new FormData();
         fd.append("productId", productId);
         fd.append("url", path);

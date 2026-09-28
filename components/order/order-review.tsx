@@ -8,12 +8,14 @@ import { createClient } from "@/lib/supabase/client";
 import { submitReviewAction } from "@/app/(loja)/conta/pedidos/actions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { resizeImageForUpload } from "@/lib/image-resize";
 
 type Photo = { path: string; url: string };
 type State = { rating: number; comment: string; photos: Photo[] };
 
 async function uploadPhoto(file: File): Promise<Photo> {
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const resized = await resizeImageForUpload(file);
+  const ext = (resized.name.split(".").pop() || "jpg").toLowerCase();
   const res = await fetch("/api/reviews/upload-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -24,7 +26,7 @@ async function uploadPhoto(file: File): Promise<Photo> {
   const supabase = createClient();
   const { error } = await supabase.storage
     .from("product-images")
-    .uploadToSignedUrl(sig.path, sig.token, file, { contentType: file.type });
+    .uploadToSignedUrl(sig.path, sig.token, resized, { contentType: resized.type });
   if (error) throw new Error(error.message);
   const { data } = supabase.storage.from("product-images").getPublicUrl(sig.path);
   return { path: sig.path, url: data.publicUrl };
