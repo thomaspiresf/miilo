@@ -32,8 +32,11 @@ export function Logo({
       alt="miilo"
       width={f.w}
       height={f.h}
-      priority={priority}
       className={cn("h-auto w-auto", className)}
+      // `priority` foi descontinuada a partir do Next 16 e não faz mais nada
+      // sozinha (ver components/site/product-card.tsx) — o pedido de
+      // prioridade de verdade é este par de props.
+      {...(priority ? { loading: "eager" as const, fetchPriority: "high" as const } : {})}
     />
   );
 }

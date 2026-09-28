@@ -19,7 +19,12 @@ export function ProductCard({ item, priority = false }: { item: ProductCardItem;
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 260px"
             className="object-cover transition duration-300 group-hover:scale-[1.03]"
-            priority={priority}
+            // Vários cards podem ser "o" LCP dependendo da largura da tela (grade
+            // muda de 2 a 4 colunas) — usa fetchPriority em vez de `preload`
+            // (que insere <link rel=preload>, indicado só quando há 1 candidato
+            // óbvio; ver docs do Image, prop preload). `priority` foi
+            // descontinuada a partir do Next 16 e não seta fetchpriority sozinha.
+            {...(priority ? { loading: "eager" as const, fetchPriority: "high" as const } : {})}
           />
         )}
         {off != null && (

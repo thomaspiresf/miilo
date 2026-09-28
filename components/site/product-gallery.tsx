@@ -67,7 +67,10 @@ export function ProductGallery({
             src={current.im.url}
             alt={current.im.alt ?? name}
             fill
-            priority
+            // Único candidato a LCP da página (a mesma imagem, só muda de
+            // tamanho por CSS) — preload é o sucessor de `priority`,
+            // descontinuada a partir do Next 16 (ver components/site/product-card.tsx).
+            preload
             sizes="(max-width: 1024px) 100vw, 520px"
             className="object-cover"
           />
