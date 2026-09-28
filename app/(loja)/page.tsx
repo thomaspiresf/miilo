@@ -35,7 +35,7 @@ export default async function HomePage() {
       {sections.length === 0 ? (
         <EmptyState title="Em breve" description="Estamos preparando a vitrine." />
       ) : (
-        sections.map((s) => (
+        sections.map((s, idx) => (
           <section key={s.kind}>
             <div className="mb-3 flex items-end justify-between gap-3">
               <h2 className="text-xl font-black">{s.label}</h2>
@@ -47,7 +47,8 @@ export default async function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-            <ProductRow items={s.items.slice(0, PER_ROW)} />
+            {/* só a 1ª seção começa visível sem rolar — as de baixo não precisam de priority */}
+            <ProductRow items={s.items.slice(0, PER_ROW)} priorityCount={idx === 0 ? 2 : 0} />
           </section>
         ))
       )}

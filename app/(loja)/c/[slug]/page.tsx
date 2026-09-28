@@ -88,7 +88,7 @@ export default async function CategoryPage(props: PageProps<"/c/[slug]">) {
               description="Tente remover alguns filtros."
             />
           ) : (
-            <ProductGrid items={items} />
+            <ProductGrid items={items} priorityCount={4} />
           )}
         </div>
       </div>

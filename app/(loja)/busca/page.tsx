@@ -52,7 +52,7 @@ export default async function SearchPage(props: PageProps<"/busca">) {
               description={q ? "Tente outras palavras." : "Digite acima para buscar."}
             />
           ) : (
-            <ProductGrid items={items} />
+            <ProductGrid items={items} priorityCount={4} />
           )}
         </div>
       </div>

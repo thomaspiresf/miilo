@@ -6,7 +6,14 @@ import type { ProductCardItem } from "@/lib/product-cards";
 import { ProductCard } from "@/components/site/product-card";
 import { cn } from "@/lib/utils";
 
-export function ProductRow({ items }: { items: ProductCardItem[] }) {
+/** `priorityCount`: quantos primeiros cards carregam sem lazy-loading — só faz sentido na primeira seção da home (o resto já está fora da tela ao carregar). */
+export function ProductRow({
+  items,
+  priorityCount = 0,
+}: {
+  items: ProductCardItem[];
+  priorityCount?: number;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
@@ -37,9 +44,9 @@ export function ProductRow({ items }: { items: ProductCardItem[] }) {
         onScroll={update}
         className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto scroll-px-4 px-4 sm:mx-0 sm:gap-4 sm:px-0"
       >
-        {items.map((it) => (
+        {items.map((it, i) => (
           <div key={it.key} className="w-[44vw] shrink-0 snap-start sm:w-52">
-            <ProductCard item={it} />
+            <ProductCard item={it} priority={i < priorityCount} />
           </div>
         ))}
       </div>

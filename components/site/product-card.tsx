@@ -4,7 +4,7 @@ import type { ProductCardItem } from "@/lib/product-cards";
 import { discountPercent, formatBRL } from "@/lib/format";
 import { Rating } from "@/components/site/rating";
 
-export function ProductCard({ item }: { item: ProductCardItem }) {
+export function ProductCard({ item, priority = false }: { item: ProductCardItem; priority?: boolean }) {
   const { product } = item;
   const compareAt = item.compareAtFrom;
   const off = discountPercent(item.priceFrom, compareAt);
@@ -19,6 +19,7 @@ export function ProductCard({ item }: { item: ProductCardItem }) {
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 260px"
             className="object-cover transition duration-300 group-hover:scale-[1.03]"
+            priority={priority}
           />
         )}
         {off != null && (
@@ -60,11 +61,18 @@ export function ProductCard({ item }: { item: ProductCardItem }) {
   );
 }
 
-export function ProductGrid({ items }: { items: ProductCardItem[] }) {
+/** `priorityCount`: quantos primeiros cards (a linha visível sem rolar) carregam sem lazy-loading — só faz sentido na primeira grade da página. */
+export function ProductGrid({
+  items,
+  priorityCount = 0,
+}: {
+  items: ProductCardItem[];
+  priorityCount?: number;
+}) {
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-4 lg:grid-cols-4">
-      {items.map((it) => (
-        <ProductCard key={it.key} item={it} />
+      {items.map((it, i) => (
+        <ProductCard key={it.key} item={it} priority={i < priorityCount} />
       ))}
     </div>
   );
