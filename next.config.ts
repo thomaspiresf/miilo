@@ -54,9 +54,13 @@ const nextConfig: NextConfig = {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
   images: {
-    // No modo demonstração (sem Supabase) as imagens são externas (picsum);
-    // desligar a otimização evita gargalo no dev e mantém o preview rápido.
-    unoptimized: !supabaseUrl,
+    // Desligado: as imagens do catálogo já saem leves do Supabase Storage
+    // (dezenas de KB, não fotos cruas), então o ganho da otimização automática
+    // do Next é pequeno — e ela consome a cota de "Image Transformations" do
+    // plano Hobby da Vercel (5.000/mês), que já estourou uma vez e derrubou
+    // as fotos da loja (erro 402) até o próximo ciclo. Sem otimizar, a imagem
+    // é servida direto do Supabase, sem depender dessa cota.
+    unoptimized: true,
     remotePatterns: [
       // Supabase Storage (quando configurado)
       ...(supabaseHost
