@@ -42,6 +42,11 @@ export function whatsappEnabled() {
   return Boolean(hasWhatsAppCredentials() && process.env.WHATSAPP_TEMPLATE_NAME);
 }
 
+/** Credenciais + template de cobrança aprovado — necessário só fora da janela de 24h (chargeOrderAction). */
+export function hasChargeTemplate() {
+  return Boolean(hasWhatsAppCredentials() && process.env.WHATSAPP_CHARGE_TEMPLATE_NAME);
+}
+
 export function notifyNumbers(): string[] {
   return (process.env.WHATSAPP_NOTIFY_NUMBERS || "")
     .split(",")
@@ -89,15 +94,34 @@ export async function sendWhatsAppText(to: string, message: string): Promise<Sen
 }
 
 /**
- * Manda a mensagem-modelo pra um número. `params` preenche as variáveis
- * {{1}}, {{2}}... do corpo do template, na ordem.
+ * Manda uma mensagem-modelo pra um número. `bodyParams` preenche as
+ * variáveis {{1}}, {{2}}... do corpo, na ordem. `buttonUrlParam`, se vier,
+ * preenche a parte dinâmica do botão de link (o template precisa ter um
+ * botão "Visit website" com URL dinâmica cadastrado no índice 0).
  */
-async function sendWhatsAppTemplate(to: string, params: string[]): Promise<SendResult> {
-  if (!whatsappEnabled()) {
+async function sendWhatsAppTemplate(
+  to: string,
+  templateName: string,
+  bodyParams: string[],
+  buttonUrlParam?: string,
+): Promise<SendResult> {
+  if (!hasWhatsAppCredentials() || !templateName) {
     console.info(`[whatsapp] desativado (faltam credenciais/template da Meta) — mensagem pra ${to} não enviada`);
     return { ok: false, id: null };
   }
   try {
+    const components: Record<string, unknown>[] = [
+      { type: "body", parameters: bodyParams.map((text) => ({ type: "text", text })) },
+    ];
+    if (buttonUrlParam) {
+      components.push({
+        type: "button",
+        sub_type: "url",
+        index: "0",
+        parameters: [{ type: "text", text: buttonUrlParam }],
+      });
+    }
+
     const res = await fetch(graphUrl(), {
       method: "POST",
       headers: {
@@ -109,14 +133,9 @@ async function sendWhatsAppTemplate(to: string, params: string[]): Promise<SendR
         to,
         type: "template",
         template: {
-          name: process.env.WHATSAPP_TEMPLATE_NAME,
+          name: templateName,
           language: { code: process.env.WHATSAPP_TEMPLATE_LANG || DEFAULT_TEMPLATE_LANG },
-          components: [
-            {
-              type: "body",
-              parameters: params.map((text) => ({ type: "text", text })),
-            },
-          ],
+          components,
         },
       }),
     });
@@ -166,6 +185,23 @@ export function chargeMessageText(order: Order, payUrl: string): string {
 }
 
 /**
+ * Manda a cobrança pelo template "cobranca_pedido" — único jeito de chegar
+ * no cliente fora da janela de 24h (caso comum: ele nunca falou com o bot).
+ * O template tem {{1}} primeiro nome, {{2}} número do pedido, {{3}} valor, e
+ * um botão de link pro pagamento cuja URL dinâmica é o id do pedido (a URL
+ * base .../pagar/ já está fixa no cadastro do template, ver instruções).
+ */
+export async function sendChargeTemplate(to: string, order: Order): Promise<SendResult> {
+  const name = order.customer_name ? order.customer_name.split(" ")[0] : "Cliente da loja";
+  return sendWhatsAppTemplate(
+    to,
+    process.env.WHATSAPP_CHARGE_TEMPLATE_NAME || "",
+    [name, order.number, formatBRL(order.total)],
+    order.id,
+  );
+}
+
+/**
  * Registra o aviso de venda na mesma tabela que o painel /admin/conversas
  * lê — sem isso a mensagem realmente sai pro WhatsApp mas fica invisível no
  * histórico ali (só as respostas do bot/humano passavam por saveTurns).
@@ -199,7 +235,7 @@ export async function notifySale(order: Order): Promise<void> {
           return;
         }
       }
-      const sent = await sendWhatsAppTemplate(to, params);
+      const sent = await sendWhatsAppTemplate(to, process.env.WHATSAPP_TEMPLATE_NAME || "", params);
       if (sent.ok) await recordSaleNotification(to, text, sent.id);
     }),
   );
