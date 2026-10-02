@@ -153,6 +153,19 @@ function saleMessageText(order: Order): string {
 }
 
 /**
+ * Mensagem de cobrança pro cliente de uma venda "a receber"/"com link" —
+ * usada no painel /admin/pedidos (ver "A receber"). O número do WhatsApp
+ * virou um número de API (Meta Cloud API) e não dá mais pra digitar e
+ * mandar pelo WhatsApp normal do celular — o envio sai daqui, pelo mesmo
+ * caminho (sendManualReply) que o painel /admin/conversas usa.
+ */
+export function chargeMessageText(order: Order, payUrl: string): string {
+  const name = order.customer_name ? order.customer_name.split(" ")[0] : null;
+  const greeting = name ? `Oi, ${name}!` : "Oi!";
+  return `${greeting} Aqui é da miilo 🙂 Seu pedido ${order.number} ficou no valor de ${formatBRL(order.total)}. Pra pagar, é só acessar: ${payUrl}`;
+}
+
+/**
  * Registra o aviso de venda na mesma tabela que o painel /admin/conversas
  * lê — sem isso a mensagem realmente sai pro WhatsApp mas fica invisível no
  * histórico ali (só as respostas do bot/humano passavam por saveTurns).

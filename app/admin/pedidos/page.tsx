@@ -2,6 +2,9 @@ import Link from "next/link";
 import { listAllOrders } from "@/lib/data/orders";
 import { formatBRL } from "@/lib/format";
 import { OrderList, type OrderListItem } from "@/components/admin/order-list";
+import { ReceivablesPanel, type ReceivableItem } from "@/components/admin/receivables-panel";
+import { chargeMessageText } from "@/lib/whatsapp";
+import { site } from "@/lib/site";
 import type { Order, OrderStatus } from "@/lib/types";
 
 const FILTERS: { value: string; label: string }[] = [
@@ -32,6 +35,16 @@ const toItem = (o: Order): OrderListItem => ({
     qty: it.qty,
     total: it.unit_price * it.qty,
   })),
+});
+
+const toReceivable = (o: Order): ReceivableItem => ({
+  id: o.id,
+  number: o.number,
+  customerName: o.customer_name,
+  phone: o.phone,
+  total: o.total,
+  created_at: o.created_at,
+  defaultMessage: chargeMessageText(o, `${site.url}/pagar/${o.id}`),
 });
 
 export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">) {
@@ -88,7 +101,11 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
         </div>
       )}
 
-      <OrderList orders={orders.map(toItem)} empty="Nenhum pedido." />
+      {receberView ? (
+        <ReceivablesPanel items={receivables.map(toReceivable)} />
+      ) : (
+        <OrderList orders={orders.map(toItem)} empty="Nenhum pedido." />
+      )}
     </div>
   );
 }
