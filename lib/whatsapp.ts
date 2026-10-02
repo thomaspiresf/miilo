@@ -171,6 +171,12 @@ function saleMessageText(order: Order): string {
   return `🛍️ Nova venda confirmada na loja miilo! Pedido número ${number}, no valor total de ${total}. Comprado por ${customer}, e-mail de contato ${email}. Item vendido: ${itens}. Obrigado por mais essa venda!`;
 }
 
+function orderItemsSummary(order: Order): string {
+  return order.items
+    .map((it) => `${it.qty}x ${it.product_name}${it.variant_label ? ` (${it.variant_label})` : ""}`)
+    .join(" · ");
+}
+
 /**
  * Mensagem de cobrança pro cliente de uma venda "a receber"/"com link" —
  * usada no painel /admin/pedidos (ver "A receber"). O número do WhatsApp
@@ -180,14 +186,14 @@ function saleMessageText(order: Order): string {
  */
 export function chargeMessageText(order: Order, payUrl: string): string {
   const name = order.customer_name ? order.customer_name.split(" ")[0] : null;
-  const greeting = name ? `Oi, ${name}!` : "Oi!";
-  return `${greeting} Aqui é da miilo 🙂 Seu pedido ${order.number} ficou no valor de ${formatBRL(order.total)}. Pra pagar, é só acessar: ${payUrl}`;
+  const greeting = name ? `Oi, ${name}! Tudo bem?` : "Oi! Tudo bem?";
+  return `${greeting} Aqui é da miilo 🙂 Vimos que o pagamento de ${orderItemsSummary(order)}, no valor de ${formatBRL(order.total)}, ainda está pendente. Pra finalizar, é só acessar: ${payUrl}. Qualquer dúvida, é só chamar!`;
 }
 
 /**
  * Manda a cobrança pelo template "cobranca_pedido" — único jeito de chegar
  * no cliente fora da janela de 24h (caso comum: ele nunca falou com o bot).
- * O template tem {{1}} primeiro nome, {{2}} número do pedido, {{3}} valor, e
+ * O template tem {{1}} primeiro nome, {{2}} itens comprados, {{3}} valor, e
  * um botão de link pro pagamento cuja URL dinâmica é o id do pedido (a URL
  * base .../pagar/ já está fixa no cadastro do template, ver instruções).
  */
@@ -196,7 +202,7 @@ export async function sendChargeTemplate(to: string, order: Order): Promise<Send
   return sendWhatsAppTemplate(
     to,
     process.env.WHATSAPP_CHARGE_TEMPLATE_NAME || "",
-    [name, order.number, formatBRL(order.total)],
+    [name, orderItemsSummary(order), formatBRL(order.total)],
     order.id,
   );
 }
