@@ -67,6 +67,16 @@ export function toCardItem(product: Product): ProductCardItem {
 }
 
 /**
+ * Reordena pra mandar os esgotados pro final, sem mexer na ordem relativa
+ * de resto (sort é estável) — usado nas páginas de listagem (categoria,
+ * busca), que mostram tudo, mas não querem "Esgotado" competindo com o que
+ * dá pra comprar agora.
+ */
+export function sortInStockFirst(items: ProductCardItem[]): ProductCardItem[] {
+  return [...items].sort((a, b) => Number(b.inStock) - Number(a.inStock));
+}
+
+/**
  * Explode a lista em um card por COR (roupa com várias cores aparece separada
  * na vitrine, cada uma com as fotos daquela cor). Produto sem cor / com uma
  * cor só vira um card normal. Mantém a ordem dos produtos; cores na ordem das

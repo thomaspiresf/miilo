@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getAvailableSizes, listProducts } from "@/lib/data/catalog";
 import { parseFilters } from "@/lib/data/parse-filters";
-import { explodeByColor } from "@/lib/product-cards";
+import { explodeByColor, sortInStockFirst } from "@/lib/product-cards";
 import { ProductGrid } from "@/components/site/product-card";
 import { Filters } from "@/components/site/filters";
 import { MobileFilters } from "@/components/site/mobile-filters";
@@ -19,7 +19,7 @@ export default async function SearchPage(props: PageProps<"/busca">) {
     listProducts(filters),
     getAvailableSizes(),
   ]);
-  const items = explodeByColor(products);
+  const items = sortInStockFirst(explodeByColor(products));
 
   return (
     <div>

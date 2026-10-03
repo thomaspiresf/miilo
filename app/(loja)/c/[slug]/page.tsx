@@ -6,7 +6,7 @@ import {
   listProducts,
 } from "@/lib/data/catalog";
 import { parseFilters } from "@/lib/data/parse-filters";
-import { explodeByColor } from "@/lib/product-cards";
+import { explodeByColor, sortInStockFirst } from "@/lib/product-cards";
 import { ProductGrid } from "@/components/site/product-card";
 import { CategoryPills, SubcategoryPills } from "@/components/site/category-pills";
 import { Filters } from "@/components/site/filters";
@@ -48,7 +48,7 @@ export default async function CategoryPage(props: PageProps<"/c/[slug]">) {
     getAvailableSizes(r.kind),
     getCategories(),
   ]);
-  const items = explodeByColor(products);
+  const items = sortInStockFirst(explodeByColor(products));
 
   return (
     <div>

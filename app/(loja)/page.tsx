@@ -16,7 +16,7 @@ const PER_ROW = 12;
 
 export default async function HomePage() {
   const products = await listProducts(); // padrão: ordem alfabética
-  const items = explodeByColor(products); // um card por cor na vitrine
+  const items = explodeByColor(products).filter((it) => it.inStock); // um card por cor, sem esgotados
 
   const sections = CATEGORY_KINDS.map((kind) => ({
     kind,
