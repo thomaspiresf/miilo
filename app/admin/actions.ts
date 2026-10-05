@@ -45,7 +45,7 @@ import type { CategoryKind, OrderStatus, VideoAudio } from "@/lib/types";
  * preço/estoque/foto só apareceria na próxima revalidação (até 60s).
  */
 function revalidateStorefront() {
-  revalidateStorefront();
+  revalidatePath("/");
   revalidatePath("/c/[slug]", "page");
   revalidatePath("/p/[slug]", "page");
 }
