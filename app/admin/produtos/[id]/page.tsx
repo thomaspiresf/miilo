@@ -4,6 +4,7 @@ import { adminGetProduct, adminListCategories } from "@/lib/data/admin";
 import { listStockAlerts } from "@/lib/data/stock-alerts";
 import { getPricingSettings } from "@/lib/data/pricing";
 import { ProductForm } from "@/components/admin/product-form";
+import { InvoiceImport } from "@/components/admin/invoice-import";
 import { PriceSimulator } from "@/components/admin/pricing-client";
 import { ImageUploader } from "@/components/admin/image-uploader";
 import { VideoUploader } from "@/components/admin/video-uploader";
@@ -50,11 +51,17 @@ export default async function AdminProductEditPage(
           {isNew ? "Novo produto" : product!.name}
         </h1>
         {isNew && (
-          <p className="mt-1 text-sm text-muted">
-            Preencha os dados e salve. O preço e o estoque ficam mais abaixo (o
-            formulário se ajusta se for roupa ou brinquedo). As fotos você adiciona
-            na etapa seguinte.
-          </p>
+          <>
+            <p className="mt-1 text-sm text-muted">
+              Preencha os dados e salve. O preço e o estoque ficam mais abaixo (o
+              formulário se ajusta se for roupa ou brinquedo). As fotos você adiciona
+              na etapa seguinte.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+              <InvoiceImport />
+              <span>Tem a nota de compra? A IA lê os itens, quantidades e custos pra você.</span>
+            </div>
+          </>
         )}
       </div>
 

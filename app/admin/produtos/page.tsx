@@ -3,6 +3,7 @@ import { FolderTree, TicketPercent } from "lucide-react";
 import { adminListProducts } from "@/lib/data/admin";
 import { AdminProductList } from "@/components/admin/admin-product-list";
 import { Button } from "@/components/ui/button";
+import { InvoiceImport } from "@/components/admin/invoice-import";
 
 export default async function AdminProductsPage() {
   const products = await adminListProducts();
@@ -24,6 +25,7 @@ export default async function AdminProductsPage() {
               Cupons
             </Link>
           </Button>
+          <InvoiceImport />
           <Button asChild size="sm">
             <Link prefetch={false} href="/admin/produtos/novo">Novo produto</Link>
           </Button>

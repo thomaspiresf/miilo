@@ -775,3 +775,15 @@ export async function adminRecentStockMovements(limit = 30): Promise<StockMoveme
 }
 
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** Define o custo de compra de todas as variações de um produto (usado no cadastro por nota). */
+export async function adminSetProductCost(productId: string, cost: number): Promise<void> {
+  assertPersistable();
+  if (!hasSupabaseAdmin()) {
+    const p = mockDB().products.find((x) => x.id === productId);
+    p?.variants.forEach((v) => (v.cost = cost));
+    return;
+  }
+  const { error } = await createAdminClient().from("product_variants").update({ cost }).eq("product_id", productId);
+  if (error) throw error;
+}
