@@ -49,7 +49,7 @@ const MASTER_LINKS: NavLink[] = [
   { href: "/admin/usuarios", label: "Usuários", icon: Users },
 ];
 
-/** Fica dentro do <Link>: troca o ícone por um spinner enquanto a página carrega. */
+/** Fica dentro do <Link prefetch={false}>: troca o ícone por um spinner enquanto a página carrega. */
 function NavItemBody({ label, Icon }: { label: string; Icon: LucideIcon }) {
   const { pending } = useLinkStatus();
   return (
@@ -78,7 +78,7 @@ export function AdminNav({ master = false }: { master?: boolean }) {
             : pathname.startsWith(l.href) ||
               (l.matches?.some((m) => pathname.startsWith(m)) ?? false);
         return (
-          <Link
+          <Link prefetch={false}
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}

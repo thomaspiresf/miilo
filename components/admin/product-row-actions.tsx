@@ -90,7 +90,7 @@ export function ProductRowActions({
         </span>
 
         {/* editar */}
-        <Link
+        <Link prefetch={false}
           href={`/admin/produtos/${id}`}
           className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-xs font-semibold hover:bg-black/[0.04]"
         >

@@ -139,7 +139,7 @@ export function HealthChart({ months, hrefBase }: { months: HealthMonth[]; hrefB
       <div className="mt-3 rounded-xl bg-black/[0.03] px-4 py-3">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p className="text-sm font-semibold">{longLabel(sel.ym)}</p>
-          <Link href={`${hrefBase}${sel.ym}`} className="text-xs font-medium text-primary hover:underline">
+          <Link prefetch={false} href={`${hrefBase}${sel.ym}`} className="text-xs font-medium text-primary hover:underline">
             Ver só este mês →
           </Link>
         </div>

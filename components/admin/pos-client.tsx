@@ -713,7 +713,7 @@ export function PosClient({
               <ul className="divide-y divide-border text-sm">
                 {recent.map((s) => (
                   <li key={s.id}>
-                    <Link
+                    <Link prefetch={false}
                       href={`/admin/pedidos/${s.id}`}
                       className="flex items-center justify-between gap-2 py-2 hover:opacity-70"
                     >
@@ -992,7 +992,7 @@ function SaleResult({
           Nova venda
         </Button>
         <Button asChild variant="outline" className="flex-1">
-          <Link href={`/admin/pedidos/${created.orderId}`}>Ver pedido</Link>
+          <Link prefetch={false} href={`/admin/pedidos/${created.orderId}`}>Ver pedido</Link>
         </Button>
       </div>
     </div>

@@ -131,7 +131,7 @@ export default async function AdminAnalyticsPage() {
         <p className="mt-4 text-xs text-muted">
           Só conta quem aceita o banner de cookies, e nunca inclui nome, e-mail,
           telefone ou endereço — veja em{" "}
-          <Link href="/privacidade" className="font-semibold underline">
+          <Link prefetch={false} href="/privacidade" className="font-semibold underline">
             /privacidade
           </Link>
           .

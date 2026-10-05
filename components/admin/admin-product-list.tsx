@@ -196,7 +196,7 @@ export function AdminProductList({ products }: { products: Product[] }) {
                 )}
               </div>
               <div className="min-w-[10rem] grow basis-0">
-                <Link
+                <Link prefetch={false}
                   href={`/admin/produtos/${p.id}`}
                   className="line-clamp-2 text-sm font-semibold leading-snug hover:text-primary"
                 >

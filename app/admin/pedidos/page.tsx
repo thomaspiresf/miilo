@@ -72,7 +72,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
       <h1 className="text-2xl font-black">Pedidos</h1>
 
       {receivables.length > 0 && !receberView && (
-        <Link
+        <Link prefetch={false}
           href="/admin/pedidos?status=receber"
           className="block rounded-xl bg-warning/10 px-4 py-3 text-sm font-medium text-warning hover:bg-warning/15"
         >
@@ -84,7 +84,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((f) => (
-          <Link
+          <Link prefetch={false}
             key={f.value}
             href={f.value ? `/admin/pedidos?status=${f.value}` : "/admin/pedidos"}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold ${

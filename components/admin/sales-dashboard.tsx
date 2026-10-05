@@ -557,7 +557,7 @@ export function SalesDashboard({
       </div>
 
       {outOfStock > 0 && (
-        <Link
+        <Link prefetch={false}
           href="/admin/estoque?f=out"
           className="block rounded-xl bg-danger/10 px-4 py-3 text-sm font-medium text-danger hover:bg-danger/15"
         >
@@ -592,7 +592,7 @@ export function SalesDashboard({
             k.wide && "col-span-2 sm:col-span-1",
           );
           return k.href ? (
-            <Link key={k.label} href={k.href} className={cls}>
+            <Link prefetch={false} key={k.label} href={k.href} className={cls}>
               {body}
             </Link>
           ) : (
@@ -662,7 +662,7 @@ export function SalesDashboard({
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-black">Pedidos recentes</h2>
-          <Link href="/admin/pedidos" className="text-sm font-semibold text-primary">
+          <Link prefetch={false} href="/admin/pedidos" className="text-sm font-semibold text-primary">
             ver todos
           </Link>
         </div>

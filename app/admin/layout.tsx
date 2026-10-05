@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
               admin
             </span>
           </div>
-          <Link href="/" className="text-sm font-semibold text-primary">
+          <Link prefetch={false} href="/" className="text-sm font-semibold text-primary">
             ver loja
           </Link>
         </div>

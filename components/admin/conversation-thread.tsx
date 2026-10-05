@@ -143,7 +143,7 @@ export function ConversationThread({
     <div className="flex h-[calc(100vh-8rem)] flex-col">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Link href="/admin/conversas" className="text-muted hover:text-foreground" aria-label="Voltar">
+          <Link prefetch={false} href="/admin/conversas" className="text-muted hover:text-foreground" aria-label="Voltar">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <ContactAvatar name={contactName} phone={phone} size={40} />

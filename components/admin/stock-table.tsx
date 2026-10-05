@@ -29,7 +29,7 @@ function ThumbLink({
   size?: number;
 }) {
   return (
-    <Link
+    <Link prefetch={false}
       href={`/admin/produtos/${productId}`}
       title="Abrir produto"
       className="relative block shrink-0 overflow-hidden rounded-lg border border-border bg-black/[0.03]"
@@ -385,7 +385,7 @@ export function StockTable({
                   size={48}
                 />
                 <div className="min-w-0 flex-1">
-                  <Link
+                  <Link prefetch={false}
                     href={`/admin/produtos/${g.productId}`}
                     className="line-clamp-2 text-sm font-bold leading-snug hover:text-primary"
                   >

@@ -77,7 +77,7 @@ export default async function AuditLogPage(props: PageProps<"/admin/atividade">)
             return (
               <li key={e.id}>
                 {href ? (
-                  <Link href={href} className="block hover:bg-black/[0.02]">
+                  <Link prefetch={false} href={href} className="block hover:bg-black/[0.02]">
                     {body}
                   </Link>
                 ) : (
@@ -91,7 +91,7 @@ export default async function AuditLogPage(props: PageProps<"/admin/atividade">)
 
       {entries.length >= limit && (
         <div className="text-center">
-          <Link
+          <Link prefetch={false}
             href={`/admin/atividade?${nextParams.toString()}`}
             className="text-sm font-semibold text-primary"
           >

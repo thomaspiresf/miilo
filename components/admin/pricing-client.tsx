@@ -1260,7 +1260,7 @@ function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
       <div className="flex items-center gap-3">
         <Thumb url={r.imageUrl} size={40} />
         <div className="min-w-0 flex-1">
-          <Link
+          <Link prefetch={false}
             href={`/admin/produtos/${r.productId}`}
             className="line-clamp-1 text-[15px] font-semibold leading-tight hover:text-primary"
           >
@@ -1278,7 +1278,7 @@ function CardRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
       {p.multi ? (
         <p className="mt-4 text-xs text-muted">
           Preços variam por variação —{" "}
-          <Link
+          <Link prefetch={false}
             href={`/admin/produtos/${r.productId}`}
             className="font-medium text-foreground underline underline-offset-2"
           >
@@ -1412,7 +1412,7 @@ function TableRow({ r, ctx }: { r: PricingRow; ctx: RowCtx }) {
           <div className="flex items-center gap-2.5">
             <Thumb url={r.imageUrl} size={36} />
             <div className="w-[9.5rem] min-w-0 sm:w-52">
-              <Link
+              <Link prefetch={false}
                 href={`/admin/produtos/${r.productId}`}
                 className="line-clamp-1 font-semibold hover:text-primary"
               >

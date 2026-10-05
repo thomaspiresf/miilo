@@ -43,7 +43,7 @@ export default async function AdminProductEditPage(
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <Link href="/admin/produtos" className="text-sm text-primary">
+        <Link prefetch={false} href="/admin/produtos" className="text-sm text-primary">
           ← Produtos
         </Link>
         <h1 className="mt-1 text-2xl font-black">

@@ -27,7 +27,7 @@ export default async function ConversasPage() {
         <ol className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
           {threads.map((t) => (
             <li key={t.phone}>
-              <Link
+              <Link prefetch={false}
                 href={`/admin/conversas/${t.phone}`}
                 className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.02]"
               >

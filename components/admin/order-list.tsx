@@ -126,7 +126,7 @@ export function OrderList({
                   ))}
                 </ul>
                 <Button asChild size="sm" className="mt-3 w-full sm:w-auto">
-                  <Link href={`/admin/pedidos/${o.id}`}>
+                  <Link prefetch={false} href={`/admin/pedidos/${o.id}`}>
                     <ExternalLink className="h-4 w-4" /> Abrir pedido
                   </Link>
                 </Button>

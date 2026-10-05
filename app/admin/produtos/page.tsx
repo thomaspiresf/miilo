@@ -13,19 +13,19 @@ export default async function AdminProductsPage() {
         <h1 className="text-2xl font-black">Produtos</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild size="sm" variant="outline">
-            <Link href="/admin/categorias">
+            <Link prefetch={false} href="/admin/categorias">
               <FolderTree className="h-4 w-4" />
               Categorias
             </Link>
           </Button>
           <Button asChild size="sm" variant="outline">
-            <Link href="/admin/cupons">
+            <Link prefetch={false} href="/admin/cupons">
               <TicketPercent className="h-4 w-4" />
               Cupons
             </Link>
           </Button>
           <Button asChild size="sm">
-            <Link href="/admin/produtos/novo">Novo produto</Link>
+            <Link prefetch={false} href="/admin/produtos/novo">Novo produto</Link>
           </Button>
         </div>
       </div>

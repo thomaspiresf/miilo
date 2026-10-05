@@ -38,7 +38,7 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <Link href="/admin/pedidos" className="text-sm text-primary">
+        <Link prefetch={false} href="/admin/pedidos" className="text-sm text-primary">
           ← Pedidos
         </Link>
         <div className="mt-1 flex items-center gap-3">
