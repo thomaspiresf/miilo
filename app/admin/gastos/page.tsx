@@ -6,8 +6,10 @@ import { listExpensesForMonth, signedReceiptUrls, totalsByPayer } from "@/lib/da
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_LABELS,
+  EXPENSE_ITEM_TYPES,
   EXPENSE_PAYERS,
   INVESTOR_PAYERS,
+  ITEM_TYPE_LABELS,
   PAYER_LABELS,
   currentMonthBr,
   isMonthKey,
@@ -18,7 +20,7 @@ import {
 } from "@/lib/expenses";
 import { formatBRL, formatDate } from "@/lib/format";
 import { ExpenseForm } from "@/components/admin/expense-form";
-import { CopyFixedButton, DeleteExpenseButton, PayerSelect } from "@/components/admin/expense-row-actions";
+import { CopyFixedButton, DeleteExpenseButton, ItemTypeSelect, PayerSelect } from "@/components/admin/expense-row-actions";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Gastos" };
@@ -76,6 +78,11 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
     a === b
       ? "Empatados."
       : `${PAYER_LABELS[a > b ? investA : investB]} investiu ${formatBRL(Math.abs(a - b))} a mais.`;
+
+  const byItemType = [...EXPENSE_ITEM_TYPES, null].map((t) => ({
+    type: t,
+    amount: rows.filter((e) => e.item_type === t).reduce((s, e) => s + e.amount, 0),
+  }));
 
   const haveFixed = new Set(rows.filter((e) => e.category === "fixa").map((e) => e.description.toLowerCase()));
   const missingFixed = prevMonth.rows.filter(
@@ -165,6 +172,29 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
         })}
       </div>
 
+      <div className="space-y-3 rounded-2xl border border-border bg-surface p-5">
+        <p className="font-bold">Por tipo</p>
+        {byItemType
+          .filter(({ type, amount }) => type !== null || amount > 0)
+          .map(({ type, amount }) => {
+            const pct = total > 0 ? (amount / total) * 100 : 0;
+            return (
+              <div key={type ?? "none"}>
+                <div className="flex justify-between text-sm">
+                  <span className={type ? "" : "text-muted"}>{type ? ITEM_TYPE_LABELS[type] : "Sem tipo"}</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatBRL(amount)}
+                    <span className="ml-2 text-xs font-normal text-muted">{Math.round(pct)}%</span>
+                  </span>
+                </div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-black/[0.06]">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+      </div>
+
       <div className="space-y-4 rounded-2xl border border-border bg-surface p-5">
         <div>
           <p className="font-bold">Quem pagou</p>
@@ -236,7 +266,7 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
       ) : (
         <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
           {rows.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 px-4 py-3 text-sm">
+            <div key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{e.description}</p>
                 <p className="text-xs text-muted">
@@ -255,6 +285,7 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
                   <Paperclip className="h-3.5 w-3.5" /> Ver nota
                 </a>
               )}
+              <ItemTypeSelect id={e.id} itemType={e.item_type} />
               <PayerSelect id={e.id} payer={e.payer} />
               <span className="shrink-0 font-bold tabular-nums">{formatBRL(e.amount)}</span>
               <DeleteExpenseButton id={e.id} description={e.description} />

@@ -1,5 +1,5 @@
 import "server-only";
-import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/expenses";
+import { EXPENSE_CATEGORIES, EXPENSE_ITEM_TYPES, type ExpenseCategory, type ExpenseItemType } from "@/lib/expenses";
 
 /**
  * Lê a foto de uma nota/cupom/comprovante e devolve os campos de um gasto.
@@ -16,6 +16,7 @@ export type ReceiptScan = {
   merchant: string | null;
   description: string | null;
   category: ExpenseCategory | null;
+  itemType: ExpenseItemType | null;
 };
 
 const PROMPT = `Você lê fotos de notas fiscais, cupons, comprovantes e recibos de uma loja infantil brasileira (miilo) e extrai os dados do gasto.
@@ -26,6 +27,7 @@ Regras:
 - merchant: nome do estabelecimento ou fornecedor.
 - description: descrição curta do gasto (ex.: "Compra Brás - bodies", "Internet", "Embalagens").
 - category: mercadoria (compra de produtos para revender/estoque), fixa (aluguel, internet, luz, assinaturas, contador, hospedagem), marketing (anúncios, impulsionamento, gráfica, brindes) ou outros (embalagens, frete, taxas e o resto).
+- item_type: o que foi comprado — brinquedo (brinquedos, pelúcias, jogos), roupa (roupas, calçados, acessórios de vestir), sacolas (sacolas, embalagens, caixas, fitas) ou outros. Use null se não for compra de mercadoria/insumo ou não der pra saber.
 - is_receipt: false se a imagem não for uma nota/comprovante legível.
 - Se não conseguir ler algum campo com segurança, use null. Nunca invente valores.`;
 
@@ -41,8 +43,9 @@ const TOOL = {
       merchant: { type: ["string", "null"] },
       description: { type: ["string", "null"] },
       category: { type: ["string", "null"], enum: [...EXPENSE_CATEGORIES, null] },
+      item_type: { type: ["string", "null"], enum: [...EXPENSE_ITEM_TYPES, null] },
     },
-    required: ["is_receipt", "amount", "date", "merchant", "description", "category"],
+    required: ["is_receipt", "amount", "date", "merchant", "description", "category", "item_type"],
   },
 };
 
@@ -60,12 +63,17 @@ export function sanitizeScan(input: unknown): ReceiptScan | null {
     ? (r.category as ExpenseCategory)
     : null;
 
+  const itemType = (EXPENSE_ITEM_TYPES as readonly string[]).includes(r.item_type as string)
+    ? (r.item_type as ExpenseItemType)
+    : null;
+
   const scan: ReceiptScan = {
     amount,
     date,
     merchant: str(r.merchant, 120),
     description: str(r.description, 160),
     category,
+    itemType,
   };
   return scan.amount == null && !scan.date && !scan.merchant && !scan.description ? null : scan;
 }

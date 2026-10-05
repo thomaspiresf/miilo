@@ -10,6 +10,17 @@ export const EXPENSE_LABELS: Record<ExpenseCategory, string> = {
   outros: "Outros",
 };
 
+/** Tipo do que foi comprado (independe da categoria: uma compra de mercadoria pode ser de roupa ou de brinquedo). */
+export const EXPENSE_ITEM_TYPES = ["brinquedo", "roupa", "sacolas", "outros"] as const;
+export type ExpenseItemType = (typeof EXPENSE_ITEM_TYPES)[number];
+
+export const ITEM_TYPE_LABELS: Record<ExpenseItemType, string> = {
+  brinquedo: "Brinquedo",
+  roupa: "Roupa",
+  sacolas: "Sacolas",
+  outros: "Outros",
+};
+
 /** Quem desembolsou o gasto: cada núcleo de sócios ou o caixa da própria Miilo. */
 export const EXPENSE_PAYERS = ["thaisa_thomas", "bruna_vinicius", "miilo"] as const;
 export type ExpensePayer = (typeof EXPENSE_PAYERS)[number];
@@ -30,6 +41,7 @@ export type Expense = {
   description: string;
   amount: number;
   payer: ExpensePayer | null;
+  item_type: ExpenseItemType | null;
   supplier: string | null;
   notes: string | null;
   receipt_path: string | null;
@@ -54,6 +66,12 @@ function brParts(d: Date) {
 export function todayBr(): string {
   const { y, m, d } = brParts(new Date());
   return `${y}-${m}-${d}`;
+}
+
+/** Mês ("YYYY-MM") de um instante, em Brasília. */
+export function monthKeyBr(iso: string | Date): string {
+  const { y, m } = brParts(typeof iso === "string" ? new Date(iso) : iso);
+  return `${y}-${m}`;
 }
 
 /** Mês atual em Brasília, "YYYY-MM". */

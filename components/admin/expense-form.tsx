@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Camera, Paperclip, X } from "lucide-react";
 import { createExpenseAction } from "@/app/admin/gastos/actions";
-import { EXPENSE_CATEGORIES, EXPENSE_LABELS, EXPENSE_PAYERS, PAYER_LABELS } from "@/lib/expenses";
+import { EXPENSE_CATEGORIES, EXPENSE_LABELS, EXPENSE_ITEM_TYPES, EXPENSE_PAYERS, ITEM_TYPE_LABELS, PAYER_LABELS } from "@/lib/expenses";
 import { resizeImageForUpload } from "@/lib/image-resize";
 import { formatBRL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ type Scan = {
   merchant: string | null;
   description: string | null;
   category: string | null;
+  itemType: string | null;
 };
 
 type Attachment = {
@@ -96,6 +97,10 @@ export function ExpenseForm({ today }: { today: string }) {
         if (scan.category && (EXPENSE_CATEGORIES as readonly string[]).includes(scan.category)) {
           setField("category", scan.category);
           filled.push("categoria");
+        }
+        if (scan.itemType && (EXPENSE_ITEM_TYPES as readonly string[]).includes(scan.itemType)) {
+          setField("itemType", scan.itemType);
+          filled.push("tipo");
         }
         if (scan.merchant && !getField("supplier")) {
           setField("supplier", scan.merchant);
@@ -193,6 +198,16 @@ export function ExpenseForm({ today }: { today: string }) {
             {EXPENSE_CATEGORIES.map((c) => (
               <option key={c} value={c}>
                 {EXPENSE_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Tipo" hint="Opcional. O que foi comprado.">
+          <select name="itemType" defaultValue="" className={SELECT_CLASS}>
+            <option value="">Sem tipo</option>
+            {EXPENSE_ITEM_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {ITEM_TYPE_LABELS[t]}
               </option>
             ))}
           </select>

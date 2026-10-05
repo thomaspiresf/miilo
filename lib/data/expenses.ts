@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseAdmin } from "@/lib/env";
-import { shiftMonth, type Expense, type ExpensePayer } from "@/lib/expenses";
+import { shiftMonth, type Expense, type ExpenseItemType, type ExpensePayer } from "@/lib/expenses";
 import type { ExpenseInput } from "@/lib/expense-schema";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -16,6 +16,7 @@ function mapExpense(row: any): Expense {
     description: row.description,
     amount: Number(row.amount),
     payer: row.payer ?? null,
+    item_type: row.item_type ?? null,
     supplier: row.supplier ?? null,
     notes: row.notes ?? null,
     receipt_path: row.receipt_path ?? null,
@@ -54,6 +55,20 @@ export async function listExpensesForMonth(
   return { rows: (data ?? []).map(mapExpense), tableMissing: false };
 }
 
+/** Todos os gastos, de todos os meses (visão geral da saúde financeira). */
+export async function listAllExpenses(): Promise<Expense[]> {
+  if (!hasSupabaseAdmin()) return [];
+  const { data, error } = await createAdminClient()
+    .from("expenses")
+    .select("*")
+    .order("spent_on", { ascending: false });
+  if (error) {
+    if (MISSING_TABLE.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []).map(mapExpense);
+}
+
 /** Total já lançado por quem pagou, em todos os meses (null = gastos antigos sem essa informação). */
 export async function totalsByPayer(): Promise<Map<ExpensePayer | null, number>> {
   const out = new Map<ExpensePayer | null, number>();
@@ -81,6 +96,7 @@ export async function createExpense(input: ExpenseInput, actorEmail: string | nu
       description: input.description,
       amount: input.amount,
       payer: input.payer,
+      item_type: input.itemType,
       supplier: input.supplier,
       notes: input.notes,
       receipt_path: input.receiptPath,
@@ -89,6 +105,9 @@ export async function createExpense(input: ExpenseInput, actorEmail: string | nu
     .select("*")
     .single();
   if (error) {
+    if (/item_type/i.test(error.message)) {
+      throw new Error("Rode a migração supabase/migration-expense-item-type.sql no SQL Editor do Supabase.");
+    }
     if (/payer/i.test(error.message)) {
       throw new Error("Rode a migração supabase/migration-expense-payer.sql no SQL Editor do Supabase.");
     }
@@ -109,6 +128,12 @@ export async function getExpense(id: string): Promise<Expense | null> {
 export async function setExpensePayer(id: string, payer: ExpensePayer): Promise<void> {
   assertPersistable();
   const { error } = await createAdminClient().from("expenses").update({ payer }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function setExpenseItemType(id: string, itemType: ExpenseItemType | null): Promise<void> {
+  assertPersistable();
+  const { error } = await createAdminClient().from("expenses").update({ item_type: itemType }).eq("id", id);
   if (error) throw error;
 }
 
@@ -183,6 +208,7 @@ export async function copyFixedFromPreviousMonth(ym: string, actorEmail: string 
         description: e.description,
         amount: e.amount,
         payer: e.payer,
+        item_type: e.item_type,
         supplier: e.supplier,
         notes: e.notes,
         created_by: actorEmail,

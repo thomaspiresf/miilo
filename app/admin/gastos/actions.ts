@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin, currentActor } from "@/lib/auth";
 import { expenseInputSchema } from "@/lib/expense-schema";
-import { copyFixedFromPreviousMonth, createExpense, deleteExpense, getExpense, setExpensePayer } from "@/lib/data/expenses";
-import { EXPENSE_LABELS, EXPENSE_PAYERS, PAYER_LABELS, isMonthKey, type ExpensePayer } from "@/lib/expenses";
+import { copyFixedFromPreviousMonth, createExpense, deleteExpense, getExpense, setExpenseItemType, setExpensePayer } from "@/lib/data/expenses";
+import { EXPENSE_LABELS, EXPENSE_ITEM_TYPES, EXPENSE_PAYERS, ITEM_TYPE_LABELS, PAYER_LABELS, isMonthKey, type ExpenseItemType, type ExpensePayer } from "@/lib/expenses";
 import { logAction } from "@/lib/data/audit";
 import { formatBRL } from "@/lib/format";
 
@@ -17,6 +17,7 @@ export async function createExpenseAction(_prev: unknown, formData: FormData) {
     description: formData.get("description") ?? "",
     amount: formData.get("amount") ?? "",
     payer: formData.get("payer") ?? "",
+    itemType: formData.get("itemType") ?? "",
     supplier: formData.get("supplier") ?? "",
     notes: formData.get("notes") ?? "",
     receiptPath: formData.get("receiptPath") ?? "",
@@ -91,6 +92,28 @@ export async function setExpensePayerAction(id: string, payer: string): Promise<
       entity: "expense",
       entityId: id,
       summary: `Definiu quem pagou: ${exp?.description ?? "gasto"} → ${PAYER_LABELS[payer as ExpensePayer]}`,
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Falha ao salvar" };
+  }
+  revalidatePath("/admin/gastos");
+  return { ok: true };
+}
+
+export async function setExpenseItemTypeAction(id: string, itemType: string): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const value = itemType === "" ? null : itemType;
+  if (value !== null && !(EXPENSE_ITEM_TYPES as readonly string[]).includes(value)) {
+    return { ok: false, error: "Tipo inválido." };
+  }
+  try {
+    const exp = await getExpense(id);
+    await setExpenseItemType(id, value as ExpenseItemType | null);
+    await logAction({
+      action: "expense.update",
+      entity: "expense",
+      entityId: id,
+      summary: `Classificou gasto: ${exp?.description ?? "gasto"} → ${value ? ITEM_TYPE_LABELS[value as ExpenseItemType] : "sem tipo"}`,
     });
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Falha ao salvar" };
