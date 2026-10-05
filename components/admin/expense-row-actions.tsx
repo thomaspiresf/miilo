@@ -61,8 +61,8 @@ export function PayerSelect({ id, payer }: { id: string; payer: ExpensePayer | n
         value={payer ?? ""}
         disabled={pending}
         onChange={(e) => change(e.target.value)}
-        className={`h-7 max-w-44 cursor-pointer rounded-full border bg-surface px-2.5 text-xs font-medium outline-none transition hover:border-foreground/30 disabled:opacity-50 ${
-          payer ? "border-border text-foreground" : "border-warning/60 bg-warning/10 text-warning"
+        className={`h-6 max-w-44 cursor-pointer rounded-full border bg-transparent px-2 text-xs outline-none transition hover:border-foreground/30 hover:bg-black/[0.03] disabled:opacity-50 ${
+          payer ? "border-border text-muted" : "border-warning/50 text-warning"
         }`}
       >
         {!payer && <option value="">Quem pagou?</option>}
@@ -98,7 +98,7 @@ export function ItemTypeSelect({ id, itemType }: { id: string; itemType: Expense
         value={itemType ?? ""}
         disabled={pending}
         onChange={(e) => change(e.target.value)}
-        className="h-7 max-w-32 cursor-pointer rounded-full border border-border bg-surface px-2.5 text-xs font-medium text-foreground outline-none transition hover:border-foreground/30 disabled:opacity-50"
+        className="h-6 max-w-32 cursor-pointer rounded-full border border-border bg-transparent px-2 text-xs text-muted outline-none transition hover:border-foreground/30 hover:bg-black/[0.03] disabled:opacity-50"
       >
         <option value="">Sem tipo</option>
         {EXPENSE_ITEM_TYPES.map((t) => (

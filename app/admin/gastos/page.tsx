@@ -1,4 +1,3 @@
-import { Paperclip } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { listAllOrders } from "@/lib/data/orders";
 import { listAllExpenses, listExpensesForMonth, signedReceiptUrls } from "@/lib/data/expenses";
@@ -13,10 +12,11 @@ import {
   todayBr,
   addDays,
 } from "@/lib/expenses";
-import { formatBRL, formatDate } from "@/lib/format";
+import { formatBRL } from "@/lib/format";
 import { PeriodFilter } from "@/components/admin/period-filter";
 import { AddExpenseDialog } from "@/components/admin/add-expense-dialog";
 import { ExpenseIcon } from "@/components/admin/expense-icon";
+import { ReceiptViewer } from "@/components/admin/receipt-viewer";
 import { MetaSyncButton } from "@/components/admin/meta-sync-button";
 import { FinancialHealth } from "@/components/admin/financial-health";
 import { CopyFixedButton, DeleteExpenseButton, ItemTypeSelect, PayerSelect } from "@/components/admin/expense-row-actions";
@@ -58,6 +58,19 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
   for (let ym = currentYm; ym >= firstMonth && monthOptions.length < 60; ym = shiftMonth(ym, -1)) {
     monthOptions.push({ ym, label: monthLabel(ym).replace(/^./, (c) => c.toUpperCase()) });
   }
+  // agrupa os lançamentos por dia (mais recentes primeiro), como num extrato
+  const groups: { date: string; items: typeof rows }[] = [];
+  for (const e of rows) {
+    const last = groups[groups.length - 1];
+    if (last && last.date === e.spent_on) last.items.push(e);
+    else groups.push({ date: e.spent_on, items: [e] });
+  }
+  const MONTHS_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const dayLabel = (d: string) => {
+    const [y, m, day] = d.split("-");
+    return `${day} ${MONTHS_ABBR[Number(m) - 1]}${y === today.slice(0, 4) ? "" : ` ${y}`}`;
+  };
+
   const customFrom = period.key === "custom" && period.from ? period.from : addDays(today, -29);
   const customTo = period.key === "custom" && period.to ? period.to : today;
 
@@ -107,62 +120,54 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
             Nenhum investimento lançado neste período.
           </p>
         ) : (
-          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
-            {rows.map((e) => {
-              const receiptUrl = e.receipt_path ? receiptUrls.get(e.receipt_path) : undefined;
-              return (
-                <div key={e.id} className="flex items-start gap-3 px-4 py-3.5">
-                  <ExpenseIcon expense={e} />
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+            {groups.map((g) => (
+              <section key={g.date}>
+                <h3 className="border-b border-border bg-black/[0.02] px-4 py-2 text-xs font-medium text-muted">
+                  {dayLabel(g.date)}
+                </h3>
+                <div className="divide-y divide-border">
+                  {g.items.map((e) => {
+                    const receiptUrl = e.receipt_path ? receiptUrls.get(e.receipt_path) : undefined;
+                    return (
+                      <div key={e.id} className="flex items-center gap-3 px-4 py-3">
+                        <ExpenseIcon expense={e} />
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <p className="min-w-0 truncate text-[15px] font-semibold leading-tight">{e.description}</p>
-                      {e.source && (
-                        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                          automático
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {formatDate(`${e.spent_on}T12:00:00-03:00`)}
-                      <span className="mx-1.5 text-border">•</span>
-                      {EXPENSE_LABELS[e.category]}
-                      {e.supplier && (
-                        <>
-                          <span className="mx-1.5 text-border">•</span>
-                          {e.supplier}
-                        </>
-                      )}
-                    </p>
-                    {e.notes && <p className="mt-1 text-xs italic text-muted">“{e.notes}”</p>}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="min-w-0 truncate text-[15px] font-semibold leading-tight">{e.description}</p>
+                            {e.source && (
+                              <span className="shrink-0 rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-medium text-muted">
+                                automático
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                            <span>
+                              {EXPENSE_LABELS[e.category]}
+                              {e.supplier ? ` · ${e.supplier}` : ""}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <PayerSelect id={e.id} payer={e.payer} />
+                              <ItemTypeSelect id={e.id} itemType={e.item_type} />
+                            </span>
+                          </div>
+                          {e.notes && <p className="mt-1 text-xs italic text-muted">“{e.notes}”</p>}
+                        </div>
 
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                      <PayerSelect id={e.id} payer={e.payer} />
-                      <ItemTypeSelect id={e.id} itemType={e.item_type} />
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <span className="text-base font-bold tabular-nums">{formatBRL(e.amount)}</span>
-                    <div className="flex items-center gap-0.5">
-                      {receiptUrl && (
-                        <a
-                          href={receiptUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Ver nota"
-                          aria-label="Ver nota"
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
-                        >
-                          <Paperclip className="h-3.5 w-3.5" /> Nota
-                        </a>
-                      )}
-                      <DeleteExpenseButton id={e.id} description={e.description} />
-                    </div>
-                  </div>
+                        <div className="flex shrink-0 flex-col items-end gap-0.5">
+                          <span className="text-[15px] font-semibold tabular-nums">{formatBRL(e.amount)}</span>
+                          <div className="flex items-center">
+                            {receiptUrl && <ReceiptViewer url={receiptUrl} title={e.description} />}
+                            <DeleteExpenseButton id={e.id} description={e.description} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </section>
+            ))}
           </div>
         )}
       </div>
