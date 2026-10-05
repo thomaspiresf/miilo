@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseAdmin } from "@/lib/env";
 import { shiftMonth, type Expense, type ExpenseItemType, type ExpensePayer } from "@/lib/expenses";
@@ -56,7 +57,7 @@ export async function listExpensesForMonth(
 }
 
 /** Todos os gastos, de todos os meses (visão geral da saúde financeira). */
-export async function listAllExpenses(): Promise<Expense[]> {
+export const listAllExpenses = cache(async (): Promise<Expense[]> => {
   if (!hasSupabaseAdmin()) return [];
   const { data, error } = await createAdminClient()
     .from("expenses")
@@ -67,7 +68,7 @@ export async function listAllExpenses(): Promise<Expense[]> {
     throw error;
   }
   return (data ?? []).map(mapExpense);
-}
+});
 
 /** Total já lançado por quem pagou, em todos os meses (null = gastos antigos sem essa informação). */
 export async function totalsByPayer(): Promise<Map<ExpensePayer | null, number>> {

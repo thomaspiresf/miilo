@@ -68,6 +68,59 @@ export function todayBr(): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Dia ("YYYY-MM-DD") de um instante, em Brasília. */
+export function dateKeyBr(iso: string | Date): string {
+  const { y, m, d } = brParts(typeof iso === "string" ? new Date(iso) : iso);
+  return `${y}-${m}-${d}`;
+}
+
+/** Soma `n` dias a uma data "YYYY-MM-DD" (calendário puro, sem fuso). */
+export function addDays(date: string, n: number): string {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+export type PeriodKey = "mes" | "30" | "90" | "365" | "tudo" | "custom";
+/** Período filtrado (datas inclusivas, "YYYY-MM-DD"); from/to nulos = sem limite. */
+export type Period = { key: PeriodKey; from: string | null; to: string | null; label: string };
+
+export const PERIOD_CHIPS: { key: Exclude<PeriodKey, "custom">; label: string }[] = [
+  { key: "mes", label: "Este mês" },
+  { key: "30", label: "30 dias" },
+  { key: "90", label: "90 dias" },
+  { key: "365", label: "12 meses" },
+  { key: "tudo", label: "Tudo" },
+];
+
+const isDateKey = (v: unknown): v is string =>
+  typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+
+const brDay = (d: string) => d.split("-").reverse().join("/");
+
+/** Lê o filtro de período da URL (`periodo`, `de`, `ate`). Padrão: tudo. */
+export function resolvePeriod(sp: { periodo?: unknown; de?: unknown; ate?: unknown }): Period {
+  const today = todayBr();
+  const key = typeof sp.periodo === "string" ? sp.periodo : "tudo";
+  if (key === "mes") {
+    const ym = today.slice(0, 7);
+    return { key: "mes", from: `${ym}-01`, to: addDays(`${shiftMonth(ym, 1)}-01`, -1), label: "Este mês" };
+  }
+  if (key === "30" || key === "90" || key === "365") {
+    const days = Number(key);
+    const label = key === "365" ? "Últimos 12 meses" : `Últimos ${days} dias`;
+    return { key, from: addDays(today, -(days - 1)), to: today, label };
+  }
+  if (key === "custom" && isDateKey(sp.de) && isDateKey(sp.ate)) {
+    const [from, to] = sp.de <= sp.ate ? [sp.de, sp.ate] : [sp.ate, sp.de];
+    return { key: "custom", from, to, label: `${brDay(from)} a ${brDay(to)}` };
+  }
+  return { key: "tudo", from: null, to: null, label: "Todo o período" };
+}
+
+export const inPeriod = (date: string, p: Period) =>
+  (!p.from || date >= p.from) && (!p.to || date <= p.to);
+
 /** Mês ("YYYY-MM") de um instante, em Brasília. */
 export function monthKeyBr(iso: string | Date): string {
   const { y, m } = brParts(typeof iso === "string" ? new Date(iso) : iso);
