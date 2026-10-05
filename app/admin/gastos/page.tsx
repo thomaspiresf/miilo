@@ -19,6 +19,7 @@ import { ExpenseIcon } from "@/components/admin/expense-icon";
 import { ReceiptViewer } from "@/components/admin/receipt-viewer";
 import { MetaSyncButton } from "@/components/admin/meta-sync-button";
 import { FinancialHealth } from "@/components/admin/financial-health";
+import { CashOverview } from "@/components/admin/cash-overview";
 import { CopyFixedButton, DeleteExpenseButton, ItemTypeSelect, PayerSelect } from "@/components/admin/expense-row-actions";
 
 export const metadata = { title: "Investimentos" };
@@ -95,6 +96,8 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
           <AddExpenseDialog today={today} />
         </div>
       </div>
+
+      {!tableMissing && <CashOverview />}
 
       {tableMissing && (
         <p className="rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">
