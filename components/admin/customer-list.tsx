@@ -5,6 +5,7 @@ import { ChevronDown, Mail, Phone, UserRound } from "lucide-react";
 import { formatBRL, formatDate, formatWhatsAppPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { OrderList, type OrderListItem } from "@/components/admin/order-list";
+import { EditCustomerDialog } from "@/components/admin/edit-customer-dialog";
 
 export type CustomerListItem = {
   key: string;
@@ -13,6 +14,8 @@ export type CustomerListItem = {
   emails: string[];
   anonymous: boolean;
   lastAt: string;
+  /** todos os pedidos do cliente (a edição vale pra todos, mesmo com filtro de status ativo) */
+  orderIds: string[];
   received: number;
   due: number;
   orders: OrderListItem[];
@@ -41,11 +44,12 @@ export function CustomerList({ customers, empty = "Nenhum cliente." }: { custome
         const isOpen = open.has(c.key);
         return (
           <div key={c.key} className="overflow-hidden rounded-2xl border border-border bg-surface">
+            <div className="flex items-start">
             <button
               type="button"
               onClick={() => toggle(c.key)}
               aria-expanded={isOpen}
-              className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-black/[0.02]"
+              className="flex min-w-0 flex-1 items-start gap-3 px-4 py-3 text-left hover:bg-black/[0.02]"
             >
               <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-black/[0.05] text-muted">
                 <UserRound className="h-4 w-4" />
@@ -86,6 +90,17 @@ export function CustomerList({ customers, empty = "Nenhum cliente." }: { custome
               </span>
               <ChevronDown className={cn("mt-1 h-4 w-4 shrink-0 text-muted transition-transform", isOpen && "rotate-180")} />
             </button>
+            {!c.anonymous && (
+              <div className="py-3 pr-3">
+                <EditCustomerDialog
+                  orderIds={c.orderIds}
+                  name={c.name.startsWith("Telefone ") ? null : c.name}
+                  phones={c.phones}
+                  emails={c.emails}
+                />
+              </div>
+            )}
+            </div>
             {isOpen && (
               <div className="border-t border-border bg-black/[0.015] p-2">
                 <OrderList orders={c.orders} />

@@ -13,6 +13,7 @@ import { DeleteOrderButton } from "@/components/admin/delete-order-button";
 import type { OrderStatus } from "@/lib/types";
 import { amountDue } from "@/lib/order-utils";
 import { SplitPaymentEditor } from "@/components/admin/split-payment-editor";
+import { EditCustomerDialog } from "@/components/admin/edit-customer-dialog";
 
 const ALL_STATUS: OrderStatus[] = [
   "pending",
@@ -140,12 +141,29 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
         <h2 className="mb-2 font-bold">
           {order.delivery_mode === "pickup" ? "Retirada na loja" : "Entrega"}
         </h2>
-        <p className="font-semibold">{order.customer_name ?? "—"}</p>
-        {order.phone && (
-          <p className="text-muted">
-            Tel/WhatsApp: <span className="font-semibold text-foreground">{order.phone}</span>
-          </p>
-        )}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold">{order.customer_name ?? "—"}</p>
+            {order.phone && (
+              <p className="text-muted">
+                Tel/WhatsApp: <span className="font-semibold text-foreground">{order.phone}</span>
+              </p>
+            )}
+            {order.email && order.email !== "venda-loja@miilo.com.br" && (
+              <p className="truncate text-muted">
+                E-mail: <span className="font-semibold text-foreground">{order.email}</span>
+              </p>
+            )}
+          </div>
+          <EditCustomerDialog
+            orderIds={[order.id]}
+            name={order.customer_name}
+            phones={order.phone ? [order.phone] : []}
+            emails={order.email && order.email !== "venda-loja@miilo.com.br" ? [order.email] : []}
+            variant="button"
+            label="Editar"
+          />
+        </div>
         {order.delivery_mode === "delivery" && order.address ? (
           <>
             <p className="mt-1 text-muted">

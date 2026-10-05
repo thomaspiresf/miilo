@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin, currentActor } from "@/lib/auth";
-import { getOrderById, setOrderCashPaid } from "@/lib/data/orders";
+import { getOrderById, setOrderCashPaid, updateOrdersContact } from "@/lib/data/orders";
+import { customerContactSchema } from "@/lib/customer-schema";
 import { cancelPayment } from "@/lib/mercadopago";
 import { amountDue } from "@/lib/order-utils";
 import { formatBRL, parseMoney } from "@/lib/format";
@@ -113,6 +114,36 @@ export async function setCashPaidAction(
     revalidatePath("/admin");
     revalidatePath("/admin/gastos");
     return { ok: true, due };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Falha ao salvar" };
+  }
+}
+
+/** Corrige nome, telefone e e-mail do cliente nos pedidos informados (todos os pedidos do cliente, ou um só). */
+export async function updateCustomerAction(
+  orderIds: string[],
+  raw: { name: string; phone: string; email: string },
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  await requireAdmin();
+  const ids = [...new Set(orderIds)].filter((id) => typeof id === "string" && id.length > 0).slice(0, 300);
+  if (ids.length === 0) return { ok: false, error: "Nenhum pedido selecionado." };
+
+  const parsed = customerContactSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+
+  try {
+    const count = await updateOrdersContact(ids, parsed.data);
+    if (count === 0) return { ok: false, error: "Pedidos não encontrados." };
+    await logAction({
+      action: "order.customer_update",
+      entity: "order",
+      entityId: ids.length === 1 ? ids[0] : undefined,
+      summary: `Editou os dados do cliente em ${count} pedido${count === 1 ? "" : "s"}: ${parsed.data.name ?? "sem nome"}${parsed.data.phone ? ` · ${parsed.data.phone}` : ""}${parsed.data.email ? ` · ${parsed.data.email}` : ""}`,
+    });
+    revalidatePath("/admin/pedidos");
+    revalidatePath("/admin/conversas");
+    for (const id of ids.slice(0, 20)) revalidatePath(`/admin/pedidos/${id}`);
+    return { ok: true, count };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Falha ao salvar" };
   }

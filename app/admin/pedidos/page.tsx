@@ -63,9 +63,14 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
       : all;
 
   // agrupa por cliente e filtra pela busca (nome, telefone, e-mail ou nº do pedido)
-  const groups = groupOrdersByCustomer(scoped).filter((g) => customerMatches(g, q));
+  // o cliente é calculado sobre TODOS os pedidos (totais e edição valem pra pessoa toda);
+  // o filtro de status só escolhe quais pedidos aparecem
+  const scopedIds = new Set(scoped.map((o) => o.id));
+  const groups = groupOrdersByCustomer(all)
+    .map((g) => ({ ...g, visible: g.orders.filter((o) => scopedIds.has(o.id)) }))
+    .filter((g) => g.visible.length > 0 && customerMatches(g, q));
   const orders = groups
-    .flatMap((g) => g.orders)
+    .flatMap((g) => g.visible)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   // links dos filtros mantêm a busca e a vista
@@ -189,7 +194,8 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
             lastAt: g.lastAt,
             received: g.received,
             due: g.due,
-            orders: g.orders.map(toItem),
+            orderIds: g.orders.map((o) => o.id),
+            orders: g.visible.map(toItem),
           }))}
           empty={q ? "Nenhum cliente encontrado." : "Nenhum cliente."}
         />

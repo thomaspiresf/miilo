@@ -577,6 +577,54 @@ export async function setOrderCashPaid(id: string, cash: number): Promise<void> 
   }
 }
 
+/** E-mail genérico das vendas na loja sem cliente (o MP e a tabela exigem um e-mail). */
+const POS_PLACEHOLDER_EMAIL = "venda-loja@miilo.com.br";
+
+/**
+ * Atualiza nome, telefone e e-mail de um ou mais pedidos (ex.: todos os pedidos de um cliente).
+ * E-mail vazio: venda na loja volta pro e-mail genérico; pedido online mantém o que já tinha
+ * (é obrigatório nele). Devolve quantos pedidos foram alterados.
+ */
+export async function updateOrdersContact(
+  ids: string[],
+  contact: { name: string | null; phone: string | null; email: string | null },
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  if (!hasSupabaseAdmin()) {
+    let n = 0;
+    for (const o of mockDB().orders) {
+      if (!ids.includes(o.id)) continue;
+      o.customer_name = contact.name;
+      o.phone = contact.phone;
+      if (contact.email) o.email = contact.email;
+      else if (o.channel === "pos") o.email = POS_PLACEHOLDER_EMAIL;
+      n++;
+    }
+    return n;
+  }
+  const admin = createAdminClient();
+  const { data: rows, error: readErr } = await admin.from("orders").select("id, channel").in("id", ids);
+  if (readErr) throw readErr;
+  const found = rows ?? [];
+  const base = { customer_name: contact.name, phone: contact.phone };
+  if (contact.email) {
+    const { error } = await admin.from("orders").update({ ...base, email: contact.email }).in("id", found.map((r) => r.id));
+    if (error) throw error;
+  } else {
+    const posIds = found.filter((r) => r.channel === "pos").map((r) => r.id);
+    const onlineIds = found.filter((r) => r.channel !== "pos").map((r) => r.id);
+    if (posIds.length) {
+      const { error } = await admin.from("orders").update({ ...base, email: POS_PLACEHOLDER_EMAIL }).in("id", posIds);
+      if (error) throw error;
+    }
+    if (onlineIds.length) {
+      const { error } = await admin.from("orders").update(base).in("id", onlineIds);
+      if (error) throw error;
+    }
+  }
+  return found.length;
+}
+
 export async function setOrderStatus(
   id: string,
   status: OrderStatus,
