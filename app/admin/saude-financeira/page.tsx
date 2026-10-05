@@ -18,6 +18,7 @@ import {
   shiftMonth,
 } from "@/lib/expenses";
 import { formatBRL } from "@/lib/format";
+import { amountDue, receivedSoFar } from "@/lib/order-utils";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Saúde financeira" };
@@ -47,11 +48,13 @@ export default async function FinancialHealthPage() {
 
   // ---- entradas -----------------------------------------------------------
   const paidOrders = orders.filter((o) => isReceived(o.status));
-  const received = paidOrders.reduce((s, o) => s + (o.net_amount ?? o.total), 0);
   const receivables = orders.filter((o) => o.channel === "pos" && o.status === "pending");
-  const receivable = receivables.reduce((s, o) => s + o.total, 0);
+  // dinheiro já recebido: vendas pagas (líquido) + parte em dinheiro das vendas ainda pendentes (pagamento dividido)
+  const receivedOrders = [...paidOrders, ...receivables.filter((o) => o.cash_paid > 0)];
+  const received = receivedOrders.reduce((s, o) => s + receivedSoFar(o), 0);
+  const receivable = receivables.reduce((s, o) => s + amountDue(o), 0);
   const overdue = receivables.filter((o) => isOlderThanDays(o.created_at, OVERDUE_DAYS));
-  const overdueTotal = overdue.reduce((s, o) => s + o.total, 0);
+  const overdueTotal = overdue.reduce((s, o) => s + amountDue(o), 0);
 
   // ---- saídas / estoque ---------------------------------------------------
   const spent = expenses.reduce((s, e) => s + e.amount, 0);
@@ -83,7 +86,7 @@ export default async function FinancialHealthPage() {
 
   // ---- por mês (últimos N) ------------------------------------------------
   const current = currentMonthBr();
-  const firstActivity = [...expenses.map((e) => e.spent_on.slice(0, 7)), ...paidOrders.map((o) => monthKeyBr(o.created_at))]
+  const firstActivity = [...expenses.map((e) => e.spent_on.slice(0, 7)), ...receivedOrders.map((o) => monthKeyBr(o.created_at))]
     .sort()[0];
   // últimos N meses, sem mostrar os vazios de antes da loja começar a movimentar
   const months = Array.from({ length: MONTHS_SHOWN }, (_, i) => shiftMonth(current, i - (MONTHS_SHOWN - 1))).filter(
@@ -91,15 +94,15 @@ export default async function FinancialHealthPage() {
   );
   const monthly = months.map((ym) => {
     const out = expenses.filter((e) => e.spent_on.slice(0, 7) === ym).reduce((s, e) => s + e.amount, 0);
-    const inn = paidOrders
+    const inn = receivedOrders
       .filter((o) => monthKeyBr(o.created_at) === ym)
-      .reduce((s, o) => s + (o.net_amount ?? o.total), 0);
+      .reduce((s, o) => s + receivedSoFar(o), 0);
     return { ym, out, inn, result: inn - out };
   });
   const monthlyMax = Math.max(1, ...monthly.flatMap((m) => [m.out, m.inn]));
   const activeMonths = new Set([
     ...expenses.map((e) => e.spent_on.slice(0, 7)),
-    ...paidOrders.map((o) => monthKeyBr(o.created_at)),
+    ...receivedOrders.map((o) => monthKeyBr(o.created_at)),
   ]).size;
   const avgSpent = activeMonths > 0 ? spent / activeMonths : 0;
   const avgReceived = activeMonths > 0 ? received / activeMonths : 0;

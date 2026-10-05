@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { getOrderById } from "@/lib/data/orders";
 import { paymentsMocked } from "@/lib/env";
 import { formatBRL } from "@/lib/format";
+import { amountDue, cashPaidOf } from "@/lib/order-utils";
 import { Button } from "@/components/ui/button";
 import { PayOrderClient } from "@/components/checkout/pay-order-client";
 
@@ -46,7 +47,8 @@ export default async function PayOrderPage(props: PageProps<"/pagar/[id]">) {
     <PayOrderClient
       orderId={order.id}
       orderNumber={order.number}
-      amount={order.total}
+      amount={amountDue(order)}
+      paidUpfront={cashPaidOf(order)}
       discount={order.discount}
       email={order.email}
       paymentsMocked={paymentsMocked()}

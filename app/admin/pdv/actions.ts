@@ -12,6 +12,7 @@ import {
 import { logAction } from "@/lib/data/audit";
 import { formatBRL } from "@/lib/format";
 import { site } from "@/lib/site";
+import { amountDue } from "@/lib/order-utils";
 
 /** E-mail usado quando a venda na loja é anônima (o MP exige um e-mail no pagador). */
 const POS_FALLBACK_EMAIL = "venda-loja@miilo.com.br";
@@ -24,6 +25,10 @@ type PosOrderResult =
       orderNumber: string;
       total: number;
       paid: boolean;
+      /** parte recebida em dinheiro na hora (pagamento dividido) */
+      cashPaid: number;
+      /** quanto falta pagar (o que o link cobra); 0 se a venda já está paga */
+      due: number;
       payUrl: string | null;
     };
 
@@ -34,7 +39,7 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
-  const { customerName, phone, email, payMode, lines, discount, notes } =
+  const { customerName, phone, email, payMode, lines, discount, notes, cashPaid } =
     parsed.data;
 
   try {
@@ -51,18 +56,27 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
       discount: discount || 0,
       notes,
       posPayMode: payMode,
+      cashPaid: payMode === "cash" ? 0 : cashPaid,
     });
 
-    if (payMode === "cash") {
+    // dinheiro/maquininha, ou a parte em dinheiro já cobriu tudo
+    const fullyPaid = payMode === "cash" || order.cash_paid >= order.total;
+    const due = fullyPaid ? 0 : amountDue(order);
+
+    if (fullyPaid) {
       await approveOrder(order.id, { mpStatus: "manual", method: "dinheiro" });
     }
 
-    const tag =
-      payMode === "cash"
+    const baseTag =
+      fullyPaid
         ? "(dinheiro/maquininha, pago)"
         : payMode === "later"
           ? "(a receber)"
           : "(link de pagamento)";
+    const tag =
+      !fullyPaid && order.cash_paid > 0
+        ? `${baseTag.slice(0, -1)}; ${formatBRL(order.cash_paid)} já em dinheiro, falta ${formatBRL(due)})`
+        : baseTag;
     await logAction({
       action: "pos.sale",
       entity: "order",
@@ -79,9 +93,11 @@ export async function createPosOrder(raw: PosOrderInput): Promise<PosOrderResult
       orderId: order.id,
       orderNumber: order.number,
       total: order.total,
-      paid: payMode === "cash",
+      paid: fullyPaid,
+      cashPaid: fullyPaid ? 0 : order.cash_paid,
+      due,
       // "a receber" e link/now: o /pagar/[id] existe pra qualquer pedido pendente
-      payUrl: payMode === "cash" ? null : `${site.url}/pagar/${order.id}`,
+      payUrl: fullyPaid ? null : `${site.url}/pagar/${order.id}`,
     };
   } catch (err) {
     console.error("createPosOrder", err);

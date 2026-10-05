@@ -2,6 +2,7 @@ import "server-only";
 import { formatBRL } from "@/lib/format";
 import { attachWamid, hasOpenServiceWindow, saveTurns } from "@/lib/whatsapp-shared";
 import type { Order } from "@/lib/types";
+import { amountDue } from "@/lib/order-utils";
 
 /**
  * Notificação de venda no WhatsApp do lojista (Thomas/Thaisa) — via WhatsApp
@@ -187,7 +188,7 @@ function orderItemsSummary(order: Order): string {
 export function chargeMessageText(order: Order, payUrl: string): string {
   const name = order.customer_name ? order.customer_name.split(" ")[0] : null;
   const greeting = name ? `Oi, ${name}! Tudo bem?` : "Oi! Tudo bem?";
-  return `${greeting} Aqui é da miilo 🙂 Vimos que o pagamento de ${orderItemsSummary(order)}, no valor de ${formatBRL(order.total)}, ainda está pendente. Pra finalizar, é só acessar: ${payUrl}. Qualquer dúvida, é só chamar!`;
+  return `${greeting} Aqui é da miilo 🙂 Vimos que o pagamento de ${orderItemsSummary(order)}, no valor de ${formatBRL(amountDue(order))}, ainda está pendente. Pra finalizar, é só acessar: ${payUrl}. Qualquer dúvida, é só chamar!`;
 }
 
 /**
@@ -202,7 +203,7 @@ export async function sendChargeTemplate(to: string, order: Order): Promise<Send
   return sendWhatsAppTemplate(
     to,
     process.env.WHATSAPP_CHARGE_TEMPLATE_NAME || "",
-    [name, orderItemsSummary(order), formatBRL(order.total)],
+    [name, orderItemsSummary(order), formatBRL(amountDue(order))],
     order.id,
   );
 }

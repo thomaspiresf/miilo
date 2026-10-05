@@ -19,6 +19,7 @@ import {
   todayBr,
 } from "@/lib/expenses";
 import { formatBRL, formatDate } from "@/lib/format";
+import { receivedSoFar } from "@/lib/order-utils";
 import { ExpenseForm } from "@/components/admin/expense-form";
 import { CopyFixedButton, DeleteExpenseButton, ItemTypeSelect, PayerSelect } from "@/components/admin/expense-row-actions";
 import { cn } from "@/lib/utils";
@@ -49,12 +50,11 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
   // "Recebido" igual ao do Painel: pedidos pagos, já descontada a taxa do MP quando conhecida
   const { from, to } = monthRange(ym);
   const received = orders
-    .filter((o) => ["paid", "shipped", "delivered"].includes(o.status))
     .filter((o) => {
       const t = new Date(o.created_at).getTime();
       return t >= from.getTime() && t < to.getTime();
     })
-    .reduce((s, o) => s + (o.net_amount ?? o.total), 0);
+    .reduce((s, o) => s + receivedSoFar(o), 0);
 
   const receiptUrls = await signedReceiptUrls(rows.flatMap((e) => (e.receipt_path ? [e.receipt_path] : [])));
 

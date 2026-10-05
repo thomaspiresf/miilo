@@ -20,6 +20,7 @@ export function PayOrderClient({
   orderNumber,
   amount,
   discount = 0,
+  paidUpfront = 0,
   email,
   items,
   paymentsMocked,
@@ -28,6 +29,8 @@ export function PayOrderClient({
   orderNumber: string;
   amount: number;
   discount?: number;
+  /** parte já paga na loja (dinheiro) — `amount` é só o que falta */
+  paidUpfront?: number;
   email: string;
   items: Item[];
   paymentsMocked: boolean;
@@ -105,14 +108,35 @@ export function PayOrderClient({
             <span>−{formatBRL(discount)}</span>
           </div>
         )}
-        <div
-          className={`flex justify-between text-base font-black ${
-            discount > 0 ? "mt-1" : "mt-3 border-t border-border pt-3"
-          }`}
-        >
-          <span>Total</span>
-          <span>{formatBRL(amount)}</span>
-        </div>
+        {paidUpfront > 0 ? (
+          <>
+            <div
+              className={`flex justify-between text-sm ${
+                discount > 0 ? "mt-1" : "mt-3 border-t border-border pt-3"
+              }`}
+            >
+              <span>Total do pedido</span>
+              <span>{formatBRL(amount + paidUpfront)}</span>
+            </div>
+            <div className="mt-1 flex justify-between text-sm text-success">
+              <span>Já pago na loja</span>
+              <span>−{formatBRL(paidUpfront)}</span>
+            </div>
+            <div className="mt-2 flex justify-between border-t border-border pt-3 text-base font-black">
+              <span>Falta pagar</span>
+              <span>{formatBRL(amount)}</span>
+            </div>
+          </>
+        ) : (
+          <div
+            className={`flex justify-between text-base font-black ${
+              discount > 0 ? "mt-1" : "mt-3 border-t border-border pt-3"
+            }`}
+          >
+            <span>Total</span>
+            <span>{formatBRL(amount)}</span>
+          </div>
+        )}
       </div>
 
       {error && (

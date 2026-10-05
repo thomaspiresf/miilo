@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import { DeleteOrderButton } from "@/components/admin/delete-order-button";
 import type { OrderStatus } from "@/lib/types";
+import { amountDue } from "@/lib/order-utils";
 
 const ALL_STATUS: OrderStatus[] = [
   "pending",
@@ -61,6 +62,12 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
           Método: {order.payment_method ?? "—"} · MP: {order.mp_payment_id ?? "—"} (
           {order.mp_status ?? "—"})
         </p>
+        {order.cash_paid > 0 && (
+          <p className="mt-1 font-semibold">
+            Pagamento dividido: {formatBRL(order.cash_paid)} em dinheiro/maquininha
+            {order.status === "pending" ? ` · falta ${formatBRL(amountDue(order))}` : ` + ${formatBRL(order.total - order.cash_paid)} por link`}
+          </p>
+        )}
         {order.status === "pending" && order.mp_payment_id && (
           <form action={recheckPaymentAction} className="mt-3">
             <input type="hidden" name="id" value={order.id} />

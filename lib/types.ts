@@ -218,6 +218,8 @@ export type Order = {
    * nesse caso trate como igual a `total` (sem taxa a descontar).
    */
   net_amount: number | null;
+  /** Parte paga na loja em dinheiro/maquininha antes do link (0 = nenhuma). O link cobra total − cash_paid. */
+  cash_paid: number;
   stock_restored: boolean;
   /** Estoque baixado na criação do pedido (reserva). */
   stock_reserved: boolean;

@@ -6,6 +6,7 @@ import { ReceivablesPanel, type ReceivableItem } from "@/components/admin/receiv
 import { chargeMessageText } from "@/lib/whatsapp";
 import { site } from "@/lib/site";
 import type { Order, OrderStatus } from "@/lib/types";
+import { amountDue } from "@/lib/order-utils";
 
 const FILTERS: { value: string; label: string }[] = [
   { value: "", label: "Todos" },
@@ -42,7 +43,7 @@ const toReceivable = (o: Order): ReceivableItem => ({
   number: o.number,
   customerName: o.customer_name,
   phone: o.phone,
-  total: o.total,
+  total: amountDue(o),
   created_at: o.created_at,
   defaultMessage: chargeMessageText(o, `${site.url}/pagar/${o.id}`),
 });
@@ -55,7 +56,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
 
   const all = await listAllOrders();
   const receivables = all.filter(isReceivable);
-  const receivableTotal = receivables.reduce((s, o) => s + o.total, 0);
+  const receivableTotal = receivables.reduce((s, o) => s + amountDue(o), 0);
 
   const orders = receberView
     ? receivables

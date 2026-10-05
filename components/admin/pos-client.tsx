@@ -75,6 +75,10 @@ type Created = {
   orderNumber: string;
   total: number;
   paid: boolean;
+  /** parte recebida em dinheiro na hora (0 = pagamento não dividido) */
+  cashPaid: number;
+  /** quanto falta pagar */
+  due: number;
   payUrl: string | null;
   mode: PayMode;
   notes: string | null;
@@ -129,6 +133,7 @@ export function PosClient({
   const [notes, setNotes] = useState("");
   const [discountInput, setDiscountInput] = useState("");
   const [payMode, setPayMode] = useState<PayMode | null>(null);
+  const [cashInput, setCashInput] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +142,13 @@ export function PosClient({
   const subtotal = cart.reduce((s, l) => s + l.price * l.qty, 0);
   const discount = Math.min(Math.max(0, parseMoney(discountInput) ?? 0), subtotal);
   const total = subtotal - discount;
+  // pagamento dividido: parte já recebida em dinheiro, o resto vai pro link / a receber
+  const splitAllowed = payMode === "link" || payMode === "now" || payMode === "later";
+  const cashRaw = splitAllowed ? Math.max(0, parseMoney(cashInput) ?? 0) : 0;
+  const cashCoversAll = cashRaw > 0 && cashRaw >= total && total > 0;
+  const cashPaid = Math.round(Math.min(cashRaw, total) * 100) / 100;
+  const due = Math.round((total - cashPaid) * 100) / 100;
+  const isSplit = cashPaid > 0 && !cashCoversAll;
   const phoneDigits = onlyDigits(phone);
   const itemCount = cart.reduce((n, l) => n + l.qty, 0);
   const submitLabel =
@@ -145,7 +157,9 @@ export function PosClient({
       : payMode === "cash"
         ? "Registrar venda paga"
         : payMode === "link"
-          ? "Gerar link de pagamento"
+          ? isSplit
+            ? `Gerar link de ${formatBRL(due)}`
+            : "Gerar link de pagamento"
           : payMode === "later"
             ? "Anotar venda a receber"
             : "Ir para o pagamento";
@@ -206,6 +220,10 @@ export function PosClient({
       setError("Coloque o nome do cliente pra anotar uma venda a receber.");
       return;
     }
+    if (cashCoversAll) {
+      setError("O valor em dinheiro cobre a venda toda — escolha “Já recebi (dinheiro ou maquininha)”.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -214,6 +232,7 @@ export function PosClient({
         phone: phoneDigits || null,
         email: email.trim() || null,
         payMode,
+        cashPaid,
         discount,
         notes: notes.trim() || null,
         lines: cart.map((l) => ({ variantId: l.variantId, qty: l.qty })),
@@ -227,6 +246,8 @@ export function PosClient({
         orderNumber: res.orderNumber,
         total: res.total,
         paid: res.paid,
+        cashPaid: res.cashPaid,
+        due: res.due,
         payUrl: res.payUrl,
         mode: payMode,
         notes: notes.trim() || null,
@@ -247,6 +268,7 @@ export function PosClient({
     setNotes("");
     setDiscountInput("");
     setPayMode(null);
+    setCashInput("");
     setQuery("");
     setError(null);
   }
@@ -583,6 +605,41 @@ export function PosClient({
                 );
               })}
             </div>
+
+            {splitAllowed && (
+              <div className="mt-4 rounded-xl border border-dashed border-border p-3">
+                <label className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <span>
+                    <span className="block font-bold">Parte já recebida em dinheiro / maquininha</span>
+                    <span className="block text-xs text-muted">
+                      Opcional. O link cobra só o que faltar (pagamento dividido).
+                    </span>
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    value={cashInput}
+                    onChange={(e) => {
+                      setCashInput(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="0,00"
+                    className="h-10 w-28 rounded-lg border border-border bg-background px-2.5 text-right text-sm outline-none focus:border-primary"
+                  />
+                </label>
+                {isSplit && (
+                  <p className="mt-2 text-sm font-semibold">
+                    Dinheiro {formatBRL(cashPaid)} + falta{" "}
+                    <span className="text-primary">{formatBRL(due)}</span>{" "}
+                    {payMode === "later" ? "a receber" : "no link"}
+                  </p>
+                )}
+                {cashCoversAll && (
+                  <p className="mt-2 text-xs text-warning">
+                    Esse valor cobre a venda toda — escolha “Já recebi (dinheiro ou maquininha)”.
+                  </p>
+                )}
+              </div>
+            )}
           </section>
         </div>
 
@@ -620,6 +677,18 @@ export function PosClient({
               <span className="text-sm font-semibold">Total</span>
               <span className="text-lg font-black">{formatBRL(total)}</span>
             </div>
+            {isSplit && (
+              <div className="mt-2 space-y-1 text-sm">
+                <div className="flex items-center justify-between text-success">
+                  <span>Em dinheiro / maquininha</span>
+                  <span>−{formatBRL(cashPaid)}</span>
+                </div>
+                <div className="flex items-center justify-between font-black">
+                  <span>{payMode === "later" ? "Falta receber" : "Falta pagar (link)"}</span>
+                  <span>{formatBRL(due)}</span>
+                </div>
+              </div>
+            )}
 
             <Button
               className="mt-4 hidden w-full lg:flex"
@@ -678,7 +747,8 @@ export function PosClient({
             <p className="text-[11px] text-muted">
               {itemCount} {itemCount === 1 ? "item" : "itens"}
             </p>
-            <p className="text-lg font-black leading-tight">{formatBRL(total)}</p>
+            <p className="text-lg font-black leading-tight">{formatBRL(isSplit ? due : total)}</p>
+            {isSplit && <p className="text-[11px] text-muted">falta (de {formatBRL(total)})</p>}
           </div>
           <Button
             className="flex-1"
@@ -774,7 +844,9 @@ function SaleResult({
   }
 
   const waText = encodeURIComponent(
-    `Olá! Aqui está o link para pagar sua compra na miilo (pedido ${created.orderNumber}): ${payUrl}`,
+    created.cashPaid > 0
+      ? `Olá! Aqui está o link para pagar o restante (${formatBRL(created.due)}) da sua compra na miilo (pedido ${created.orderNumber}): ${payUrl}`
+      : `Olá! Aqui está o link para pagar sua compra na miilo (pedido ${created.orderNumber}): ${payUrl}`,
   );
   const waHref = phoneDigits
     ? `https://wa.me/55${phoneDigits}?text=${waText}`
@@ -808,11 +880,17 @@ function SaleResult({
           Pedido <span className="font-semibold text-foreground">{created.orderNumber}</span> ·{" "}
           {formatBRL(created.total)}
         </p>
+        {!paid && created.cashPaid > 0 && (
+          <p className="mt-1 text-sm font-semibold">
+            {formatBRL(created.cashPaid)} já em dinheiro · falta{" "}
+            <span className="text-primary">{formatBRL(created.due)}</span>
+          </p>
+        )}
         <p className="mt-1 text-xs text-muted">
           {paid
             ? "Estoque baixado. Tudo certo."
             : receivable
-              ? `${formatBRL(created.total)} a receber. O estoque já está reservado — confirme quando o cliente pagar, ou mande o link.`
+              ? `${formatBRL(created.due)} a receber. O estoque já está reservado — confirme quando o cliente pagar, ou mande o link.`
               : "O estoque será baixado assim que o cliente pagar."}
         </p>
 
@@ -846,7 +924,11 @@ function SaleResult({
             disabled={marking}
           >
             {marking ? <Spinner /> : <Banknote className="h-5 w-5" />}
-            {receivable ? "Marcar como recebido" : "Recebi em dinheiro / maquininha"}
+            {created.cashPaid > 0
+              ? `Recebi o restante (${formatBRL(created.due)}) em dinheiro`
+              : receivable
+                ? "Marcar como recebido"
+                : "Recebi em dinheiro / maquininha"}
           </Button>
           {markErr && <p className="text-xs text-danger">{markErr}</p>}
           <p className="text-center text-[11px] text-muted">

@@ -37,6 +37,8 @@ export type NewOrderInput = {
   notes?: string | null;
   /** Como a venda na loja foi lançada: link | now | cash | later. */
   posPayMode?: string | null;
+  /** Venda na loja: parte já recebida em dinheiro/maquininha (o link cobra só o restante). */
+  cashPaid?: number;
 };
 
 export type ResolvedLine = {
@@ -150,6 +152,8 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
   const notes = input.notes?.trim() ? input.notes.trim().slice(0, 500) : null;
   const posPayMode =
     channel === "pos" && input.posPayMode ? input.posPayMode : null;
+  const cashPaid =
+    channel === "pos" ? Math.min(round2(Math.max(0, input.cashPaid ?? 0)), total) : 0;
 
   // ---- modo demonstração ----
   if (!hasSupabaseAdmin()) {
@@ -179,6 +183,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
       notes,
       pos_pay_mode: posPayMode,
       net_amount: null,
+      cash_paid: cashPaid,
       stock_restored: false,
       stock_reserved: true,
       created_at: new Date().toISOString(),
@@ -217,6 +222,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
   const coupon = discount > 0 ? { discount, coupon_code: couponCode } : {};
   const note = notes ? { notes } : {};
   const posMode = posPayMode ? { pos_pay_mode: posPayMode } : {};
+  const cash = cashPaid > 0 ? { cash_paid: cashPaid } : {};
   const full = {
     ...baseRow,
     customer_name: input.name,
@@ -225,7 +231,7 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
     channel,
   };
   const rowAttempts = [
-    { ...full, ...coupon, ...note, ...posMode },
+    { ...full, ...coupon, ...note, ...posMode, ...cash },
     { ...full, ...coupon, ...note },
     { ...full, ...coupon },
     full,
@@ -239,6 +245,10 @@ export async function createOrder(input: NewOrderInput): Promise<Order> {
   ];
   const missingColumn = /column .* does not exist|schema cache|could not find/i;
   let ins = await admin.from("orders").insert(rowAttempts[0]).select("*").single();
+  // com pagamento parcial a coluna é obrigatória: sem ela o link cobraria o total de novo
+  if (cashPaid > 0 && ins.error && /cash_paid/i.test(ins.error.message)) {
+    throw new Error("Rode a migração supabase/migration-cash-paid.sql no SQL Editor do Supabase.");
+  }
   for (let i = 1; i < rowAttempts.length && ins.error && missingColumn.test(ins.error.message); i++) {
     ins = await admin.from("orders").insert(rowAttempts[i]).select("*").single();
   }
@@ -315,6 +325,7 @@ function mapOrder(row: any, items: any[]): Order {
     notes: row.notes ?? null,
     pos_pay_mode: row.pos_pay_mode ?? null,
     net_amount: row.net_amount != null ? Number(row.net_amount) : null,
+    cash_paid: Number(row.cash_paid ?? 0),
     stock_restored: row.stock_restored ?? false,
     stock_reserved: row.stock_reserved ?? false,
     created_at: row.created_at,
@@ -443,6 +454,23 @@ function revalidateStorefrontStock() {
   }
 }
 
+/**
+ * Pagamento dividido (parte em dinheiro + restante por MP): o método vira
+ * "dinheiro + pix" e o líquido soma o dinheiro ao que o MP depositou.
+ */
+function splitPayment(
+  cash: number,
+  opts: { method?: string | null; netAmount?: number | null },
+): { method: string | null; netAmount: number | null } {
+  if (cash <= 0) return { method: opts.method ?? null, netAmount: opts.netAmount ?? null };
+  const m = opts.method ?? null;
+  const isCash = !m || m === "manual" || m.toLowerCase().includes("dinheiro");
+  return {
+    method: isCash ? (m ?? null) : `dinheiro + ${m}`,
+    netAmount: opts.netAmount != null ? round2(opts.netAmount + cash) : null,
+  };
+}
+
 export async function approveOrder(
   id: string,
   opts: {
@@ -456,11 +484,12 @@ export async function approveOrder(
   if (!hasSupabaseAdmin()) {
     const order = mockDB().orders.find((o) => o.id === id);
     if (!order || order.status === "paid") return;
+    const split = splitPayment(order.cash_paid, opts);
     order.status = "paid";
     order.mp_payment_id = opts.mpPaymentId ?? order.mp_payment_id;
     order.mp_status = opts.mpStatus ?? "approved";
-    order.payment_method = opts.method ?? order.payment_method;
-    order.net_amount = opts.netAmount ?? order.net_amount;
+    order.payment_method = split.method ?? order.payment_method;
+    order.net_amount = split.netAmount ?? order.net_amount;
     if (order.stock_reserved && !order.stock_restored) {
       // estoque já baixado na reserva — só converte o histórico
       for (const mv of mockDB().movements) {
@@ -484,6 +513,9 @@ export async function approveOrder(
     .eq("id", id)
     .maybeSingle();
   const wasPaid = prev?.status === "paid";
+  // coluna nova (migration-cash-paid): se ainda não existe, o select falha e fica 0
+  const { data: cashRow } = await admin.from("orders").select("cash_paid").eq("id", id).maybeSingle();
+  const split = splitPayment(Number(cashRow?.cash_paid ?? 0), opts);
 
   // `p_net_amount` só existe na função depois da migration-order-net-amount.sql —
   // se ainda não rodou no banco, cai pra assinatura antiga (a venda é aprovada
@@ -492,15 +524,15 @@ export async function approveOrder(
     p_order_id: id,
     p_mp_payment_id: opts.mpPaymentId ?? null,
     p_mp_status: opts.mpStatus ?? "approved",
-    p_method: opts.method ?? null,
-    p_net_amount: opts.netAmount ?? null,
+    p_method: split.method,
+    p_net_amount: split.netAmount,
   });
   if (error?.message?.includes("p_net_amount")) {
     ({ error } = await admin.rpc("approve_order", {
       p_order_id: id,
       p_mp_payment_id: opts.mpPaymentId ?? null,
       p_mp_status: opts.mpStatus ?? "approved",
-      p_method: opts.method ?? null,
+      p_method: split.method,
     }));
   }
   if (error) throw error;

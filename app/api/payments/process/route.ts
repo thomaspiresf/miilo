@@ -4,6 +4,7 @@ import { getOrderById, approveOrder, setOrderStatus } from "@/lib/data/orders";
 import { createPayment, type BrickFormData } from "@/lib/mercadopago";
 import { rateLimit, clientIp, tooMany } from "@/lib/rate-limit";
 import { isSameOrigin, forbiddenCrossOrigin } from "@/lib/http";
+import { amountDue } from "@/lib/order-utils";
 
 const schema = z.object({
   orderId: z.string().min(1),
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     const result = await createPayment({
       orderId: order.id,
       orderNumber: order.number,
-      amount: order.total, // total do servidor — nunca o valor do cliente
+      amount: amountDue(order), // valor do servidor (total − parte já paga na loja) — nunca o do cliente
       payerEmail: order.email,
       form,
     });

@@ -23,6 +23,8 @@ export type DashOrder = {
   total: number;
   /** Valor líquido (já sem taxa do MP); null = sem esse dado, trata como = total. */
   netAmount: number | null;
+  /** parte já recebida em dinheiro numa venda na loja ainda não paga por inteiro */
+  cashPaid?: number;
   channel: OrderChannel;
   paymentMethod: string | null;
   posPayMode: string | null;
@@ -38,6 +40,8 @@ const isReceivable = (o: DashOrder) =>
 const isMarkedOnly = (o: DashOrder) => o.posPayMode === "later";
 /** valor que efetivamente entrou (desconta taxa do MP quando a gente sabe qual foi) */
 const netOf = (o: DashOrder) => o.netAmount ?? o.total;
+/** quanto ainda falta receber de uma venda pendente */
+const dueOf = (o: DashOrder) => o.total - (o.cashPaid ?? 0);
 
 type RangeId = "7d" | "30d" | "90d" | "12m" | "all";
 const RANGES: { id: RangeId; label: string; days: number | null }[] = [
@@ -53,6 +57,8 @@ type ChannelId = "all" | OrderChannel;
 function payLabel(method: string | null): string {
   if (!method) return "Não informado";
   const m = method.toLowerCase();
+  // pagamento dividido: "dinheiro + pix"
+  if (m.startsWith("dinheiro + ")) return `Dinheiro + ${payLabel(m.slice(11))}`;
   if (m.includes("pix")) return "Pix";
   if (m.includes("dinheiro") || m === "manual" || m.includes("cash")) return "Dinheiro / maquininha";
   if (m.includes("account")) return "Saldo Mercado Pago";
@@ -315,11 +321,13 @@ export function SalesDashboard({
     const units = paid.reduce((s, o) => s + o.items.reduce((a, i) => a + i.qty, 0), 0);
     const prevRevenue = prevPaid.reduce((s, o) => s + o.total, 0);
     // "Recebido" de verdade: desconta a taxa do Mercado Pago quando ela é conhecida
-    const received = paid.reduce((s, o) => s + netOf(o), 0);
-    const prevReceived = prevPaid.reduce((s, o) => s + netOf(o), 0);
+    // pagamento dividido: o dinheiro já recebido de venda ainda pendente também conta como entrada
+    const cashOf = (arr: DashOrder[]) => arr.filter(isReceivable).reduce((s, o) => s + (o.cashPaid ?? 0), 0);
+    const received = paid.reduce((s, o) => s + netOf(o), 0) + cashOf(inRange);
+    const prevReceived = prevPaid.reduce((s, o) => s + netOf(o), 0) + cashOf(prevRange);
 
     // recebido x a receber x total vendido
-    const sum = (arr: DashOrder[]) => arr.reduce((s, o) => s + o.total, 0);
+    const sum = (arr: DashOrder[]) => arr.reduce((s, o) => s + dueOf(o), 0);
     const receivableOrders = inRange.filter(isReceivable);
     const receivable = sum(receivableOrders);
     const receivableMarked = sum(receivableOrders.filter(isMarkedOnly));
@@ -329,9 +337,9 @@ export function SalesDashboard({
       (min, o) => (!min || o.created_at < min ? o.created_at : min),
       null,
     );
-    const sold = revenue + receivable;
+    const sold = revenue + receivable + cashOf(inRange);
     const prevReceivable = sum(prevRange.filter(isReceivable));
-    const prevSold = prevRevenue + prevReceivable;
+    const prevSold = prevRevenue + prevReceivable + cashOf(prevRange);
 
     // buckets do gráfico de receita
     const bucketMode: "day" | "week" | "month" =

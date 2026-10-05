@@ -26,6 +26,8 @@ export type OrderListItem = {
 function payLabel(method: string | null): string {
   if (!method) return "Não informado";
   const m = method.toLowerCase();
+  // pagamento dividido: "dinheiro + pix"
+  if (m.startsWith("dinheiro + ")) return `Dinheiro + ${payLabel(m.slice(11))}`;
   if (m.includes("pix")) return "Pix";
   if (m.includes("dinheiro") || m === "manual" || m.includes("cash"))
     return "Dinheiro / maquininha";

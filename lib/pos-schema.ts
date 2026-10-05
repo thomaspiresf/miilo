@@ -34,6 +34,11 @@ export const posOrderSchema = z.object({
    * anotar como "a receber" (cliente paga depois)
    */
   payMode: z.enum(["link", "now", "cash", "later"]),
+  /**
+   * parte já recebida em dinheiro/maquininha — o link (ou o "a receber") fica só com o
+   * restante. Ignorado em payMode "cash" (aí já é tudo pago).
+   */
+  cashPaid: z.number().nonnegative().optional().default(0),
   /** desconto em reais aplicado na venda (o servidor limita ao subtotal) */
   discount: z.number().nonnegative().optional().default(0),
   /** observação livre do vendedor (ex.: "paga dia 15") */
