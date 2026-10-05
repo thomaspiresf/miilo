@@ -7,6 +7,7 @@ import { copyFixedFromPreviousMonth, createExpense, deleteExpense, getExpense, s
 import { EXPENSE_LABELS, EXPENSE_ITEM_TYPES, EXPENSE_PAYERS, ITEM_TYPE_LABELS, PAYER_LABELS, isMonthKey, type ExpenseItemType, type ExpensePayer } from "@/lib/expenses";
 import { logAction } from "@/lib/data/audit";
 import { formatBRL } from "@/lib/format";
+import { syncMetaSpend, type SyncLine } from "@/lib/meta-sync";
 
 export async function createExpenseAction(_prev: unknown, formData: FormData) {
   await requireAdmin();
@@ -120,4 +121,19 @@ export async function setExpenseItemTypeAction(id: string, itemType: string): Pr
   }
   revalidatePath("/admin/gastos");
   return { ok: true };
+}
+
+/** Busca agora os custos da Meta (WhatsApp e anúncios) e atualiza as linhas automáticas de Gastos. */
+export async function syncMetaSpendAction(): Promise<{ lines: SyncLine[] }> {
+  await requireAdmin();
+  const lines = await syncMetaSpend();
+  if (lines.some((l) => l.status === "ok")) {
+    await logAction({
+      action: "expense.sync",
+      entity: "expense",
+      summary: `Sincronizou custos da Meta: ${lines.map((l) => `${l.label} — ${l.message}`).join(" · ")}`,
+    });
+    revalidatePath("/admin/gastos");
+  }
+  return { lines };
 }

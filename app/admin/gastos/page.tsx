@@ -17,6 +17,7 @@ import {
 import { formatBRL, formatDate } from "@/lib/format";
 import { PeriodFilter } from "@/components/admin/period-filter";
 import { AddExpenseDialog } from "@/components/admin/add-expense-dialog";
+import { MetaSyncButton } from "@/components/admin/meta-sync-button";
 import { FinancialHealth } from "@/components/admin/financial-health";
 import { CopyFixedButton, DeleteExpenseButton, ItemTypeSelect, PayerSelect } from "@/components/admin/expense-row-actions";
 
@@ -67,7 +68,7 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
           <h1 className="text-2xl font-black">Gastos e saúde financeira</h1>
           <p className="mt-1 text-sm text-muted">Quanto saiu, quanto entrou e como a loja está.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-start gap-2">
           <PeriodFilter
             label={period.label}
             periodKey={period.key}
@@ -77,6 +78,7 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
             to={customTo}
             today={today}
           />
+          <MetaSyncButton />
           <AddExpenseDialog today={today} />
         </div>
       </div>
@@ -109,7 +111,14 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
             {rows.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{e.description}</p>
+                  <p className="flex items-center gap-2 truncate font-semibold">
+                    <span className="truncate">{e.description}</span>
+                    {e.source && (
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                        automático
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted">
                     {formatDate(`${e.spent_on}T12:00:00-03:00`)} · {EXPENSE_LABELS[e.category]}
                     {e.payer ? ` · ${PAYER_LABELS[e.payer]}` : ""}

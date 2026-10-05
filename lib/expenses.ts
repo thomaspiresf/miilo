@@ -42,6 +42,8 @@ export type Expense = {
   amount: number;
   payer: ExpensePayer | null;
   item_type: ExpenseItemType | null;
+  /** origem do lançamento automático (ex.: "meta_whatsapp"); null = lançado na mão */
+  source: string | null;
   supplier: string | null;
   notes: string | null;
   receipt_path: string | null;

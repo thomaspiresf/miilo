@@ -18,6 +18,7 @@ function mapExpense(row: any): Expense {
     amount: Number(row.amount),
     payer: row.payer ?? null,
     item_type: row.item_type ?? null,
+    source: row.source ?? null,
     supplier: row.supplier ?? null,
     notes: row.notes ?? null,
     receipt_path: row.receipt_path ?? null,
@@ -124,6 +125,56 @@ export async function getExpense(id: string): Promise<Expense | null> {
   if (!hasSupabaseAdmin()) return null;
   const { data } = await createAdminClient().from("expenses").select("*").eq("id", id).maybeSingle();
   return data ? mapExpense(data) : null;
+}
+
+export type SyncedExpense = {
+  source: string;
+  sourceKey: string;
+  spentOn: string;
+  category: "mercadoria" | "fixa" | "marketing" | "outros";
+  description: string;
+  supplier: string;
+  amount: number;
+};
+
+/**
+ * Cria ou atualiza um gasto automático (identificado por `sourceKey`). Na atualização mexe só no
+ * valor e na data — categoria, tipo e "quem pagou" que você ajustou na mão ficam como estão.
+ * Valor zero não cria linha nova.
+ */
+export async function upsertSyncedExpense(e: SyncedExpense): Promise<"created" | "updated" | "unchanged" | "skipped"> {
+  assertPersistable();
+  const admin = createAdminClient();
+  const { data: existing, error: readErr } = await admin
+    .from("expenses")
+    .select("id, amount, spent_on")
+    .eq("source_key", e.sourceKey)
+    .maybeSingle();
+  if (readErr) {
+    if (/source_key|source/i.test(readErr.message)) {
+      throw new Error("Rode a migração supabase/migration-expense-source.sql no SQL Editor do Supabase.");
+    }
+    throw readErr;
+  }
+  if (existing) {
+    if (Number(existing.amount) === e.amount && existing.spent_on === e.spentOn) return "unchanged";
+    const { error } = await admin.from("expenses").update({ amount: e.amount, spent_on: e.spentOn }).eq("id", existing.id);
+    if (error) throw error;
+    return "updated";
+  }
+  if (e.amount <= 0) return "skipped";
+  const { error } = await admin.from("expenses").insert({
+    spent_on: e.spentOn,
+    category: e.category,
+    description: e.description,
+    amount: e.amount,
+    supplier: e.supplier,
+    source: e.source,
+    source_key: e.sourceKey,
+    created_by: "sincronização automática",
+  });
+  if (error) throw error;
+  return "created";
 }
 
 export async function setExpensePayer(id: string, payer: ExpensePayer): Promise<void> {
