@@ -30,7 +30,7 @@ type Attachment = {
   note: string | null;
 };
 
-export function ExpenseForm({ today }: { today: string }) {
+export function ExpenseForm({ today, onSaved }: { today: string; onSaved?: () => void }) {
   const formRef = useRef<HTMLFormElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
@@ -43,6 +43,7 @@ export function ExpenseForm({ today }: { today: string }) {
       if (res && "ok" in res && res.ok) {
         setAttachment(null);
         setScanError(null);
+        onSaved?.();
       }
       return res;
     },
@@ -130,15 +131,10 @@ export function ExpenseForm({ today }: { today: string }) {
     <form
       ref={formRef}
       action={action}
-      className="space-y-4 rounded-2xl border border-border bg-surface p-5"
+      className="space-y-4"
     >
-      <p className="font-bold">Novo gasto</p>
-
       {state?.error && (
         <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{state.error}</p>
-      )}
-      {state?.ok && (
-        <p className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">Gasto lançado!</p>
       )}
 
       <div className="space-y-2 rounded-xl border border-dashed border-border p-3">

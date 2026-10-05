@@ -20,7 +20,8 @@ import {
 } from "@/lib/expenses";
 import { formatBRL, formatDate } from "@/lib/format";
 import { receivedSoFar } from "@/lib/order-utils";
-import { ExpenseForm } from "@/components/admin/expense-form";
+import { AddExpenseDialog } from "@/components/admin/add-expense-dialog";
+import { FinancialHealth } from "@/components/admin/financial-health";
 import { CopyFixedButton, DeleteExpenseButton, ItemTypeSelect, PayerSelect } from "@/components/admin/expense-row-actions";
 import { cn } from "@/lib/utils";
 
@@ -93,11 +94,18 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black">Controle de gastos</h1>
+          <h1 className="text-2xl font-black">Gastos e saúde financeira</h1>
           <p className="mt-1 text-sm text-muted">
-            Lance o que saiu do caixa e compare com o que entrou no mês.
+            Como a loja está desde o começo e o detalhe de cada mês.
           </p>
         </div>
+        <AddExpenseDialog today={todayBr()} />
+      </div>
+
+      {!tableMissing && <FinancialHealth />}
+
+      <div className="flex flex-wrap items-end justify-between gap-3 border-t border-border pt-6">
+        <h2 className="text-xl font-black">Detalhe do mês</h2>
         <div className="flex items-center gap-1 rounded-full border border-border bg-surface p-1 text-sm font-semibold">
           <Link
             href={`/admin/gastos?mes=${prevYm}`}
@@ -256,8 +264,6 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
       </div>
 
       {missingFixed > 0 && <CopyFixedButton month={ym} count={missingFixed} />}
-
-      <ExpenseForm today={todayBr()} />
 
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
