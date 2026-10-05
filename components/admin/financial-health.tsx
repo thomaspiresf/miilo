@@ -246,7 +246,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
           <p className="text-[11px] text-muted">últimos {chartMonths.length} {chartMonths.length === 1 ? "mês" : "meses"}</p>
         </div>
         <div className="mt-3">
-          <HealthChart months={chartMonths} hrefFor={(ym) => `/admin/gastos?periodo=${ym}`} />
+          <HealthChart months={chartMonths} hrefBase="/admin/gastos?periodo=" />
         </div>
         <details className="group mt-3 border-t border-border pt-3">
           <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-muted marker:hidden [&::-webkit-details-marker]:hidden">
