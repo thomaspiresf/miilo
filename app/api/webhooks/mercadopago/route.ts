@@ -88,6 +88,11 @@ export async function POST(request: Request) {
       netAmount: payment.netReceivedAmount ?? null,
     });
   } else if (payment.status === "rejected" || payment.status === "cancelled") {
+    // pagamento antigo (ex.: Pix cancelado ao editar o valor do pedido) não derruba o pedido
+    const current = await getOrderById(orderId);
+    if (current?.mp_payment_id && current.mp_payment_id !== String(payment.id)) {
+      return NextResponse.json({ ok: true, stalePayment: true });
+    }
     await setOrderStatus(orderId, "failed", {
       mpStatus: payment.status,
       mpPaymentId: payment.id,

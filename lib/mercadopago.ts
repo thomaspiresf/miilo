@@ -54,7 +54,9 @@ export async function createPayment(params: {
   if (paymentsMocked()) return mockPayment(amount, form);
 
   const isPix = form.payment_method_id === "pix";
-  const idempotencyKey = `order-${orderId}`;
+  // o valor entra na chave: se o pagamento for editado (parte em dinheiro), o MP gera um Pix novo
+  // em vez de devolver o antigo (mesma chave = mesma resposta, com o valor velho)
+  const idempotencyKey = `order-${orderId}-${Math.round(amount * 100)}`;
 
   // O Pix expira em 1h — o mesmo tempo que o estoque fica reservado. Assim o
   // cliente não consegue pagar depois que a reserva já foi devolvida.
@@ -95,6 +97,16 @@ export async function createPayment(params: {
   });
 
   return normalize(res);
+}
+
+/** Cancela um pagamento pendente (ex.: Pix antigo depois de editar o valor). Melhor esforço — nunca lança. */
+export async function cancelPayment(id: string): Promise<void> {
+  if (paymentsMocked()) return;
+  try {
+    await mpClient().cancel({ id });
+  } catch (err) {
+    console.warn("cancelPayment", id, (err as Error).message);
+  }
 }
 
 export async function getPayment(id: string): Promise<PaymentResult> {

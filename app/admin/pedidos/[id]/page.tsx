@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { DeleteOrderButton } from "@/components/admin/delete-order-button";
 import type { OrderStatus } from "@/lib/types";
 import { amountDue } from "@/lib/order-utils";
+import { SplitPaymentEditor } from "@/components/admin/split-payment-editor";
 
 const ALL_STATUS: OrderStatus[] = [
   "pending",
@@ -67,6 +68,16 @@ export default async function AdminOrderPage(props: PageProps<"/admin/pedidos/[i
             Pagamento dividido: {formatBRL(order.cash_paid)} em dinheiro/maquininha
             {order.status === "pending" ? ` · falta ${formatBRL(amountDue(order))}` : ` + ${formatBRL(order.total - order.cash_paid)} por link`}
           </p>
+        )}
+        {order.status === "pending" && order.channel === "pos" && (
+          <div className="mt-3">
+            <SplitPaymentEditor
+              orderId={order.id}
+              total={order.total}
+              cashPaid={order.cash_paid}
+              payUrl={`${site.url}/pagar/${order.id}`}
+            />
+          </div>
         )}
         {order.status === "pending" && order.mp_payment_id && (
           <form action={recheckPaymentAction} className="mt-3">

@@ -44,6 +44,9 @@ const toReceivable = (o: Order): ReceivableItem => ({
   customerName: o.customer_name,
   phone: o.phone,
   total: amountDue(o),
+  fullTotal: o.total,
+  cashPaid: o.cash_paid,
+  payUrl: `${site.url}/pagar/${o.id}`,
   created_at: o.created_at,
   defaultMessage: chargeMessageText(o, `${site.url}/pagar/${o.id}`),
 });

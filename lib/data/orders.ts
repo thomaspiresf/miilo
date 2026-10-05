@@ -549,6 +549,34 @@ export async function approveOrder(
   }
 }
 
+/**
+ * Define quanto do pedido já foi recebido em dinheiro/maquininha (o link cobra o resto).
+ * Só pedido pendente. Zera o pagamento do MP associado (o Pix/cartão antigo tinha o valor
+ * velho) — quem chama cancela o pagamento antigo no MP antes.
+ */
+export async function setOrderCashPaid(id: string, cash: number): Promise<void> {
+  const value = round2(Math.max(0, cash));
+  if (!hasSupabaseAdmin()) {
+    const order = mockDB().orders.find((o) => o.id === id);
+    if (!order || order.status !== "pending") return;
+    order.cash_paid = Math.min(value, order.total);
+    order.mp_payment_id = null;
+    order.mp_status = null;
+    return;
+  }
+  const { error } = await createAdminClient()
+    .from("orders")
+    .update({ cash_paid: value, mp_payment_id: null, mp_status: null })
+    .eq("id", id)
+    .eq("status", "pending");
+  if (error) {
+    if (/cash_paid/i.test(error.message)) {
+      throw new Error("Rode a migração supabase/migration-cash-paid.sql no SQL Editor do Supabase.");
+    }
+    throw error;
+  }
+}
+
 export async function setOrderStatus(
   id: string,
   status: OrderStatus,

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
 import { formatBRL, formatDateTime, formatWhatsAppPhone } from "@/lib/format";
 import { chargeOrderAction } from "@/app/admin/pedidos/actions";
+import { SplitPaymentEditor } from "@/components/admin/split-payment-editor";
 
 export type ReceivableItem = {
   id: string;
@@ -14,7 +15,13 @@ export type ReceivableItem = {
   customerName: string | null;
   /** dígitos sem o 55 (como fica salvo no pedido) — null se a venda não tem telefone. */
   phone: string | null;
+  /** o que falta receber (total − parte já paga em dinheiro) */
   total: number;
+  /** valor cheio da venda */
+  fullTotal: number;
+  /** parte já recebida em dinheiro/maquininha */
+  cashPaid: number;
+  payUrl: string;
   created_at: string;
   defaultMessage: string;
 };
@@ -28,16 +35,16 @@ export type ReceivableItem = {
  */
 export function ReceivablesPanel({ items }: { items: ReceivableItem[] }) {
   const router = useRouter();
-  const [texts, setTexts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(items.map((it) => [it.id, it.defaultMessage])),
-  );
+  // só guarda o que a pessoa digitou; sem edição manual, vale a mensagem padrão (que muda com o valor a cobrar)
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const textOf = (it: ReceivableItem) => edited[it.id] ?? it.defaultMessage;
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, { ok: boolean; error?: string } | undefined>>({});
 
   async function send(id: string) {
     setSendingId(id);
     setResults((r) => ({ ...r, [id]: undefined }));
-    const res = await chargeOrderAction(id, texts[id]);
+    const res = await chargeOrderAction(id, textOf(items.find((x) => x.id === id)!));
     setResults((r) => ({ ...r, [id]: res }));
     setSendingId(null);
     if (res.ok) router.refresh();
@@ -71,8 +78,8 @@ export function ReceivablesPanel({ items }: { items: ReceivableItem[] }) {
             </div>
 
             <textarea
-              value={texts[it.id] ?? ""}
-              onChange={(e) => setTexts((t) => ({ ...t, [it.id]: e.target.value }))}
+              value={textOf(it)}
+              onChange={(e) => setEdited((t) => ({ ...t, [it.id]: e.target.value }))}
               rows={3}
               className="mt-3 w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
             />
@@ -91,6 +98,21 @@ export function ReceivablesPanel({ items }: { items: ReceivableItem[] }) {
               )}
               {result?.error && <span className="text-xs text-danger">{result.error}</span>}
             </div>
+
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-semibold text-primary">
+                Editar pagamento (dinheiro + Pix/cartão)
+                {it.cashPaid > 0 ? ` · ${formatBRL(it.cashPaid)} já em dinheiro` : ""}
+              </summary>
+              <div className="mt-2">
+                <SplitPaymentEditor
+                  orderId={it.id}
+                  total={it.fullTotal}
+                  cashPaid={it.cashPaid}
+                  payUrl={it.payUrl}
+                />
+              </div>
+            </details>
           </div>
         );
       })}
