@@ -27,7 +27,7 @@ export function MetaSyncButton() {
   return (
     <div className="flex flex-col items-end gap-1.5">
       <Button variant="outline" onClick={run} disabled={pending}>
-        {pending ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Sincronizar Meta
+        {pending ? <Spinner /> : <RefreshCw className="h-4 w-4" />} Sincronizar custos
       </Button>
       {lines && (
         <ul className="max-w-xs space-y-0.5 text-right text-xs">

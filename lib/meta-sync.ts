@@ -1,9 +1,9 @@
 import "server-only";
-import { fetchAdsSpend, fetchWhatsAppSpend, type SpendFetch } from "@/lib/meta-spend";
+import { fetchAdsSpend, fetchAnthropicSpend, fetchWhatsAppSpend, type SpendFetch } from "@/lib/meta-spend";
 import { upsertSyncedExpense, type SyncedExpense } from "@/lib/data/expenses";
 import { addDays, currentMonthBr, shiftMonth, todayBr } from "@/lib/expenses";
 
-export type SyncLine = { source: "whatsapp" | "ads"; label: string; status: "ok" | "skipped" | "error"; message: string };
+export type SyncLine = { source: "whatsapp" | "ads" | "anthropic"; label: string; status: "ok" | "skipped" | "error"; message: string };
 
 const SOURCES = [
   {
@@ -13,6 +13,7 @@ const SOURCES = [
     fetch: fetchWhatsAppSpend,
     category: "outros" as const,
     description: "Meta — mensagens do WhatsApp Business",
+    supplier: "Meta",
   },
   {
     id: "ads" as const,
@@ -21,6 +22,16 @@ const SOURCES = [
     fetch: fetchAdsSpend,
     category: "marketing" as const,
     description: "Meta Ads — anúncios Facebook/Instagram",
+    supplier: "Meta",
+  },
+  {
+    id: "anthropic" as const,
+    label: "Anthropic",
+    key: "anthropic",
+    fetch: fetchAnthropicSpend,
+    category: "outros" as const,
+    description: "Anthropic — IA do site (leitura de notas e bot)",
+    supplier: "Anthropic",
   },
 ];
 
@@ -31,7 +42,7 @@ function spentOnFor(ym: string): string {
 }
 
 /**
- * Lê os custos da Meta dos últimos 3 meses e mantém UMA linha por mês e por fonte em Gastos
+ * Lê os custos externos (Meta e Anthropic) dos últimos 3 meses e mantém UMA linha por mês e por fonte em Gastos
  * (o valor do mês corrente vai subindo a cada sincronização).
  */
 export async function syncMetaSpend(): Promise<SyncLine[]> {
@@ -52,7 +63,7 @@ export async function syncMetaSpend(): Promise<SyncLine[]> {
           spentOn: spentOnFor(m.ym),
           category: src.category,
           description: src.description,
-          supplier: "Meta",
+          supplier: src.supplier,
           amount: m.amount,
         };
         const r = await upsertSyncedExpense(e);

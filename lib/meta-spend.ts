@@ -100,3 +100,65 @@ export async function fetchAdsSpend(monthsBack = 2): Promise<SpendFetch> {
     return { status: "error", message: err instanceof Error ? err.message : "Falha ao falar com a Meta." };
   }
 }
+
+// --------------------------------------------------------------------------
+//  Anthropic (IA do site: leitura de notas e bot) — API de administração
+// --------------------------------------------------------------------------
+import { usdByMonth, type CostBucket } from "@/lib/anthropic-cost-parse";
+
+/** Cotação do dólar em reais: serviço público sem chave; cai pra USD_BRL_RATE se estiver fora do ar. */
+async function usdToBrl(): Promise<number | null> {
+  try {
+    const res = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", { cache: "no-store" });
+    const bid = Number((await res.json())?.USDBRL?.bid);
+    if (res.ok && bid > 0) return bid;
+  } catch {
+    /* tenta o valor fixo */
+  }
+  const fixed = Number(process.env.USD_BRL_RATE);
+  return fixed > 0 ? fixed : null;
+}
+
+/** Custo da API da Anthropic por mês, convertido pra reais. Precisa de uma Admin API key. */
+export async function fetchAnthropicSpend(monthsBack = 2): Promise<SpendFetch> {
+  const key = process.env.ANTHROPIC_ADMIN_KEY;
+  if (!key) return { status: "skipped", message: "Ainda não ligado (falta ANTHROPIC_ADMIN_KEY)." };
+
+  const now = new Date();
+  const startingAt = monthStartUtc(now, monthsBack).toISOString().replace(".000", "");
+  const endingAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10) + "T00:00:00Z";
+
+  const buckets: CostBucket[] = [];
+  let page: string | null = null;
+  try {
+    for (let i = 0; i < 6; i++) {
+      const qs = new URLSearchParams({ starting_at: startingAt, ending_at: endingAt, limit: "31" });
+      qs.append("group_by[]", "workspace_id");
+      if (page) qs.set("page", page);
+      const res = await fetch(`https://api.anthropic.com/v1/organizations/cost_report?${qs}`, {
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "user-agent": "miilo/1.0 (https://miilo.com.br)" },
+        cache: "no-store",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = (json as { error?: { message?: string } } | null)?.error?.message;
+        return { status: "error", message: msg ? `Anthropic: ${msg}` : `A Anthropic respondeu ${res.status}.` };
+      }
+      buckets.push(...(((json as { data?: CostBucket[] })?.data) ?? []));
+      const next = json as { has_more?: boolean; next_page?: string };
+      if (!next.has_more || !next.next_page) break;
+      page = next.next_page;
+    }
+  } catch (err) {
+    return { status: "error", message: err instanceof Error ? err.message : "Falha ao falar com a Anthropic." };
+  }
+
+  const usd = usdByMonth(buckets, process.env.ANTHROPIC_WORKSPACE_ID || undefined);
+  if (usd.size === 0) return { status: "ok", months: [] };
+  const rate = await usdToBrl();
+  if (!rate) return { status: "error", message: "Não consegui a cotação do dólar (defina USD_BRL_RATE)." };
+  return {
+    status: "ok",
+    months: [...usd].map(([ym, v]) => ({ ym, amount: round2(v * rate) })).sort((a, b) => a.ym.localeCompare(b.ym)),
+  };
+}
