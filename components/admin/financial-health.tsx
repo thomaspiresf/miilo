@@ -339,8 +339,14 @@ export async function FinancialHealth({ period }: { period: Period }) {
           <>
             <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-6 sm:grid-cols-2">
               {compareRows.map((r) => {
-                const balance = r.sold + r.stock - r.spent;
-                const ok = balance >= 0;
+                const gap = r.sold - r.spent; // o que já voltou em dinheiro, sem contar estoque
+                const withStock = r.sold + r.stock - r.spent;
+                const recovered = gap >= 0;
+                const bars = [
+                  { label: "Gasto", value: r.spent, color: "bg-danger/60" },
+                  { label: "Vendido", value: r.sold, color: "bg-success/80" },
+                  { label: "Em estoque", value: r.stock, color: "bg-success/30" },
+                ];
                 return (
                   <div key={r.label}>
                     <div className="flex items-center justify-between gap-3">
@@ -348,48 +354,35 @@ export async function FinancialHealth({ period }: { period: Period }) {
                       <span
                         className={cn(
                           "rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
-                          ok ? "bg-success/10 text-success" : "bg-danger/10 text-danger",
+                          recovered ? "bg-success/10 text-success" : "bg-warning/15 text-warning",
                         )}
                       >
-                        saldo {ok ? "+" : "−"}
-                        {formatBRL(Math.abs(balance))}
+                        {recovered ? "já se pagou +" : "falta recuperar "}
+                        {formatBRL(Math.abs(gap))}
                       </span>
                     </div>
 
                     <div className="mt-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-14 shrink-0 text-[11px] text-muted">Gasto</span>
-                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/[0.06]">
-                          <div className="h-full rounded-full bg-danger/60" style={{ width: `${(r.spent / typeScale) * 100}%` }} />
+                      {bars.map((b) => (
+                        <div key={b.label} className="flex items-center gap-3">
+                          <span className="w-[4.5rem] shrink-0 text-[12px] text-muted">{b.label}</span>
+                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/[0.06]">
+                            <div className={cn("h-full rounded-full", b.color)} style={{ width: `${(b.value / typeScale) * 100}%` }} />
+                          </div>
+                          <span className="w-24 shrink-0 text-right text-[13px] font-semibold tabular-nums">{formatBRL(b.value)}</span>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-14 shrink-0 text-[11px] text-muted">Retorno</span>
-                        <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-black/[0.06]">
-                          <div className="h-full bg-success/80" style={{ width: `${(r.sold / typeScale) * 100}%` }} />
-                          <div className="h-full bg-success/30" style={{ width: `${(r.stock / typeScale) * 100}%` }} />
-                        </div>
-                      </div>
+                      ))}
                     </div>
 
-                    <dl className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-muted">
-                      <div>
-                        <dt>Gasto</dt>
-                        <dd className="mt-0.5 text-[13px] font-semibold tabular-nums text-foreground">{formatBRL(r.spent)}</dd>
-                      </div>
-                      <div>
-                        <dt className="flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 rounded-full bg-success/80" /> Vendido
-                        </dt>
-                        <dd className="mt-0.5 text-[13px] font-semibold tabular-nums text-foreground">{formatBRL(r.sold)}</dd>
-                      </div>
-                      <div>
-                        <dt className="flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 rounded-full bg-success/30" /> Em estoque
-                        </dt>
-                        <dd className="mt-0.5 text-[13px] font-semibold tabular-nums text-foreground">{formatBRL(r.stock)}</dd>
-                      </div>
-                    </dl>
+                    {r.stock > 0 && (
+                      <p className="mt-2.5 text-[12px] text-muted">
+                        Contando o estoque ao custo:{" "}
+                        <span className={cn("font-semibold tabular-nums", withStock >= 0 ? "text-success" : "text-danger")}>
+                          {withStock >= 0 ? "+" : "−"}
+                          {formatBRL(Math.abs(withStock))}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -406,7 +399,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
               </div>
             )}
             <p className="mt-3 text-[11px] text-muted">
-              Retorno = vendido (verde forte) + o que ainda está em estoque ao custo (verde claro). Saldo = retorno − gasto.
+              “Falta recuperar” = gasto − vendido (o que já voltou em dinheiro). O estoque parado, ao preço de custo, é o que ainda pode voltar.
             </p>
           </>
         )}
