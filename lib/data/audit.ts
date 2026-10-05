@@ -9,6 +9,7 @@ export type AuditEntity =
   | "category"
   | "coupon"
   | "order"
+  | "expense"
   | "user"
   | "settings";
 
