@@ -81,11 +81,18 @@ export function addDays(date: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export type PeriodKey = "mes" | "30" | "90" | "365" | "tudo" | "custom";
+export type PeriodKey = "mes" | "month" | "30" | "90" | "365" | "tudo" | "custom";
 /** Período filtrado (datas inclusivas, "YYYY-MM-DD"); from/to nulos = sem limite. */
-export type Period = { key: PeriodKey; from: string | null; to: string | null; label: string };
+export type Period = {
+  key: PeriodKey;
+  from: string | null;
+  to: string | null;
+  label: string;
+  /** "YYYY-MM" quando o período é um mês inteiro (este mês ou um mês escolhido) */
+  month?: string;
+};
 
-export const PERIOD_CHIPS: { key: Exclude<PeriodKey, "custom">; label: string }[] = [
+export const PERIOD_CHIPS: { key: "mes" | "30" | "90" | "365" | "tudo"; label: string }[] = [
   { key: "mes", label: "Este mês" },
   { key: "30", label: "30 dias" },
   { key: "90", label: "90 dias" },
@@ -102,10 +109,17 @@ const brDay = (d: string) => d.split("-").reverse().join("/");
 export function resolvePeriod(sp: { periodo?: unknown; de?: unknown; ate?: unknown }): Period {
   const today = todayBr();
   const key = typeof sp.periodo === "string" ? sp.periodo : "tudo";
-  if (key === "mes") {
-    const ym = today.slice(0, 7);
-    return { key: "mes", from: `${ym}-01`, to: addDays(`${shiftMonth(ym, 1)}-01`, -1), label: "Este mês" };
-  }
+  const currentYm = today.slice(0, 7);
+  const monthPeriod = (ym: string, k: "mes" | "month"): Period => ({
+    key: k,
+    month: ym,
+    from: `${ym}-01`,
+    to: addDays(`${shiftMonth(ym, 1)}-01`, -1),
+    label: k === "mes" ? "Este mês" : monthLabel(ym).replace(/^./, (c) => c.toUpperCase()),
+  });
+  if (key === "mes" || key === currentYm) return monthPeriod(currentYm, "mes");
+  // um mês específico: ?periodo=2026-09 (não aceita mês futuro)
+  if (isMonthKey(key) && key < currentYm) return monthPeriod(key, "month");
   if (key === "30" || key === "90" || key === "365") {
     const days = Number(key);
     const label = key === "365" ? "Últimos 12 meses" : `Últimos ${days} dias`;

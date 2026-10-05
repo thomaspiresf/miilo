@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Paperclip } from "lucide-react";
+import { ChevronLeft, ChevronRight, Paperclip } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { listAllExpenses, listExpensesForMonth, signedReceiptUrls } from "@/lib/data/expenses";
 import {
@@ -14,6 +14,7 @@ import {
   addDays,
 } from "@/lib/expenses";
 import { formatBRL, formatDate } from "@/lib/format";
+import { MonthInput } from "@/components/admin/month-input";
 import { AddExpenseDialog } from "@/components/admin/add-expense-dialog";
 import { FinancialHealth } from "@/components/admin/financial-health";
 import { CopyFixedButton, DeleteExpenseButton, ItemTypeSelect, PayerSelect } from "@/components/admin/expense-row-actions";
@@ -45,6 +46,8 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
     missingFixed = prev.rows.filter((e) => e.category === "fixa" && !haveFixed.has(e.description.toLowerCase())).length;
   }
 
+  const currentYm = currentMonthBr();
+  const shownMonth = period.month ?? null;
   const customFrom = period.key === "custom" && period.from ? period.from : addDays(today, -29);
   const customTo = period.key === "custom" && period.to ? period.to : today;
 
@@ -59,7 +62,7 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
       </div>
 
       {/* filtro de período */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
           {PERIOD_CHIPS.map((c) => (
             <Link
@@ -75,16 +78,39 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
               {c.label}
             </Link>
           ))}
-          <span
-            className={cn(
-              "rounded-full border px-3 py-1 text-sm font-medium",
-              period.key === "custom" ? "border-foreground bg-foreground text-background" : "border-border bg-surface text-muted",
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          {/* mês a mês */}
+          <div className="flex items-center gap-1">
+            <span className="mr-1 text-xs font-medium text-muted">Mês</span>
+            <Link
+              href={`/admin/gastos?periodo=${shiftMonth(shownMonth ?? currentYm, -1)}`}
+              aria-label="Mês anterior"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-surface hover:border-foreground/30"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Link>
+            <MonthInput value={shownMonth ?? ""} max={currentYm} />
+            {shownMonth && shownMonth < currentYm ? (
+              <Link
+                href={`/admin/gastos?periodo=${shiftMonth(shownMonth, 1)}`}
+                aria-label="Próximo mês"
+                className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-surface hover:border-foreground/30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            ) : (
+              <span className="grid h-8 w-8 place-items-center rounded-lg border border-border/60 text-border">
+                <ChevronRight className="h-4 w-4" />
+              </span>
             )}
-          >
-            Personalizado
-          </span>
-          <form method="get" action="/admin/gastos" className="flex flex-wrap items-center gap-1.5 text-sm">
+          </div>
+
+          {/* intervalo livre */}
+          <form method="get" action="/admin/gastos" className="flex flex-wrap items-center gap-1.5">
             <input type="hidden" name="periodo" value="custom" />
+            <span className="mr-1 text-xs font-medium text-muted">Intervalo</span>
             <input
               type="date"
               name="de"
@@ -104,7 +130,12 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
             />
             <button
               type="submit"
-              className="h-8 rounded-lg border border-border bg-surface px-3 text-sm font-semibold hover:border-foreground/30"
+              className={cn(
+                "h-8 rounded-lg border px-3 text-sm font-semibold",
+                period.key === "custom"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-surface hover:border-foreground/30",
+              )}
             >
               Aplicar
             </button>

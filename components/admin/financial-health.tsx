@@ -20,6 +20,7 @@ import {
 import { formatBRL } from "@/lib/format";
 import { amountDue, receivedSoFar } from "@/lib/order-utils";
 import { cn } from "@/lib/utils";
+import { HealthChart, type HealthMonth } from "@/components/admin/health-chart";
 
 const MAX_MONTHS = 12;
 const OVERDUE_DAYS = 7;
@@ -124,25 +125,29 @@ export async function FinancialHealth({ period }: { period: Period }) {
               text: `Mesmo com estoque e a receber, faltam ${formatBRL(Math.abs(overall))} para empatar.`,
             };
 
-  // ---- mês a mês dentro do período (até os 12 mais recentes) --------------
+  // ---- mês a mês (gráfico): últimos 12 meses, resultado acumulado desde o começo -------
   const current = currentMonthBr();
-  const activity = [
-    ...periodExpenses.map((e) => e.spent_on.slice(0, 7)),
-    ...periodReceivedOrders.map((o) => monthKeyBr(o.created_at)),
-  ].sort();
-  const firstMonth = period.from ? period.from.slice(0, 7) : (activity[0] ?? current);
-  const lastMonth = period.to ? period.to.slice(0, 7) : current;
-  const monthList: string[] = [];
-  for (let ym = firstMonth; ym <= lastMonth && monthList.length < 60; ym = shiftMonth(ym, 1)) monthList.push(ym);
-  const monthly = monthList.slice(-MAX_MONTHS).map((ym) => {
-    const out = periodExpenses.filter((e) => e.spent_on.slice(0, 7) === ym).reduce((s, e) => s + e.amount, 0);
-    const inn = periodReceivedOrders
+  const firstMonth =
+    [...expenses.map((e) => e.spent_on.slice(0, 7)), ...receivedOrders.map((o) => monthKeyBr(o.created_at))].sort()[0] ??
+    current;
+  const allMonths: HealthMonth[] = [];
+  let cum = 0;
+  for (let ym = firstMonth; ym <= current && allMonths.length < 120; ym = shiftMonth(ym, 1)) {
+    const out = expenses.filter((e) => e.spent_on.slice(0, 7) === ym).reduce((s, e) => s + e.amount, 0);
+    const inn = receivedOrders
       .filter((o) => monthKeyBr(o.created_at) === ym)
       .reduce((s, o) => s + receivedSoFar(o), 0);
-    return { ym, out, inn, result: inn - out };
-  });
-  const monthlyMax = Math.max(1, ...monthly.flatMap((m) => [m.out, m.inn]));
-  const showMonthly = monthly.length > 1;
+    cum += inn - out;
+    allMonths.push({
+      ym,
+      inn,
+      out,
+      cum,
+      active:
+        (!period.from || ym >= period.from.slice(0, 7)) && (!period.to || ym <= period.to.slice(0, 7)),
+    });
+  }
+  const chartMonths = allMonths.slice(-MAX_MONTHS);
 
   // ---- quebras dos gastos (do período) ------------------------------------
   const sum = (pred: (e: (typeof expenses)[number]) => boolean) =>
@@ -235,37 +240,50 @@ export async function FinancialHealth({ period }: { period: Period }) {
         </details>
       )}
 
-      {showMonthly && (
-        <div className="rounded-2xl border border-border bg-surface p-5">
-          <p className="text-sm font-semibold">Mês a mês</p>
-          <div className="mt-3 space-y-3.5">
-            {monthly.map((m) => (
-              <div key={m.ym}>
-                <div className="flex items-baseline justify-between text-sm">
-                  <span className="first-letter:uppercase">{monthLabel(m.ym)}</span>
-                  <span className={cn("font-semibold tabular-nums", m.result >= 0 ? "text-success" : "text-danger")}>
-                    {formatBRL(m.result)}
-                  </span>
-                </div>
-                <div className="mt-1 space-y-1 text-[11px] text-muted">
-                  {[
-                    { label: "Recebido", value: m.inn, color: "bg-success/70" },
-                    { label: "Gasto", value: m.out, color: "bg-danger/60" },
-                  ].map((row) => (
-                    <div key={row.label} className="flex items-center gap-2">
-                      <span className="w-14 shrink-0">{row.label}</span>
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/[0.06]">
-                        <div className={cn("h-full rounded-full", row.color)} style={{ width: `${(row.value / monthlyMax) * 100}%` }} />
-                      </div>
-                      <span className="w-24 shrink-0 text-right tabular-nums">{formatBRL(row.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="rounded-2xl border border-border bg-surface p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm font-semibold">Saúde financeira mês a mês</p>
+          <p className="text-[11px] text-muted">últimos {chartMonths.length} {chartMonths.length === 1 ? "mês" : "meses"}</p>
         </div>
-      )}
+        <div className="mt-3">
+          <HealthChart months={chartMonths} hrefFor={(ym) => `/admin/gastos?periodo=${ym}`} />
+        </div>
+        <details className="group mt-3 border-t border-border pt-3">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-muted marker:hidden [&::-webkit-details-marker]:hidden">
+            <span>Ver os números</span>
+            <span className="group-open:hidden">mostrar</span>
+            <span className="hidden group-open:inline">ocultar</span>
+          </summary>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[26rem] text-[13px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                  <th className="py-1.5 font-medium">Mês</th>
+                  <th className="py-1.5 text-right font-medium">Recebido</th>
+                  <th className="py-1.5 text-right font-medium">Gasto</th>
+                  <th className="py-1.5 text-right font-medium">Resultado</th>
+                  <th className="py-1.5 text-right font-medium">Acumulado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {[...chartMonths].reverse().map((m) => (
+                  <tr key={m.ym}>
+                    <td className="py-1.5 first-letter:uppercase">{monthLabel(m.ym)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{formatBRL(m.inn)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{formatBRL(m.out)}</td>
+                    <td className={cn("py-1.5 text-right font-medium tabular-nums", m.inn - m.out >= 0 ? "text-success" : "text-danger")}>
+                      {formatBRL(m.inn - m.out)}
+                    </td>
+                    <td className={cn("py-1.5 text-right tabular-nums", m.cum >= 0 ? "text-success" : "text-danger")}>
+                      {formatBRL(m.cum)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {breakdowns.map((block) => (
