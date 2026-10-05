@@ -18,6 +18,7 @@ export type Expense = {
   amount: number;
   supplier: string | null;
   notes: string | null;
+  receipt_path: string | null;
   created_by: string | null;
   created_at: string;
 };

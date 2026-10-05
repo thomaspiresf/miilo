@@ -17,7 +17,11 @@ const WEBP_QUALITY = 0.85;
  * meio do caminho (formato não suportado, canvas indisponível), devolve o
  * arquivo original — nunca bloqueia o upload por causa disso.
  */
-export async function resizeImageForUpload(file: File): Promise<File> {
+export async function resizeImageForUpload(
+  file: File,
+  opts: { maxDimension?: number } = {},
+): Promise<File> {
+  const maxDimension = opts.maxDimension ?? MAX_DIMENSION;
   if (!file.type.startsWith("image/") || file.type === "image/svg+xml") return file;
 
   let bitmap: ImageBitmap;
@@ -28,12 +32,12 @@ export async function resizeImageForUpload(file: File): Promise<File> {
   }
 
   const { width, height } = bitmap;
-  if (Math.max(width, height) <= MAX_DIMENSION) {
+  if (Math.max(width, height) <= maxDimension) {
     bitmap.close();
     return file;
   }
 
-  const scale = MAX_DIMENSION / Math.max(width, height);
+  const scale = maxDimension / Math.max(width, height);
   const targetW = Math.round(width * scale);
   const targetH = Math.round(height * scale);
 

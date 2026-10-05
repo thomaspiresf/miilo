@@ -17,6 +17,7 @@ function mapExpense(row: any): Expense {
     amount: Number(row.amount),
     supplier: row.supplier ?? null,
     notes: row.notes ?? null,
+    receipt_path: row.receipt_path ?? null,
     created_by: row.created_by ?? null,
     created_at: row.created_at,
   };
@@ -63,6 +64,7 @@ export async function createExpense(input: ExpenseInput, actorEmail: string | nu
       amount: input.amount,
       supplier: input.supplier,
       notes: input.notes,
+      receipt_path: input.receiptPath,
       created_by: actorEmail,
     })
     .select("*")
@@ -84,8 +86,48 @@ export async function getExpense(id: string): Promise<Expense | null> {
 
 export async function deleteExpense(id: string): Promise<void> {
   assertPersistable();
-  const { error } = await createAdminClient().from("expenses").delete().eq("id", id);
+  const admin = createAdminClient();
+  const exp = await getExpense(id);
+  const { error } = await admin.from("expenses").delete().eq("id", id);
   if (error) throw error;
+  // apaga a imagem da nota junto (melhor esforço — o gasto já foi removido)
+  if (exp?.receipt_path) await admin.storage.from(RECEIPT_BUCKET).remove([exp.receipt_path]).catch(() => {});
+}
+
+// --------------------------------------------------------------------------
+//  Notas anexadas (bucket privado)
+// --------------------------------------------------------------------------
+export const RECEIPT_BUCKET = "expense-receipts";
+const RECEIPT_EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+export const RECEIPT_TYPES = Object.keys(RECEIPT_EXT);
+
+/** Guarda a imagem da nota no bucket privado e devolve o caminho. */
+export async function uploadReceipt(bytes: Buffer, contentType: string): Promise<string> {
+  assertPersistable();
+  const ext = RECEIPT_EXT[contentType];
+  if (!ext) throw new Error("Formato não suportado. Use JPG, PNG ou WebP.");
+  const path = `receipts/${crypto.randomUUID()}.${ext}`;
+  const { error } = await createAdminClient()
+    .storage.from(RECEIPT_BUCKET)
+    .upload(path, bytes, { contentType, upsert: false });
+  if (error) {
+    if (/bucket not found/i.test(error.message)) {
+      throw new Error("Rode a migração supabase/migration-expense-receipts.sql no SQL Editor do Supabase.");
+    }
+    throw new Error(`Falha ao salvar a nota: ${error.message}`);
+  }
+  return path;
+}
+
+/** Links temporários (1h) pra abrir as notas — o bucket é privado. path -> url. */
+export async function signedReceiptUrls(paths: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!hasSupabaseAdmin() || paths.length === 0) return out;
+  const { data } = await createAdminClient().storage.from(RECEIPT_BUCKET).createSignedUrls(paths, 3600);
+  for (const item of data ?? []) {
+    if (item.path && item.signedUrl) out.set(item.path, item.signedUrl);
+  }
+  return out;
 }
 
 /**

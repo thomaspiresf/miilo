@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Paperclip } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { listAllOrders } from "@/lib/data/orders";
-import { listExpensesForMonth } from "@/lib/data/expenses";
+import { listExpensesForMonth, signedReceiptUrls } from "@/lib/data/expenses";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_LABELS,
@@ -49,6 +49,8 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
       return t >= from.getTime() && t < to.getTime();
     })
     .reduce((s, o) => s + (o.net_amount ?? o.total), 0);
+
+  const receiptUrls = await signedReceiptUrls(rows.flatMap((e) => (e.receipt_path ? [e.receipt_path] : [])));
 
   const total = rows.reduce((s, e) => s + e.amount, 0);
   const result = received - total;
@@ -165,6 +167,16 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
                   {e.notes ? ` · ${e.notes}` : ""}
                 </p>
               </div>
+              {e.receipt_path && receiptUrls.get(e.receipt_path) && (
+                <a
+                  href={receiptUrls.get(e.receipt_path)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
+                >
+                  <Paperclip className="h-3.5 w-3.5" /> Ver nota
+                </a>
+              )}
               <span className="shrink-0 font-bold tabular-nums">{formatBRL(e.amount)}</span>
               <DeleteExpenseButton id={e.id} description={e.description} />
             </div>

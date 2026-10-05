@@ -21,6 +21,14 @@ export const expenseInputSchema = z.object({
   }),
   supplier: z.preprocess(emptyToNull, z.string().max(120).nullable()),
   notes: z.preprocess(emptyToNull, z.string().max(500).nullable()),
+  /** caminho no bucket expense-receipts — só aceita o formato gerado pelo upload */
+  receiptPath: z.preprocess(
+    emptyToNull,
+    z
+      .string()
+      .regex(/^receipts\/[0-9a-f-]{36}\.(jpg|png|webp)$/, "Anexo inválido")
+      .nullable(),
+  ),
 });
 
 export type ExpenseInput = z.infer<typeof expenseInputSchema>;

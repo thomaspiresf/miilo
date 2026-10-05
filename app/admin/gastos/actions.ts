@@ -18,6 +18,7 @@ export async function createExpenseAction(_prev: unknown, formData: FormData) {
     amount: formData.get("amount") ?? "",
     supplier: formData.get("supplier") ?? "",
     notes: formData.get("notes") ?? "",
+    receiptPath: formData.get("receiptPath") ?? "",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
