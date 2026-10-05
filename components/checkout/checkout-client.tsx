@@ -67,8 +67,13 @@ export function CheckoutClient({
   const router = useRouter();
   const mounted = useHydrated();
 
-  const lines = useCart((s) => s.lines);
+  const cartLines = useCart((s) => s.lines);
   const clear = useCart((s) => s.clear);
+  // Ao concluir o pagamento a sacola é esvaziada; sem uma cópia, a tela cairia em "Sacola vazia"
+  // por cima do QR do Pix / do resumo antes de abrir o pedido.
+  const [frozenLines, setFrozenLines] = useState<typeof cartLines | null>(null);
+  const lines = frozenLines ?? cartLines;
+  const [paid, setPaid] = useState(false);
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
 
   // uma vez por visita ao checkout, não a cada mudança na sacola
@@ -302,12 +307,15 @@ export function CheckoutClient({
 
       if (data.pix?.qr_code) {
         // Pix gerado → mostra o QR aqui mesmo; o pedido é acompanhado por esta tela
+        setFrozenLines(cartLines);
         setPix(data.pix);
         clear();
       } else if (data.status === "rejected") {
         setError("Pagamento recusado. Tente outro método ou cartão.");
       } else {
         // cartão aprovado / pendente
+        setFrozenLines(cartLines);
+        setPaid(true);
         clear();
         router.push(`/pedido/${order.orderId}`);
       }
@@ -413,6 +421,16 @@ export function CheckoutClient({
   );
 
   if (!mounted) return null;
+
+  if (paid) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-border bg-surface p-8 text-center">
+        <Spinner className="mx-auto" />
+        <h1 className="mt-3 text-lg font-black">Pagamento recebido!</h1>
+        <p className="mt-1 text-sm text-muted">Abrindo o seu pedido… não feche esta página.</p>
+      </div>
+    );
+  }
 
   if (lines.length === 0) {
     return (
