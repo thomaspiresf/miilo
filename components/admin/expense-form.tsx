@@ -104,7 +104,7 @@ export function ExpenseForm({ today }: { today: string }) {
       }
       setAttachment({
         path: json.path,
-        previewUrl: URL.createObjectURL(file),
+        previewUrl: URL.createObjectURL(resized),
         filled,
         note: scan ? null : "Não consegui ler a nota automaticamente — preencha os campos na mão. A imagem foi salva.",
       });
@@ -140,7 +140,7 @@ export function ExpenseForm({ today }: { today: string }) {
         <input
           ref={fileRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/*"
+          accept="image/*,.heic,.heif"
           className="hidden"
           onChange={(e) => onPickFile(e.target.files?.[0])}
         />

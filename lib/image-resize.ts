@@ -10,6 +10,29 @@ const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.85;
 const WEBP_QUALITY = 0.85;
 
+const HEIC_TYPE = /^image\/hei[cf]/i;
+const HEIC_NAME = /\.hei[cf]$/i;
+
+/**
+ * Foto de iPhone vem em HEIC e só o Safari sabe abrir. Converte pra JPEG no
+ * navegador (biblioteca carregada só quando preciso, é pesada). Se falhar,
+ * devolve o arquivo original e o upload mostra o erro de formato.
+ */
+async function convertHeicToJpeg(file: File): Promise<File> {
+  // Chrome/Windows costuma mandar HEIC com type vazio — olha a extensão também
+  if (!HEIC_TYPE.test(file.type) && !HEIC_NAME.test(file.name)) return file;
+  try {
+    const { heicTo } = await import("heic-to/next");
+    const blob = await heicTo({ blob: file, type: "image/jpeg", quality: JPEG_QUALITY });
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } catch {
+    return file;
+  }
+}
+
 /**
  * Redimensiona/recomprime a imagem no navegador antes do upload, só quando
  * ela passa de MAX_DIMENSION px no lado maior. PNG mantém transparência
@@ -18,10 +41,11 @@ const WEBP_QUALITY = 0.85;
  * arquivo original — nunca bloqueia o upload por causa disso.
  */
 export async function resizeImageForUpload(
-  file: File,
+  input: File,
   opts: { maxDimension?: number } = {},
 ): Promise<File> {
   const maxDimension = opts.maxDimension ?? MAX_DIMENSION;
+  const file = await convertHeicToJpeg(input);
   if (!file.type.startsWith("image/") || file.type === "image/svg+xml") return file;
 
   let bitmap: ImageBitmap;
