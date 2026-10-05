@@ -9,6 +9,7 @@ import { formatBRL, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
+import { ChargeDialog } from "@/components/admin/charge-dialog";
 
 export type OrderListItem = {
   id: string;
@@ -21,6 +22,11 @@ export type OrderListItem = {
   channel: OrderChannel;
   paymentMethod: string | null;
   posPayMode?: string | null;
+  /** venda a receber há mais de 7 dias */
+  overdue?: boolean;
+  phone?: string | null;
+  /** mensagem de cobrança pronta (só em venda a receber) */
+  chargeMessage?: string;
   items: { name: string; qty: number; total: number }[];
 };
 
@@ -92,7 +98,7 @@ export function OrderList({
               </span>
               {receivable ? (
                 <span className="flex shrink-0 items-center gap-1.5">
-                  <Badge tone="warning">a receber</Badge>
+                  <Badge tone={o.overdue ? "danger" : "warning"}>{o.overdue ? "atrasado" : "a receber"}</Badge>
                   <span className="text-xs text-muted">
                     {o.posPayMode === "later" ? "anotado" : "com link"}
                   </span>
@@ -125,11 +131,22 @@ export function OrderList({
                     </li>
                   ))}
                 </ul>
-                <Button asChild size="sm" className="mt-3 w-full sm:w-auto">
-                  <Link prefetch={false} href={`/admin/pedidos/${o.id}`}>
-                    <ExternalLink className="h-4 w-4" /> Abrir pedido
-                  </Link>
-                </Button>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button asChild size="sm" className="w-full sm:w-auto">
+                    <Link prefetch={false} href={`/admin/pedidos/${o.id}`}>
+                      <ExternalLink className="h-4 w-4" /> Abrir pedido
+                    </Link>
+                  </Button>
+                  {receivable && o.overdue && o.chargeMessage && (
+                    <ChargeDialog
+                      orderId={o.id}
+                      orderNumber={o.number}
+                      customerName={o.customerName ?? null}
+                      hasPhone={!!o.phone}
+                      defaultMessage={o.chargeMessage}
+                    />
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -1,21 +1,89 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { listConversationThreads } from "@/lib/data/whatsapp-conversations";
-import { formatDateTime, formatWhatsAppPhone } from "@/lib/format";
+import { listAllOrders } from "@/lib/data/orders";
+import { formatBRL, formatDateTime, formatWhatsAppPhone } from "@/lib/format";
+import { isReceivable, toReceivable } from "@/lib/receivables";
 import { ContactAvatar } from "@/components/admin/contact-avatar";
+import { ReceivablesPanel } from "@/components/admin/receivables-panel";
+import { cn } from "@/lib/utils";
 
-export default async function ConversasPage() {
+export default async function ConversasPage(props: PageProps<"/admin/conversas">) {
   await requireAdmin();
-  const threads = await listConversationThreads();
+  const sp = await props.searchParams;
+  const tab = sp.aba === "cobrancas" ? "cobrancas" : "conversas";
+
+  const [threads, orders] = await Promise.all([listConversationThreads(), listAllOrders()]);
+  // mais antigas primeiro: são as que mais precisam de cobrança
+  const receivables = orders
+    .filter(isReceivable)
+    .map(toReceivable)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const receivableTotal = receivables.reduce((s, r) => s + r.total, 0);
+  const overdueCount = receivables.filter((r) => r.overdue).length;
+
+  const tabs = [
+    { id: "conversas", label: "Conversas", href: "/admin/conversas", count: null as number | null },
+    { id: "cobrancas", label: "Cobranças", href: "/admin/conversas?aba=cobrancas", count: receivables.length },
+  ];
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-black">Conversas do WhatsApp</h1>
         <p className="text-sm text-muted">
-          Acompanhe as conversas do bot (interno e de atendimento ao público) e intervenha quando precisar.
+          Acompanhe as conversas do bot (interno e de atendimento ao público), intervenha quando precisar e cobre quem
+          ainda não pagou.
         </p>
       </div>
+
+      <div role="tablist" className="inline-flex rounded-full border border-border bg-black/[0.03] p-0.5 text-sm">
+        {tabs.map((t) => (
+          <Link
+            prefetch={false}
+            key={t.id}
+            href={t.href}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={cn(
+              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 font-medium transition",
+              tab === t.id ? "bg-background text-foreground shadow-sm" : "text-muted hover:text-foreground",
+            )}
+          >
+            {t.label}
+            {t.count != null && t.count > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-[11px] font-semibold",
+                  overdueCount > 0 ? "bg-danger/10 text-danger" : "bg-warning/15 text-warning",
+                )}
+              >
+                {t.count}
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
+
+      {tab === "cobrancas" && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm">
+            <span className="text-muted">
+              Total a receber
+              {overdueCount > 0 && (
+                <span className="ml-2 text-danger">
+                  · {overdueCount} atrasada{overdueCount === 1 ? "" : "s"} (mais de 7 dias)
+                </span>
+              )}
+            </span>
+            <span className="font-black">{formatBRL(receivableTotal)}</span>
+          </div>
+          <ReceivablesPanel items={receivables} />
+        </div>
+      )}
+
+      {tab === "conversas" && (
+        <>
 
       {threads.length === 0 ? (
         <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
@@ -52,6 +120,8 @@ export default async function ConversasPage() {
             </li>
           ))}
         </ol>
+      )}
+        </>
       )}
     </div>
   );

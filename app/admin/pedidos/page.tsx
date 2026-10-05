@@ -2,11 +2,11 @@ import Link from "next/link";
 import { listAllOrders } from "@/lib/data/orders";
 import { formatBRL } from "@/lib/format";
 import { OrderList, type OrderListItem } from "@/components/admin/order-list";
-import { ReceivablesPanel, type ReceivableItem } from "@/components/admin/receivables-panel";
 import { chargeMessageText } from "@/lib/whatsapp";
+import { isReceivable } from "@/lib/receivables";
 import { site } from "@/lib/site";
 import type { Order, OrderStatus } from "@/lib/types";
-import { amountDue } from "@/lib/order-utils";
+import { amountDue, isOverdue } from "@/lib/order-utils";
 
 const FILTERS: { value: string; label: string }[] = [
   { value: "", label: "Todos" },
@@ -17,8 +17,6 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "delivered", label: "Entregues" },
   { value: "failed", label: "Falhos" },
 ];
-
-const isReceivable = (o: Order) => o.channel === "pos" && o.status === "pending";
 
 const toItem = (o: Order): OrderListItem => ({
   id: o.id,
@@ -31,24 +29,15 @@ const toItem = (o: Order): OrderListItem => ({
   channel: o.channel,
   paymentMethod: o.payment_method,
   posPayMode: o.pos_pay_mode,
+  phone: o.phone,
+  ...(isReceivable(o)
+    ? { overdue: isOverdue(o.created_at), chargeMessage: chargeMessageText(o, `${site.url}/pagar/${o.id}`) }
+    : {}),
   items: o.items.map((it) => ({
     name: it.product_name,
     qty: it.qty,
     total: it.unit_price * it.qty,
   })),
-});
-
-const toReceivable = (o: Order): ReceivableItem => ({
-  id: o.id,
-  number: o.number,
-  customerName: o.customer_name,
-  phone: o.phone,
-  total: amountDue(o),
-  fullTotal: o.total,
-  cashPaid: o.cash_paid,
-  payUrl: `${site.url}/pagar/${o.id}`,
-  created_at: o.created_at,
-  defaultMessage: chargeMessageText(o, `${site.url}/pagar/${o.id}`),
 });
 
 export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">) {
@@ -99,17 +88,18 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/pedidos">
       </div>
 
       {receberView && (
-        <div className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm">
           <span className="text-muted">Total a receber</span>
-          <span className="font-black">{formatBRL(receivableTotal)}</span>
+          <span className="flex items-center gap-3">
+            <Link prefetch={false} href="/admin/conversas?aba=cobrancas" className="text-xs font-semibold text-primary hover:underline">
+              Abrir painel de cobranças →
+            </Link>
+            <span className="font-black">{formatBRL(receivableTotal)}</span>
+          </span>
         </div>
       )}
 
-      {receberView ? (
-        <ReceivablesPanel items={receivables.map(toReceivable)} />
-      ) : (
-        <OrderList orders={orders.map(toItem)} empty="Nenhum pedido." />
-      )}
+      <OrderList orders={orders.map(toItem)} empty="Nenhum pedido." />
     </div>
   );
 }

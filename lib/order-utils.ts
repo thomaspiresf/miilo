@@ -19,3 +19,9 @@ export function receivedSoFar(o: Amounts & { status: string; channel: string; ne
   if (o.channel === "pos" && o.status === "pending") return cashPaidOf(o);
   return 0;
 }
+
+/** Venda a receber há mais que isso conta como atrasada (cobrança). */
+export const OVERDUE_DAYS = 7;
+
+export const isOverdue = (createdAtIso: string): boolean =>
+  Date.now() - new Date(createdAtIso).getTime() > OVERDUE_DAYS * 24 * 60 * 60 * 1000;

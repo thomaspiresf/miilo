@@ -23,6 +23,8 @@ export type ReceivableItem = {
   cashPaid: number;
   payUrl: string;
   created_at: string;
+  /** há mais de 7 dias sem pagar */
+  overdue: boolean;
   defaultMessage: string;
 };
 
@@ -66,8 +68,13 @@ export function ReceivablesPanel({ items }: { items: ReceivableItem[] }) {
           <div key={it.id} className="rounded-2xl border border-border bg-surface p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="font-semibold">
+                <p className="flex flex-wrap items-center gap-2 font-semibold">
                   {it.number} · {it.customerName || "Cliente da loja"}
+                  {it.overdue && (
+                    <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-semibold text-danger">
+                      atrasado
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-muted">
                   {it.phone ? formatWhatsAppPhone(`55${it.phone}`) : "sem telefone cadastrado"} ·{" "}
