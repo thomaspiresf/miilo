@@ -2,10 +2,13 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Paperclip } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { listAllOrders } from "@/lib/data/orders";
-import { listExpensesForMonth, signedReceiptUrls } from "@/lib/data/expenses";
+import { listExpensesForMonth, signedReceiptUrls, totalsByPayer } from "@/lib/data/expenses";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_LABELS,
+  EXPENSE_PAYERS,
+  INVESTOR_PAYERS,
+  PAYER_LABELS,
   currentMonthBr,
   isMonthKey,
   monthLabel,
@@ -15,7 +18,7 @@ import {
 } from "@/lib/expenses";
 import { formatBRL, formatDate } from "@/lib/format";
 import { ExpenseForm } from "@/components/admin/expense-form";
-import { CopyFixedButton, DeleteExpenseButton } from "@/components/admin/expense-row-actions";
+import { CopyFixedButton, DeleteExpenseButton, PayerSelect } from "@/components/admin/expense-row-actions";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Gastos" };
@@ -34,10 +37,11 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
   const ym = isMonthKey(sp.mes) ? sp.mes : current;
   const prevYm = shiftMonth(ym, -1);
 
-  const [{ rows, tableMissing }, prevMonth, orders] = await Promise.all([
+  const [{ rows, tableMissing }, prevMonth, orders, allTime] = await Promise.all([
     listExpensesForMonth(ym),
     listExpensesForMonth(prevYm),
     listAllOrders(),
+    totalsByPayer(),
   ]);
 
   // "Recebido" igual ao do Painel: pedidos pagos, já descontada a taxa do MP quando conhecida
@@ -58,6 +62,20 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
     category: c,
     amount: rows.filter((e) => e.category === c).reduce((s, e) => s + e.amount, 0),
   }));
+
+  const monthByPayer = (p: (typeof EXPENSE_PAYERS)[number]) =>
+    rows.filter((e) => e.payer === p).reduce((s, e) => s + e.amount, 0);
+  const monthNoPayer = rows.filter((e) => !e.payer).reduce((s, e) => s + e.amount, 0);
+  const allNoPayer = allTime.get(null) ?? 0;
+  const [investA, investB] = INVESTOR_PAYERS;
+  const allA = allTime.get(investA) ?? 0;
+  const allB = allTime.get(investB) ?? 0;
+  const monthA = monthByPayer(investA);
+  const monthB = monthByPayer(investB);
+  const gap = (a: number, b: number) =>
+    a === b
+      ? "Empatados."
+      : `${PAYER_LABELS[a > b ? investA : investB]} investiu ${formatBRL(Math.abs(a - b))} a mais.`;
 
   const haveFixed = new Set(rows.filter((e) => e.category === "fixa").map((e) => e.description.toLowerCase()));
   const missingFixed = prevMonth.rows.filter(
@@ -147,6 +165,66 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
         })}
       </div>
 
+      <div className="space-y-4 rounded-2xl border border-border bg-surface p-5">
+        <div>
+          <p className="font-bold">Quem pagou</p>
+          <p className="text-xs text-muted">
+            Gastos pagos por cada núcleo de sócios e pelo caixa da Miilo.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-80 text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted">
+                <th className="pb-2 font-semibold">&nbsp;</th>
+                <th className="pb-2 text-right font-semibold first-letter:uppercase">{monthLabel(ym)}</th>
+                <th className="pb-2 text-right font-semibold">Total acumulado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {EXPENSE_PAYERS.map((p) => (
+                <tr key={p}>
+                  <td className="py-2 font-semibold">{PAYER_LABELS[p]}</td>
+                  <td className="py-2 text-right tabular-nums">{formatBRL(monthByPayer(p))}</td>
+                  <td className="py-2 text-right font-bold tabular-nums">{formatBRL(allTime.get(p) ?? 0)}</td>
+                </tr>
+              ))}
+              {(monthNoPayer > 0 || allNoPayer > 0) && (
+                <tr className="text-muted">
+                  <td className="py-2">Sem informação (lançados antes)</td>
+                  <td className="py-2 text-right tabular-nums">{formatBRL(monthNoPayer)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatBRL(allNoPayer)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="space-y-3 border-t border-border pt-4">
+          <p className="text-sm font-semibold">Investimento dos sócios (acumulado)</p>
+          {INVESTOR_PAYERS.map((p) => {
+            const value = allTime.get(p) ?? 0;
+            const pct = allA + allB > 0 ? (value / (allA + allB)) * 100 : 0;
+            return (
+              <div key={p}>
+                <div className="flex justify-between text-sm">
+                  <span>{PAYER_LABELS[p]}</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatBRL(value)}
+                    <span className="ml-2 text-xs font-normal text-muted">{Math.round(pct)}%</span>
+                  </span>
+                </div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-black/[0.06]">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-xs text-muted">
+            Acumulado: {gap(allA, allB)} No mês: {gap(monthA, monthB)}
+          </p>
+        </div>
+      </div>
+
       {missingFixed > 0 && <CopyFixedButton month={ym} count={missingFixed} />}
 
       <ExpenseForm today={todayBr()} />
@@ -177,6 +255,7 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
                   <Paperclip className="h-3.5 w-3.5" /> Ver nota
                 </a>
               )}
+              <PayerSelect id={e.id} payer={e.payer} />
               <span className="shrink-0 font-bold tabular-nums">{formatBRL(e.amount)}</span>
               <DeleteExpenseButton id={e.id} description={e.description} />
             </div>

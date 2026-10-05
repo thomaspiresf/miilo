@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Camera, Paperclip, X } from "lucide-react";
 import { createExpenseAction } from "@/app/admin/gastos/actions";
-import { EXPENSE_CATEGORIES, EXPENSE_LABELS } from "@/lib/expenses";
+import { EXPENSE_CATEGORIES, EXPENSE_LABELS, EXPENSE_PAYERS, PAYER_LABELS } from "@/lib/expenses";
 import { resizeImageForUpload } from "@/lib/image-resize";
 import { formatBRL } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -193,6 +193,18 @@ export function ExpenseForm({ today }: { today: string }) {
             {EXPENSE_CATEGORIES.map((c) => (
               <option key={c} value={c}>
                 {EXPENSE_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Quem pagou" hint="Cada núcleo de sócios ou o caixa da loja.">
+          <select name="payer" required defaultValue="" className={SELECT_CLASS}>
+            <option value="" disabled>
+              Escolha…
+            </option>
+            {EXPENSE_PAYERS.map((p) => (
+              <option key={p} value={p}>
+                {PAYER_LABELS[p]}
               </option>
             ))}
           </select>

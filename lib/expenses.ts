@@ -10,12 +10,26 @@ export const EXPENSE_LABELS: Record<ExpenseCategory, string> = {
   outros: "Outros",
 };
 
+/** Quem desembolsou o gasto: cada núcleo de sócios ou o caixa da própria Miilo. */
+export const EXPENSE_PAYERS = ["thaisa_thomas", "bruna_vinicius", "miilo"] as const;
+export type ExpensePayer = (typeof EXPENSE_PAYERS)[number];
+
+export const PAYER_LABELS: Record<ExpensePayer, string> = {
+  thaisa_thomas: "Thaisa e Thomás",
+  bruna_vinicius: "Bruna e Vinicius",
+  miilo: "Miilo (caixa da loja)",
+};
+
+/** Os dois núcleos que aportam dinheiro na loja — a Miilo em si não "investe". */
+export const INVESTOR_PAYERS = ["thaisa_thomas", "bruna_vinicius"] as const;
+
 export type Expense = {
   id: string;
   spent_on: string; // YYYY-MM-DD
   category: ExpenseCategory;
   description: string;
   amount: number;
+  payer: ExpensePayer | null;
   supplier: string | null;
   notes: string | null;
   receipt_path: string | null;

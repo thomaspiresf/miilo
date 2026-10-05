@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin, currentActor } from "@/lib/auth";
 import { expenseInputSchema } from "@/lib/expense-schema";
-import { copyFixedFromPreviousMonth, createExpense, deleteExpense, getExpense } from "@/lib/data/expenses";
-import { EXPENSE_LABELS, isMonthKey } from "@/lib/expenses";
+import { copyFixedFromPreviousMonth, createExpense, deleteExpense, getExpense, setExpensePayer } from "@/lib/data/expenses";
+import { EXPENSE_LABELS, EXPENSE_PAYERS, PAYER_LABELS, isMonthKey, type ExpensePayer } from "@/lib/expenses";
 import { logAction } from "@/lib/data/audit";
 import { formatBRL } from "@/lib/format";
 
@@ -16,6 +16,7 @@ export async function createExpenseAction(_prev: unknown, formData: FormData) {
     category: formData.get("category") ?? "",
     description: formData.get("description") ?? "",
     amount: formData.get("amount") ?? "",
+    payer: formData.get("payer") ?? "",
     supplier: formData.get("supplier") ?? "",
     notes: formData.get("notes") ?? "",
     receiptPath: formData.get("receiptPath") ?? "",
@@ -31,7 +32,7 @@ export async function createExpenseAction(_prev: unknown, formData: FormData) {
       action: "expense.create",
       entity: "expense",
       entityId: exp.id,
-      summary: `Lançou gasto: ${exp.description} — ${formatBRL(exp.amount)} (${EXPENSE_LABELS[exp.category]})`,
+      summary: `Lançou gasto: ${exp.description} — ${formatBRL(exp.amount)} (${EXPENSE_LABELS[exp.category]}, pago por ${exp.payer ? PAYER_LABELS[exp.payer] : "—"})`,
     });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Falha ao salvar o gasto" };
@@ -77,4 +78,23 @@ export async function copyFixedAction(ym: string): Promise<{ ok: boolean; count?
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Falha ao copiar" };
   }
+}
+
+export async function setExpensePayerAction(id: string, payer: string): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (!(EXPENSE_PAYERS as readonly string[]).includes(payer)) return { ok: false, error: "Pagador inválido." };
+  try {
+    const exp = await getExpense(id);
+    await setExpensePayer(id, payer as ExpensePayer);
+    await logAction({
+      action: "expense.update",
+      entity: "expense",
+      entityId: id,
+      summary: `Definiu quem pagou: ${exp?.description ?? "gasto"} → ${PAYER_LABELS[payer as ExpensePayer]}`,
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Falha ao salvar" };
+  }
+  revalidatePath("/admin/gastos");
+  return { ok: true };
 }

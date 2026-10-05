@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Trash2 } from "lucide-react";
-import { copyFixedAction, deleteExpenseAction } from "@/app/admin/gastos/actions";
+import { copyFixedAction, deleteExpenseAction, setExpensePayerAction } from "@/app/admin/gastos/actions";
+import { EXPENSE_PAYERS, PAYER_LABELS, type ExpensePayer } from "@/lib/expenses";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/misc";
 
@@ -34,6 +35,44 @@ export function DeleteExpenseButton({ id, description }: { id: string; descripti
         {pending ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
       </button>
       {error && <span className="text-xs text-danger">{error}</span>}
+    </span>
+  );
+}
+
+export function PayerSelect({ id, payer }: { id: string; payer: ExpensePayer | null }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function change(value: string) {
+    if (!value) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await setExpensePayerAction(id, value);
+      if (!res.ok) setError(res.error ?? "Falha ao salvar");
+      else router.refresh();
+    });
+  }
+
+  return (
+    <span className="shrink-0">
+      <select
+        aria-label="Quem pagou"
+        value={payer ?? ""}
+        disabled={pending}
+        onChange={(e) => change(e.target.value)}
+        className={`h-8 max-w-36 rounded-lg border bg-surface px-1.5 text-xs font-semibold outline-none disabled:opacity-50 ${
+          payer ? "border-border" : "border-warning text-warning"
+        }`}
+      >
+        {!payer && <option value="">Quem pagou?</option>}
+        {EXPENSE_PAYERS.map((p) => (
+          <option key={p} value={p}>
+            {PAYER_LABELS[p]}
+          </option>
+        ))}
+      </select>
+      {error && <span className="ml-1 text-xs text-danger">{error}</span>}
     </span>
   );
 }
