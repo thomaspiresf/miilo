@@ -172,10 +172,13 @@ function saleMessageText(order: Order): string {
   return `🛍️ Nova venda confirmada na loja miilo! Pedido número ${number}, no valor total de ${total}. Comprado por ${customer}, e-mail de contato ${email}. Item vendido: ${itens}. Obrigado por mais essa venda!`;
 }
 
+function orderItemLines(order: Order): string[] {
+  return order.items.map((it) => `${it.qty}x ${it.product_name}${it.variant_label ? ` (${it.variant_label})` : ""}`);
+}
+
+/** Uma linha só — variável de template não aceita quebra de linha. */
 function orderItemsSummary(order: Order): string {
-  return order.items
-    .map((it) => `${it.qty}x ${it.product_name}${it.variant_label ? ` (${it.variant_label})` : ""}`)
-    .join(" · ");
+  return orderItemLines(order).join(" · ");
 }
 
 /**
@@ -188,7 +191,9 @@ function orderItemsSummary(order: Order): string {
 export function chargeMessageText(order: Order, payUrl: string): string {
   const name = order.customer_name ? order.customer_name.split(" ")[0] : null;
   const greeting = name ? `Oi, ${name}! Tudo bem?` : "Oi! Tudo bem?";
-  return `${greeting} Aqui é da miilo 🙂 Vimos que o pagamento de ${orderItemsSummary(order)}, no valor de ${formatBRL(amountDue(order))}, ainda está pendente. Pra finalizar, é só acessar: ${payUrl}. Qualquer dúvida, é só chamar!`;
+  const items = orderItemLines(order).map((l) => `• ${l}`).join("\n");
+  // texto livre aceita quebra de linha e lista (o template aprovado na Meta, não)
+  return `${greeting}\nAqui é da miilo 🙂\n\nVimos que o pagamento de:\n${items}\n\nNo valor de ${formatBRL(amountDue(order))} ainda está pendente.\nPra finalizar, é só acessar:\n${payUrl}\n\nQualquer dúvida, é só chamar!`;
 }
 
 /**

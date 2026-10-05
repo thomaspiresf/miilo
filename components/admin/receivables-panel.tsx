@@ -87,7 +87,7 @@ export function ReceivablesPanel({ items }: { items: ReceivableItem[] }) {
             <textarea
               value={textOf(it)}
               onChange={(e) => setEdited((t) => ({ ...t, [it.id]: e.target.value }))}
-              rows={3}
+              rows={9}
               className="mt-3 w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
             />
 
