@@ -17,7 +17,7 @@ export type ExpenseItemType = (typeof EXPENSE_ITEM_TYPES)[number];
 export const ITEM_TYPE_LABELS: Record<ExpenseItemType, string> = {
   brinquedo: "Brinquedo",
   roupa: "Roupa",
-  sacolas: "Sacolas",
+  sacolas: "Embalagem",
   outros: "Outros",
 };
 

@@ -27,7 +27,7 @@ Regras:
 - merchant: nome do estabelecimento ou fornecedor.
 - description: descrição curta do gasto (ex.: "Compra Brás - bodies", "Internet", "Embalagens").
 - category: mercadoria (compra de produtos para revender/estoque), fixa (aluguel, internet, luz, assinaturas, contador, hospedagem), marketing (anúncios, impulsionamento, gráfica, brindes) ou outros (embalagens, frete, taxas e o resto).
-- item_type: o que foi comprado — brinquedo (brinquedos, pelúcias, jogos), roupa (roupas, calçados, acessórios de vestir), sacolas (sacolas, embalagens, caixas, fitas) ou outros. Use null se não for compra de mercadoria/insumo ou não der pra saber.
+- item_type: o que foi comprado — brinquedo (brinquedos, pelúcias, jogos), roupa (roupas, calçados, acessórios de vestir), sacolas (aqui é o tipo "Embalagem": sacolas, embalagens, caixas, fitas, papel de seda) ou outros. Use null se não for compra de mercadoria/insumo ou não der pra saber.
 - is_receipt: false se a imagem não for uma nota/comprovante legível.
 - Se não conseguir ler algum campo com segurança, use null. Nunca invente valores.`;
 
