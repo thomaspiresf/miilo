@@ -235,7 +235,7 @@ export function ExpenseForm({ today, onSaved }: { today: string; onSaved?: () =>
       </div>
 
       <Button type="submit" disabled={pending || reading}>
-        {pending ? <Spinner /> : "Lançar gasto"}
+        {pending ? <Spinner /> : "Lançar investimento"}
       </Button>
     </form>
   );

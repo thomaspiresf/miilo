@@ -14,7 +14,7 @@ export function DeleteExpenseButton({ id, description }: { id: string; descripti
   const [error, setError] = useState<string | null>(null);
 
   function run() {
-    if (!window.confirm(`Apagar o gasto "${description}"?`)) return;
+    if (!window.confirm(`Apagar o investimento "${description}"?`)) return;
     setError(null);
     startTransition(async () => {
       const res = await deleteExpenseAction(id);
@@ -29,7 +29,7 @@ export function DeleteExpenseButton({ id, description }: { id: string; descripti
         type="button"
         onClick={run}
         disabled={pending}
-        aria-label="Apagar gasto"
+        aria-label="Apagar investimento"
         className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger disabled:opacity-50"
       >
         {pending ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
@@ -94,7 +94,7 @@ export function ItemTypeSelect({ id, itemType }: { id: string; itemType: Expense
   return (
     <span className="shrink-0">
       <select
-        aria-label="Tipo do gasto" title="Tipo do gasto"
+        aria-label="Tipo do investimento" title="Tipo do investimento"
         value={itemType ?? ""}
         disabled={pending}
         onChange={(e) => change(e.target.value)}

@@ -113,14 +113,14 @@ export async function FinancialHealth({ period }: { period: Period }) {
 
   const status =
     allSpent === 0 && allReceived === 0
-      ? { dot: "bg-border", title: "Sem dados ainda", text: "Lance gastos e registre vendas para ver a saúde da loja." }
+      ? { dot: "bg-border", title: "Sem dados ainda", text: "Lance investimentos e registre vendas para ver a saúde da loja." }
       : allCash >= 0
         ? { dot: "bg-success", title: "No azul no caixa", text: "Tudo que já entrou cobre tudo que já saiu." }
         : overall >= 0
           ? {
               dot: "bg-warning",
               title: "Recuperando o investimento",
-              text: `Já voltou ${Math.round((allReceived / allSpent) * 100)}% do que foi gasto (${Math.round(((allReceived + receivable + stockCost) / allSpent) * 100)}% contando estoque e a receber).`,
+              text: `Já voltou ${Math.round((allReceived / allSpent) * 100)}% do que foi investido (${Math.round(((allReceived + receivable + stockCost) / allSpent) * 100)}% contando estoque e a receber).`,
             }
           : {
               dot: "bg-danger",
@@ -213,7 +213,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
     alerts.push(
       `${overdue.length} venda${overdue.length === 1 ? "" : "s"} a receber há mais de ${OVERDUE_DAYS} dias (${formatBRL(overdueTotal)})`,
     );
-  if (noPayer > 0) alerts.push(`${formatBRL(noPayer)} em gastos sem “quem pagou” neste período`);
+  if (noPayer > 0) alerts.push(`${formatBRL(noPayer)} em investimentos sem “quem pagou” neste período`);
   if (productsWithoutCost > 0)
     alerts.push(
       `${productsWithoutCost} produto${productsWithoutCost === 1 ? "" : "s"} em estoque sem custo cadastrado (estoque subestimado)`,
@@ -238,13 +238,13 @@ export async function FinancialHealth({ period }: { period: Period }) {
           {period.label}
         </p>
         <div className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-4 sm:divide-y-0">
-          <Stat label="Gasto" value={formatBRL(spent)} />
+          <Stat label="Investido" value={formatBRL(spent)} />
           <Stat label="Recebido" value={formatBRL(received)} note="líquido da taxa" />
           <Stat label="Resultado" value={formatBRL(cashResult)} tone={cashResult >= 0 ? "good" : "bad"} />
           <Stat
-            label="Voltou do gasto"
+            label="Já voltou"
             value={recoveredPct != null ? `${recoveredPct}%` : "—"}
-            note="recebido ÷ gasto"
+            note="recebido ÷ investido"
           />
         </div>
         <p className="border-y border-border bg-black/[0.02] px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
@@ -302,7 +302,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
                 <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
                   <th className="py-1.5 font-medium">Mês</th>
                   <th className="py-1.5 text-right font-medium">Recebido</th>
-                  <th className="py-1.5 text-right font-medium">Gasto</th>
+                  <th className="py-1.5 text-right font-medium">Investido</th>
                   <th className="py-1.5 text-right font-medium">Resultado</th>
                   <th className="py-1.5 text-right font-medium">Acumulado</th>
                 </tr>
@@ -329,12 +329,12 @@ export async function FinancialHealth({ period }: { period: Period }) {
 
       <div className="rounded-2xl border border-border bg-surface p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-sm font-semibold">Gasto × vendas por tipo</p>
+          <p className="text-sm font-semibold">Investido × vendas por tipo</p>
           <p className="text-[11px] text-muted">Brinquedo inclui livros · vendas pagas do período, sem frete</p>
         </div>
 
         {compareRows.length === 0 && spendOnly.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">Nenhum gasto neste período.</p>
+          <p className="mt-3 text-sm text-muted">Nenhum investimento neste período.</p>
         ) : (
           <>
             <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-6 sm:grid-cols-2">
@@ -343,7 +343,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
                 const withStock = r.sold + r.stock - r.spent;
                 const recovered = gap >= 0;
                 const bars = [
-                  { label: "Gasto", value: r.spent, color: "bg-danger/60" },
+                  { label: "Investido", value: r.spent, color: "bg-danger/60" },
                   { label: "Vendido", value: r.sold, color: "bg-success/80" },
                   { label: "Em estoque", value: r.stock, color: "bg-success/30" },
                 ];
@@ -390,7 +390,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
 
             {spendOnly.length > 0 && (
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border pt-4 text-[12px] text-muted">
-                <span className="font-medium">Só gasto, sem venda:</span>
+                <span className="font-medium">Só investimento, sem venda:</span>
                 {spendOnly.map((r) => (
                   <span key={r.label}>
                     {r.label} <span className="font-semibold tabular-nums text-foreground">{formatBRL(r.amount)}</span>
@@ -399,7 +399,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
               </div>
             )}
             <p className="mt-3 text-[11px] text-muted">
-              “Falta recuperar” = gasto − vendido (o que já voltou em dinheiro). O estoque parado, ao preço de custo, é o que ainda pode voltar.
+              “Falta recuperar” = investido − vendido (o que já voltou em dinheiro). O estoque parado, ao preço de custo, é o que ainda pode voltar.
             </p>
           </>
         )}
@@ -411,7 +411,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
             <p className="text-sm font-semibold">{block.title}</p>
             <div className="mt-3 space-y-3">
               {block.items.length === 0 || spent === 0 ? (
-                <p className="text-sm text-muted">Nenhum gasto neste período.</p>
+                <p className="text-sm text-muted">Nenhum investimento neste período.</p>
               ) : (
                 block.items.map((r) => (
                   <div key={r.label}>
@@ -447,7 +447,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
           </div>
           <p className="mt-4 border-t border-border pt-3 text-xs text-muted">
             {amtA === 0 && amtB === 0
-              ? "Nenhum dos núcleos pagou gastos neste período."
+              ? "Nenhum dos núcleos pagou investimentos neste período."
               : amtA === amtB
               ? "Os dois núcleos investiram o mesmo valor neste período."
               : `${PAYER_LABELS[amtA > amtB ? invA : invB]} investiu ${formatBRL(Math.abs(amtA - amtB))} a mais que ${PAYER_LABELS[amtA > amtB ? invB : invA]} neste período.`}
@@ -457,7 +457,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
 
       <p className="text-[11px] leading-relaxed text-muted">
         “Recebido” conta só vendas pagas (líquido da taxa do Mercado Pago) e a parte já recebida em dinheiro de vendas
-        divididas. “Saldo geral” soma o que entrou, o a receber e o estoque ao custo, menos tudo que foi gasto: é uma
+        divididas. “Saldo geral” soma o que entrou, o a receber e o estoque ao custo, menos tudo que foi investido: é uma
         estimativa, não um balanço contábil. Estoque sem custo cadastrado conta como zero.
       </p>
     </section>

@@ -34,10 +34,10 @@ export async function createExpenseAction(_prev: unknown, formData: FormData) {
       action: "expense.create",
       entity: "expense",
       entityId: exp.id,
-      summary: `Lançou gasto: ${exp.description} — ${formatBRL(exp.amount)} (${EXPENSE_LABELS[exp.category]}, pago por ${exp.payer ? PAYER_LABELS[exp.payer] : "—"})`,
+      summary: `Lançou investimento: ${exp.description} — ${formatBRL(exp.amount)} (${EXPENSE_LABELS[exp.category]}, pago por ${exp.payer ? PAYER_LABELS[exp.payer] : "—"})`,
     });
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Falha ao salvar o gasto" };
+    return { error: err instanceof Error ? err.message : "Falha ao salvar o investimento" };
   }
   revalidatePath("/admin/gastos");
   return { ok: true };
@@ -52,8 +52,8 @@ export async function deleteExpenseAction(id: string): Promise<{ ok: boolean; er
       action: "expense.delete",
       entity: "expense",
       summary: exp
-        ? `Apagou gasto: ${exp.description} — ${formatBRL(exp.amount)}`
-        : "Apagou um gasto",
+        ? `Apagou investimento: ${exp.description} — ${formatBRL(exp.amount)}`
+        : "Apagou um investimento",
     });
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Falha ao apagar" };
@@ -92,7 +92,7 @@ export async function setExpensePayerAction(id: string, payer: string): Promise<
       action: "expense.update",
       entity: "expense",
       entityId: id,
-      summary: `Definiu quem pagou: ${exp?.description ?? "gasto"} → ${PAYER_LABELS[payer as ExpensePayer]}`,
+      summary: `Definiu quem pagou: ${exp?.description ?? "investimento"} → ${PAYER_LABELS[payer as ExpensePayer]}`,
     });
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Falha ao salvar" };
@@ -114,7 +114,7 @@ export async function setExpenseItemTypeAction(id: string, itemType: string): Pr
       action: "expense.update",
       entity: "expense",
       entityId: id,
-      summary: `Classificou gasto: ${exp?.description ?? "gasto"} → ${value ? ITEM_TYPE_LABELS[value as ExpenseItemType] : "sem tipo"}`,
+      summary: `Classificou investimento: ${exp?.description ?? "investimento"} → ${value ? ITEM_TYPE_LABELS[value as ExpenseItemType] : "sem tipo"}`,
     });
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Falha ao salvar" };

@@ -38,7 +38,7 @@ const LINKS: NavLink[] = [
   },
   { href: "/admin/estoque", label: "Estoque", icon: Boxes },
   { href: "/admin/precificacao", label: "Precificação", icon: Calculator },
-  { href: "/admin/gastos", label: "Gastos", icon: Wallet },
+  { href: "/admin/gastos", label: "Investimentos", icon: Wallet },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/pedidos", label: "Pedidos", icon: Receipt },
   { href: "/admin/conversas", label: "Conversas", icon: MessageCircle },

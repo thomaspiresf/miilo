@@ -21,7 +21,7 @@ import { MetaSyncButton } from "@/components/admin/meta-sync-button";
 import { FinancialHealth } from "@/components/admin/financial-health";
 import { CopyFixedButton, DeleteExpenseButton, ItemTypeSelect, PayerSelect } from "@/components/admin/expense-row-actions";
 
-export const metadata = { title: "Gastos" };
+export const metadata = { title: "Investimentos" };
 
 export default async function AdminExpensesPage(props: PageProps<"/admin/gastos">) {
   await requireAdmin();
@@ -65,7 +65,7 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black">Gastos e saúde financeira</h1>
+          <h1 className="text-2xl font-black">Investimentos e saúde financeira</h1>
           <p className="mt-1 text-sm text-muted">Quanto saiu, quanto entrou e como a loja está.</p>
         </div>
         <div className="flex items-start gap-2">
@@ -85,7 +85,7 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
 
       {tableMissing && (
         <p className="rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">
-          A tabela de gastos ainda não existe no banco. Rode o arquivo{" "}
+          A tabela de investimentos ainda não existe no banco. Rode o arquivo{" "}
           <code>supabase/migration-expenses.sql</code> no SQL Editor do Supabase e recarregue.
         </p>
       )}
@@ -98,13 +98,13 @@ export default async function AdminExpensesPage(props: PageProps<"/admin/gastos"
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-lg font-bold">Lançamentos</h2>
           <p className="text-xs text-muted">
-            {period.label} · {rows.length} gasto{rows.length === 1 ? "" : "s"} · {formatBRL(total)}
+            {period.label} · {rows.length} investimento{rows.length === 1 ? "" : "s"} · {formatBRL(total)}
           </p>
         </div>
 
         {rows.length === 0 ? (
           <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-            Nenhum gasto lançado neste período.
+            Nenhum investimento lançado neste período.
           </p>
         ) : (
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">

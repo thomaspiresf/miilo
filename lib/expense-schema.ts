@@ -12,7 +12,7 @@ export const expenseInputSchema = z.object({
   category: z.enum(EXPENSE_CATEGORIES, { message: "Escolha uma categoria" }),
   payer: z.enum(EXPENSE_PAYERS, { message: "Diga quem pagou" }),
   itemType: z.preprocess(emptyToNull, z.enum(EXPENSE_ITEM_TYPES, { message: "Tipo inválido" }).nullable()),
-  description: z.string().trim().min(2, "Descreva o gasto").max(160, "Descrição muito longa"),
+  description: z.string().trim().min(2, "Descreva o investimento").max(160, "Descrição muito longa"),
   amount: z.string().transform((s, ctx) => {
     const v = parseMoney(s);
     if (v == null || v <= 0) {

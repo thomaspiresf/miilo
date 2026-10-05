@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 export type HealthMonth = {
   ym: string; // YYYY-MM
   inn: number; // recebido
-  out: number; // gasto
+  out: number; // investido
   cum: number; // resultado acumulado (recebido − gasto) desde o começo, até o fim deste mês
   /** o mês está dentro do período filtrado */
   active: boolean;
@@ -17,8 +17,8 @@ export type HealthMonth = {
 type View = "flow" | "result" | "cum";
 
 const VIEWS: { id: View; label: string; hint: string }[] = [
-  { id: "flow", label: "Entrou × saiu", hint: "Quanto recebeu e quanto gastou em cada mês." },
-  { id: "result", label: "Resultado", hint: "Recebido menos gasto em cada mês: verde sobrou, vermelho faltou." },
+  { id: "flow", label: "Entrou × saiu", hint: "Quanto recebeu e quanto investiu em cada mês." },
+  { id: "result", label: "Resultado", hint: "Recebido menos investido em cada mês: verde sobrou, vermelho faltou." },
   { id: "cum", label: "Acumulado", hint: "Quanto a loja já recuperou do que investiu, somando todos os meses até aqui." },
 ];
 
@@ -149,7 +149,7 @@ export function HealthChart({ months, hrefBase }: { months: HealthMonth[]; hrefB
             <dd className="font-semibold tabular-nums">{formatBRL(sel.inn)}</dd>
           </div>
           <div>
-            <dt className="text-[11px] text-muted">Gasto</dt>
+            <dt className="text-[11px] text-muted">Investido</dt>
             <dd className="font-semibold tabular-nums">{formatBRL(sel.out)}</dd>
           </div>
           <div>
@@ -175,7 +175,7 @@ export function HealthChart({ months, hrefBase }: { months: HealthMonth[]; hrefB
               <span className="h-2 w-2 rounded-sm bg-success/75" /> Recebido
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-sm bg-danger/65" /> Gasto
+              <span className="h-2 w-2 rounded-sm bg-danger/65" /> Investido
             </span>
           </>
         )}
@@ -265,7 +265,7 @@ export function HealthChart({ months, hrefBase }: { months: HealthMonth[]; hrefB
                 onFocus={() => setPicked(m.ym)}
                 tabIndex={0}
                 role="button"
-                aria-label={`${longLabel(m.ym)}: recebido ${formatBRL(m.inn)}, gasto ${formatBRL(m.out)}`}
+                aria-label={`${longLabel(m.ym)}: recebido ${formatBRL(m.inn)}, investido ${formatBRL(m.out)}`}
               >
                 {/* área de toque do mês inteiro */}
                 <rect x={PAD.left + slot * i} y={PAD.top - 6} width={slot} height={innerH + 6 + 34} fill="transparent" />
