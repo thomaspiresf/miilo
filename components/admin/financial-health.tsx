@@ -183,18 +183,30 @@ export async function FinancialHealth({ period }: { period: Period }) {
       if (kind) soldByKind[kind] += it.unit_price * it.qty * factor;
     }
   }
-  const TYPE_KIND: Partial<Record<(typeof EXPENSE_ITEM_TYPES)[number], CategoryKind>> = {
-    brinquedo: "brinquedos",
-    roupa: "roupas",
+  // livros entram no mesmo tipo de gasto de brinquedos (vêm na mesma compra)
+  const TYPE_KINDS: Partial<Record<(typeof EXPENSE_ITEM_TYPES)[number], CategoryKind[]>> = {
+    brinquedo: ["brinquedos", "livros"],
+    roupa: ["roupas"],
   };
-  type TypeRow = { label: string; spent: number; kind?: CategoryKind };
-  const typeRows: TypeRow[] = [
-    ...EXPENSE_ITEM_TYPES.map((t): TypeRow => ({ label: ITEM_TYPE_LABELS[t], spent: sum((e) => e.item_type === t), kind: TYPE_KIND[t] })),
-    { label: "Sem tipo", spent: sum((e) => !e.item_type) } as TypeRow,
-  ].filter((r) => r.spent > 0 || (r.kind && (soldByKind[r.kind] > 0 || stockByKind[r.kind] > 0)));
-  // livros não têm tipo de gasto próprio: aparecem só com vendas e estoque
-  if (soldByKind.livros > 0 || stockByKind.livros > 0) typeRows.splice(2, 0, { label: "Livros", spent: 0, kind: "livros" });
-  const typeScale = Math.max(1, ...typeRows.flatMap((r) => [r.spent, r.kind ? soldByKind[r.kind] : 0]));
+  const sumKinds = (rec: Record<CategoryKind, number>, kinds: CategoryKind[]) => kinds.reduce((t, k) => t + rec[k], 0);
+  type TypeRow = { label: string; spent: number; sold: number; stock: number };
+  const compareRows: TypeRow[] = EXPENSE_ITEM_TYPES.flatMap((t): TypeRow[] => {
+    const kinds = TYPE_KINDS[t];
+    if (!kinds) return [];
+    const row = {
+      label: ITEM_TYPE_LABELS[t],
+      spent: sum((e) => e.item_type === t),
+      sold: sumKinds(soldByKind, kinds),
+      stock: sumKinds(stockByKind, kinds),
+    };
+    return row.spent > 0 || row.sold > 0 || row.stock > 0 ? [row] : [];
+  });
+  // tipos de gasto que não geram venda (embalagem, outros, sem tipo)
+  const spendOnly = [
+    ...EXPENSE_ITEM_TYPES.filter((t) => !TYPE_KINDS[t]).map((t) => ({ label: ITEM_TYPE_LABELS[t], amount: sum((e) => e.item_type === t) })),
+    { label: "Sem tipo", amount: sum((e) => !e.item_type) },
+  ].filter((r) => r.amount > 0);
+  const typeScale = Math.max(1, ...compareRows.flatMap((r) => [r.spent, r.sold + r.stock]));
 
   const alerts: string[] = [];
   if (overdue.length > 0)
@@ -315,8 +327,92 @@ export async function FinancialHealth({ period }: { period: Period }) {
         </details>
       </div>
 
+      <div className="rounded-2xl border border-border bg-surface p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="text-sm font-semibold">Gasto × vendas por tipo</p>
+          <p className="text-[11px] text-muted">Brinquedo inclui livros · vendas pagas do período, sem frete</p>
+        </div>
+
+        {compareRows.length === 0 && spendOnly.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">Nenhum gasto neste período.</p>
+        ) : (
+          <>
+            <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-6 sm:grid-cols-2">
+              {compareRows.map((r) => {
+                const balance = r.sold + r.stock - r.spent;
+                const ok = balance >= 0;
+                return (
+                  <div key={r.label}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold">{r.label}</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
+                          ok ? "bg-success/10 text-success" : "bg-danger/10 text-danger",
+                        )}
+                      >
+                        saldo {ok ? "+" : "−"}
+                        {formatBRL(Math.abs(balance))}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-[11px] text-muted">Gasto</span>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/[0.06]">
+                          <div className="h-full rounded-full bg-danger/60" style={{ width: `${(r.spent / typeScale) * 100}%` }} />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-14 shrink-0 text-[11px] text-muted">Retorno</span>
+                        <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-black/[0.06]">
+                          <div className="h-full bg-success/80" style={{ width: `${(r.sold / typeScale) * 100}%` }} />
+                          <div className="h-full bg-success/30" style={{ width: `${(r.stock / typeScale) * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <dl className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-muted">
+                      <div>
+                        <dt>Gasto</dt>
+                        <dd className="mt-0.5 text-[13px] font-semibold tabular-nums text-foreground">{formatBRL(r.spent)}</dd>
+                      </div>
+                      <div>
+                        <dt className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-success/80" /> Vendido
+                        </dt>
+                        <dd className="mt-0.5 text-[13px] font-semibold tabular-nums text-foreground">{formatBRL(r.sold)}</dd>
+                      </div>
+                      <div>
+                        <dt className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-success/30" /> Em estoque
+                        </dt>
+                        <dd className="mt-0.5 text-[13px] font-semibold tabular-nums text-foreground">{formatBRL(r.stock)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                );
+              })}
+            </div>
+
+            {spendOnly.length > 0 && (
+              <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border pt-4 text-[12px] text-muted">
+                <span className="font-medium">Só gasto, sem venda:</span>
+                {spendOnly.map((r) => (
+                  <span key={r.label}>
+                    {r.label} <span className="font-semibold tabular-nums text-foreground">{formatBRL(r.amount)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="mt-3 text-[11px] text-muted">
+              Retorno = vendido (verde forte) + o que ainda está em estoque ao custo (verde claro). Saldo = retorno − gasto.
+            </p>
+          </>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
-        <div className="space-y-4">
         {breakdowns.map((block) => (
           <div key={block.title} className="rounded-2xl border border-border bg-surface p-5">
             <p className="text-sm font-semibold">{block.title}</p>
@@ -340,89 +436,29 @@ export async function FinancialHealth({ period }: { period: Period }) {
             </div>
           </div>
         ))}
-          <div className="rounded-2xl border border-border bg-surface p-5">
-            <p className="text-sm font-semibold">Quem pagou</p>
-            <div className="mt-3 space-y-3">
-              {byPayer.map(({ payer, amount }) => (
-                <div key={payer}>
-                  <div className="flex justify-between text-[13px]">
-                    <span>{PAYER_LABELS[payer]}</span>
-                    <span className="tabular-nums">
-                      {formatBRL(amount)}
-                      <span className="ml-2 text-xs text-muted">{spent > 0 ? Math.round((amount / spent) * 100) : 0}%</span>
-                    </span>
-                  </div>
-                  <Bar pct={spent > 0 ? (amount / spent) * 100 : 0} className={payer === "miilo" ? "bg-muted" : undefined} />
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 border-t border-border pt-3 text-xs text-muted">
-              {amtA === 0 && amtB === 0
-                ? "Nenhum dos núcleos pagou gastos neste período."
-                : amtA === amtB
-                ? "Os dois núcleos investiram o mesmo valor neste período."
-                : `${PAYER_LABELS[amtA > amtB ? invA : invB]} investiu ${formatBRL(Math.abs(amtA - amtB))} a mais que ${PAYER_LABELS[amtA > amtB ? invB : invA]} neste período.`}
-            </p>
-          </div>
-        </div>
-
         <div className="rounded-2xl border border-border bg-surface p-5">
-          <p className="text-sm font-semibold">Por tipo · gasto × vendas</p>
-          <p className="mt-0.5 text-[11px] text-muted">
-            Vendido = vendas pagas no período (sem frete, já com desconto). Saldo = vendido + estoque parado − gasto.
-          </p>
-          <div className="mt-3 space-y-4">
-            {typeRows.length === 0 ? (
-              <p className="text-sm text-muted">Nenhum gasto neste período.</p>
-            ) : (
-              typeRows.map((r) => {
-                const sold = r.kind ? soldByKind[r.kind] : null;
-                const stock = r.kind ? stockByKind[r.kind] : 0;
-                const balance = sold != null ? sold + stock - r.spent : null;
-                return (
-                  <div key={r.label}>
-                    <div className="flex justify-between text-[13px]">
-                      <span className="font-medium">{r.label}</span>
-                      {balance != null && (
-                        <span className={cn("text-xs font-semibold tabular-nums", balance >= 0 ? "text-success" : "text-danger")}>
-                          saldo {balance >= 0 ? "+" : ""}
-                          {formatBRL(balance)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 space-y-1.5 text-[12px]">
-                      <div>
-                        <div className="flex justify-between text-muted">
-                          <span>Gasto</span>
-                          <span className="tabular-nums text-foreground">
-                            {formatBRL(r.spent)}
-                            {spent > 0 && r.spent > 0 && (
-                              <span className="ml-2 text-xs text-muted">{Math.round((r.spent / spent) * 100)}%</span>
-                            )}
-                          </span>
-                        </div>
-                        <Bar pct={(r.spent / typeScale) * 100} />
-                      </div>
-                      {sold != null && (
-                        <div>
-                          <div className="flex justify-between text-muted">
-                            <span>Vendido</span>
-                            <span className="tabular-nums text-foreground">{formatBRL(sold)}</span>
-                          </div>
-                          <Bar pct={(sold / typeScale) * 100} className="bg-success/70" />
-                          {stock > 0 && (
-                            <p className="mt-1 text-[11px] text-muted">
-                              + {formatBRL(stock)} em estoque (ao custo)
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+          <p className="text-sm font-semibold">Quem pagou</p>
+          <div className="mt-3 space-y-3">
+            {byPayer.map(({ payer, amount }) => (
+              <div key={payer}>
+                <div className="flex justify-between text-[13px]">
+                  <span>{PAYER_LABELS[payer]}</span>
+                  <span className="tabular-nums">
+                    {formatBRL(amount)}
+                    <span className="ml-2 text-xs text-muted">{spent > 0 ? Math.round((amount / spent) * 100) : 0}%</span>
+                  </span>
+                </div>
+                <Bar pct={spent > 0 ? (amount / spent) * 100 : 0} className={payer === "miilo" ? "bg-muted" : undefined} />
+              </div>
+            ))}
           </div>
+          <p className="mt-4 border-t border-border pt-3 text-xs text-muted">
+            {amtA === 0 && amtB === 0
+              ? "Nenhum dos núcleos pagou gastos neste período."
+              : amtA === amtB
+              ? "Os dois núcleos investiram o mesmo valor neste período."
+              : `${PAYER_LABELS[amtA > amtB ? invA : invB]} investiu ${formatBRL(Math.abs(amtA - amtB))} a mais que ${PAYER_LABELS[amtA > amtB ? invB : invA]} neste período.`}
+          </p>
         </div>
       </div>
 
