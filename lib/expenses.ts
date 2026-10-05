@@ -92,14 +92,6 @@ export type Period = {
   month?: string;
 };
 
-export const PERIOD_CHIPS: { key: "mes" | "30" | "90" | "365" | "tudo"; label: string }[] = [
-  { key: "mes", label: "Este mês" },
-  { key: "30", label: "30 dias" },
-  { key: "90", label: "90 dias" },
-  { key: "365", label: "12 meses" },
-  { key: "tudo", label: "Tudo" },
-];
-
 const isDateKey = (v: unknown): v is string =>
   typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
 
