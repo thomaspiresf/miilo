@@ -209,6 +209,7 @@ function buildMockProduct(
 export async function adminCreateProduct(
   input: ProductInput,
   variants: VariantInput[],
+  cost: number | null = null,
 ): Promise<string> {
   assertPersistable();
   const slug = slugify(input.name) || `produto-${Date.now()}`;
@@ -217,6 +218,7 @@ export async function adminCreateProduct(
   if (!hasSupabaseAdmin()) {
     const id = `p-${Date.now()}`;
     const product = buildMockProduct(id, slug, input, variants);
+    if (cost != null) product.variants.forEach((v) => (v.cost = cost));
     product.images = [];
     mockDB().products.unshift(product);
     return id;
@@ -233,7 +235,7 @@ export async function adminCreateProduct(
 
   await admin
     .from("product_variants")
-    .insert(variants.map((v) => ({ product_id: product.id, ...variantRow(v) })));
+    .insert(variants.map((v) => ({ product_id: product.id, ...variantRow(v), ...(cost != null ? { cost } : {}) })));
   return product.id;
 }
 
@@ -241,6 +243,7 @@ export async function adminUpdateProduct(
   id: string,
   input: ProductInput,
   variants: (VariantInput & { id?: string })[],
+  cost: number | null = null,
 ): Promise<void> {
   assertPersistable();
   const basePrice = Math.min(...variants.map((v) => v.price));
@@ -250,6 +253,7 @@ export async function adminUpdateProduct(
     const p = db.products.find((x) => x.id === id);
     if (!p) return;
     const rebuilt = buildMockProduct(id, p.slug, input, variants);
+    if (cost != null) rebuilt.variants.forEach((v) => (v.cost = cost));
     rebuilt.images = p.images;
     rebuilt.rating_avg = p.rating_avg;
     rebuilt.rating_count = p.rating_count;
@@ -280,6 +284,11 @@ export async function adminUpdateProduct(
     } else {
       await admin.from("product_variants").insert({ product_id: id, ...variantRow(v) });
     }
+  }
+
+  // custo de compra preenchido no cadastro vale pra todas as variações do produto
+  if (cost != null) {
+    await admin.from("product_variants").update({ cost }).eq("product_id", id);
   }
 
   await notifyRestockForProduct(id);

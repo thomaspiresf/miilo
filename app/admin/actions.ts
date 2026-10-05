@@ -36,7 +36,7 @@ import {
 } from "@/lib/data/pricing";
 import { logAction } from "@/lib/data/audit";
 import { ORDER_STATUS } from "@/lib/order-status";
-import { parseMoney } from "@/lib/format";
+import { formatBRL, parseMoney } from "@/lib/format";
 import type { CategoryKind, OrderStatus, VideoAudio } from "@/lib/types";
 
 /**
@@ -116,23 +116,30 @@ export async function saveProductAction(_prev: unknown, formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const { variants, ...product } = parsed.data;
 
+  // custo de compra (vazio = não mexe nos custos que já existem)
+  const costRaw = String(formData.get("cost") ?? "").trim();
+  const cost = costRaw === "" ? null : parseMoney(costRaw);
+  if (costRaw !== "" && (cost == null || cost < 0)) {
+    return { error: "Custo de compra inválido" };
+  }
+
   let newId: string | null = null;
   try {
     if (id && id !== "novo") {
-      await adminUpdateProduct(id, product, variants);
+      await adminUpdateProduct(id, product, variants, cost);
       await logAction({
         action: "product.update",
         entity: "product",
         entityId: id,
-        summary: `Editou o produto "${product.name}"`,
+        summary: `Editou o produto "${product.name}"${cost != null ? ` (custo ${formatBRL(cost)})` : ""}`,
       });
     } else {
-      newId = await adminCreateProduct(product, variants);
+      newId = await adminCreateProduct(product, variants, cost);
       await logAction({
         action: "product.create",
         entity: "product",
         entityId: newId,
-        summary: `Criou o produto "${product.name}"`,
+        summary: `Criou o produto "${product.name}"${cost != null ? ` (custo ${formatBRL(cost)})` : ""}`,
       });
     }
   } catch (err) {

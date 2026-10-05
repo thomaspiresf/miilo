@@ -40,6 +40,11 @@ export function ProductForm({
 }) {
   const [state, action, pending] = useActionState(saveProductAction, null);
 
+  // custo de compra: um valor só pro produto (vale pra todas as variações)
+  const variantCosts = (product?.variants ?? []).map((v) => v.cost).filter((c): c is number => c != null);
+  const commonCost = variantCosts.length > 0 && variantCosts.every((c) => c === variantCosts[0]) ? variantCosts[0] : null;
+  const mixedCost = variantCosts.length > 0 && commonCost == null;
+
   const [categoryId, setCategoryId] = useState(product?.category.id ?? "");
   const kind = useMemo(
     () => categories.find((c) => c.id === categoryId)?.kind ?? null,
@@ -172,6 +177,21 @@ export function ProductForm({
               <option value="menina">menina</option>
               <option value="unissex">unissex</option>
             </select>
+          </Field>
+          <Field
+            label="Custo de compra (R$)"
+            hint={
+              mixedCost
+                ? "As variações têm custos diferentes — deixe vazio para manter. Preencher aplica o mesmo custo a todas."
+                : "Quanto você paga por unidade. Vale para todas as variações e já alimenta a Precificação."
+            }
+          >
+            <Input
+              name="cost"
+              inputMode="decimal"
+              defaultValue={commonCost ?? ""}
+              placeholder={mixedCost ? "vários valores" : "29.90"}
+            />
           </Field>
           <Field
             label="Preço antigo (riscado)"
