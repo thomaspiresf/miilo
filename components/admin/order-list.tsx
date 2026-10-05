@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 import type { OrderChannel, OrderStatus } from "@/lib/types";
 import { ORDER_STATUS } from "@/lib/order-status";
 import { formatBRL, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/misc";
+import { Button } from "@/components/ui/button";
 
 export type OrderListItem = {
   id: string;
@@ -124,12 +125,11 @@ export function OrderList({
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href={`/admin/pedidos/${o.id}`}
-                  className="mt-2 inline-block text-xs font-semibold text-primary"
-                >
-                  Abrir pedido →
-                </Link>
+                <Button asChild size="sm" className="mt-3 w-full sm:w-auto">
+                  <Link href={`/admin/pedidos/${o.id}`}>
+                    <ExternalLink className="h-4 w-4" /> Abrir pedido
+                  </Link>
+                </Button>
               </div>
             )}
           </div>
