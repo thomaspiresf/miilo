@@ -57,12 +57,12 @@ export function PayerSelect({ id, payer }: { id: string; payer: ExpensePayer | n
   return (
     <span className="shrink-0">
       <select
-        aria-label="Quem pagou"
+        aria-label="Quem pagou" title="Quem pagou"
         value={payer ?? ""}
         disabled={pending}
         onChange={(e) => change(e.target.value)}
-        className={`h-8 max-w-36 rounded-lg border bg-surface px-1.5 text-xs font-semibold outline-none disabled:opacity-50 ${
-          payer ? "border-border" : "border-warning text-warning"
+        className={`h-7 max-w-44 cursor-pointer rounded-full border bg-surface px-2.5 text-xs font-medium outline-none transition hover:border-foreground/30 disabled:opacity-50 ${
+          payer ? "border-border text-foreground" : "border-warning/60 bg-warning/10 text-warning"
         }`}
       >
         {!payer && <option value="">Quem pagou?</option>}
@@ -94,11 +94,11 @@ export function ItemTypeSelect({ id, itemType }: { id: string; itemType: Expense
   return (
     <span className="shrink-0">
       <select
-        aria-label="Tipo do gasto"
+        aria-label="Tipo do gasto" title="Tipo do gasto"
         value={itemType ?? ""}
         disabled={pending}
         onChange={(e) => change(e.target.value)}
-        className="h-8 max-w-28 rounded-lg border border-border bg-surface px-1.5 text-xs font-semibold outline-none disabled:opacity-50"
+        className="h-7 max-w-32 cursor-pointer rounded-full border border-border bg-surface px-2.5 text-xs font-medium text-foreground outline-none transition hover:border-foreground/30 disabled:opacity-50"
       >
         <option value="">Sem tipo</option>
         {EXPENSE_ITEM_TYPES.map((t) => (
