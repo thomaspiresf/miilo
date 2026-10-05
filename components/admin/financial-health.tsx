@@ -1,5 +1,7 @@
 import { listAllOrders } from "@/lib/data/orders";
 import { listPricingRows } from "@/lib/data/pricing";
+import { adminListProducts } from "@/lib/data/admin";
+import type { CategoryKind } from "@/lib/types";
 import { listAllExpenses } from "@/lib/data/expenses";
 import {
   EXPENSE_CATEGORIES,
@@ -75,10 +77,11 @@ function Stat({
  * sempre a foto de hoje, desde o começo.
  */
 export async function FinancialHealth({ period }: { period: Period }) {
-  const [orders, expenses, { rows: pricing }] = await Promise.all([
+  const [orders, expenses, { rows: pricing }, products] = await Promise.all([
     listAllOrders(),
     listAllExpenses(),
     listPricingRows(),
+    adminListProducts(),
   ]);
 
   // ---- entradas -----------------------------------------------------------
@@ -153,15 +156,45 @@ export async function FinancialHealth({ period }: { period: Period }) {
   const sum = (pred: (e: (typeof expenses)[number]) => boolean) =>
     periodExpenses.filter(pred).reduce((s, e) => s + e.amount, 0);
   const byCategory = EXPENSE_CATEGORIES.map((c) => ({ label: EXPENSE_LABELS[c], amount: sum((e) => e.category === c) }));
-  const byType = [
-    ...EXPENSE_ITEM_TYPES.map((t) => ({ label: ITEM_TYPE_LABELS[t], amount: sum((e) => e.item_type === t) })),
-    { label: "Sem tipo", amount: sum((e) => !e.item_type) },
-  ].filter((r) => r.amount > 0);
   const byPayer = EXPENSE_PAYERS.map((p) => ({ payer: p, amount: sum((e) => e.payer === p) }));
   const noPayer = sum((e) => !e.payer);
   const [invA, invB] = INVESTOR_PAYERS;
   const amtA = byPayer.find((p) => p.payer === invA)?.amount ?? 0;
   const amtB = byPayer.find((p) => p.payer === invB)?.amount ?? 0;
+
+  // ---- ganho por tipo de produto: vendas pagas do período x gasto x estoque parado ----
+  const kindOfVariant = new Map<string, CategoryKind>();
+  const stockByKind: Record<CategoryKind, number> = { roupas: 0, brinquedos: 0, livros: 0 };
+  for (const p of products) {
+    const costs = p.variants.map((v) => v.cost).filter((c): c is number => c != null);
+    const fallback = costs.length ? Math.min(...costs) : 0;
+    for (const v of p.variants) {
+      kindOfVariant.set(v.id, p.category.kind);
+      stockByKind[p.category.kind] += Math.max(0, v.stock) * (v.cost ?? fallback);
+    }
+  }
+  const soldByKind: Record<CategoryKind, number> = { roupas: 0, brinquedos: 0, livros: 0 };
+  for (const o of paidOrders) {
+    if (!inPeriod(dateKeyBr(o.created_at), period)) continue;
+    // desconto do pedido reparte proporcionalmente entre os itens (frete não entra)
+    const factor = o.subtotal > 0 ? Math.max(0, (o.subtotal - o.discount) / o.subtotal) : 1;
+    for (const it of o.items) {
+      const kind = it.variant_id ? kindOfVariant.get(it.variant_id) : undefined;
+      if (kind) soldByKind[kind] += it.unit_price * it.qty * factor;
+    }
+  }
+  const TYPE_KIND: Partial<Record<(typeof EXPENSE_ITEM_TYPES)[number], CategoryKind>> = {
+    brinquedo: "brinquedos",
+    roupa: "roupas",
+  };
+  type TypeRow = { label: string; spent: number; kind?: CategoryKind };
+  const typeRows: TypeRow[] = [
+    ...EXPENSE_ITEM_TYPES.map((t): TypeRow => ({ label: ITEM_TYPE_LABELS[t], spent: sum((e) => e.item_type === t), kind: TYPE_KIND[t] })),
+    { label: "Sem tipo", spent: sum((e) => !e.item_type) } as TypeRow,
+  ].filter((r) => r.spent > 0 || (r.kind && (soldByKind[r.kind] > 0 || stockByKind[r.kind] > 0)));
+  // livros não têm tipo de gasto próprio: aparecem só com vendas e estoque
+  if (soldByKind.livros > 0 || stockByKind.livros > 0) typeRows.splice(2, 0, { label: "Livros", spent: 0, kind: "livros" });
+  const typeScale = Math.max(1, ...typeRows.flatMap((r) => [r.spent, r.kind ? soldByKind[r.kind] : 0]));
 
   const alerts: string[] = [];
   if (overdue.length > 0)
@@ -174,10 +207,7 @@ export async function FinancialHealth({ period }: { period: Period }) {
       `${productsWithoutCost} produto${productsWithoutCost === 1 ? "" : "s"} em estoque sem custo cadastrado (estoque subestimado)`,
     );
 
-  const breakdowns = [
-    { title: "Por categoria", items: byCategory },
-    { title: "Por tipo", items: byType },
-  ];
+  const breakdowns = [{ title: "Por categoria", items: byCategory }];
 
   return (
     <section aria-label="Saúde financeira" className="space-y-4">
@@ -285,7 +315,8 @@ export async function FinancialHealth({ period }: { period: Period }) {
         </details>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
+        <div className="space-y-4">
         {breakdowns.map((block) => (
           <div key={block.title} className="rounded-2xl border border-border bg-surface p-5">
             <p className="text-sm font-semibold">{block.title}</p>
@@ -309,31 +340,90 @@ export async function FinancialHealth({ period }: { period: Period }) {
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="rounded-2xl border border-border bg-surface p-5">
-        <p className="text-sm font-semibold">Quem pagou</p>
-        <div className="mt-3 space-y-3">
-          {byPayer.map(({ payer, amount }) => (
-            <div key={payer}>
-              <div className="flex justify-between text-[13px]">
-                <span>{PAYER_LABELS[payer]}</span>
-                <span className="tabular-nums">
-                  {formatBRL(amount)}
-                  <span className="ml-2 text-xs text-muted">{spent > 0 ? Math.round((amount / spent) * 100) : 0}%</span>
-                </span>
-              </div>
-              <Bar pct={spent > 0 ? (amount / spent) * 100 : 0} className={payer === "miilo" ? "bg-muted" : undefined} />
+          <div className="rounded-2xl border border-border bg-surface p-5">
+            <p className="text-sm font-semibold">Quem pagou</p>
+            <div className="mt-3 space-y-3">
+              {byPayer.map(({ payer, amount }) => (
+                <div key={payer}>
+                  <div className="flex justify-between text-[13px]">
+                    <span>{PAYER_LABELS[payer]}</span>
+                    <span className="tabular-nums">
+                      {formatBRL(amount)}
+                      <span className="ml-2 text-xs text-muted">{spent > 0 ? Math.round((amount / spent) * 100) : 0}%</span>
+                    </span>
+                  </div>
+                  <Bar pct={spent > 0 ? (amount / spent) * 100 : 0} className={payer === "miilo" ? "bg-muted" : undefined} />
+                </div>
+              ))}
             </div>
-          ))}
+            <p className="mt-4 border-t border-border pt-3 text-xs text-muted">
+              {amtA === 0 && amtB === 0
+                ? "Nenhum dos núcleos pagou gastos neste período."
+                : amtA === amtB
+                ? "Os dois núcleos investiram o mesmo valor neste período."
+                : `${PAYER_LABELS[amtA > amtB ? invA : invB]} investiu ${formatBRL(Math.abs(amtA - amtB))} a mais que ${PAYER_LABELS[amtA > amtB ? invB : invA]} neste período.`}
+            </p>
+          </div>
         </div>
-        <p className="mt-4 border-t border-border pt-3 text-xs text-muted">
-          {amtA === 0 && amtB === 0
-            ? "Nenhum dos núcleos pagou gastos neste período."
-            : amtA === amtB
-            ? "Os dois núcleos investiram o mesmo valor neste período."
-            : `${PAYER_LABELS[amtA > amtB ? invA : invB]} investiu ${formatBRL(Math.abs(amtA - amtB))} a mais que ${PAYER_LABELS[amtA > amtB ? invB : invA]} neste período.`}
-        </p>
+
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <p className="text-sm font-semibold">Por tipo · gasto × vendas</p>
+          <p className="mt-0.5 text-[11px] text-muted">
+            Vendido = vendas pagas no período (sem frete, já com desconto). Saldo = vendido + estoque parado − gasto.
+          </p>
+          <div className="mt-3 space-y-4">
+            {typeRows.length === 0 ? (
+              <p className="text-sm text-muted">Nenhum gasto neste período.</p>
+            ) : (
+              typeRows.map((r) => {
+                const sold = r.kind ? soldByKind[r.kind] : null;
+                const stock = r.kind ? stockByKind[r.kind] : 0;
+                const balance = sold != null ? sold + stock - r.spent : null;
+                return (
+                  <div key={r.label}>
+                    <div className="flex justify-between text-[13px]">
+                      <span className="font-medium">{r.label}</span>
+                      {balance != null && (
+                        <span className={cn("text-xs font-semibold tabular-nums", balance >= 0 ? "text-success" : "text-danger")}>
+                          saldo {balance >= 0 ? "+" : ""}
+                          {formatBRL(balance)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 space-y-1.5 text-[12px]">
+                      <div>
+                        <div className="flex justify-between text-muted">
+                          <span>Gasto</span>
+                          <span className="tabular-nums text-foreground">
+                            {formatBRL(r.spent)}
+                            {spent > 0 && r.spent > 0 && (
+                              <span className="ml-2 text-xs text-muted">{Math.round((r.spent / spent) * 100)}%</span>
+                            )}
+                          </span>
+                        </div>
+                        <Bar pct={(r.spent / typeScale) * 100} />
+                      </div>
+                      {sold != null && (
+                        <div>
+                          <div className="flex justify-between text-muted">
+                            <span>Vendido</span>
+                            <span className="tabular-nums text-foreground">{formatBRL(sold)}</span>
+                          </div>
+                          <Bar pct={(sold / typeScale) * 100} className="bg-success/70" />
+                          {stock > 0 && (
+                            <p className="mt-1 text-[11px] text-muted">
+                              + {formatBRL(stock)} em estoque (ao custo)
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
 
       <p className="text-[11px] leading-relaxed text-muted">
