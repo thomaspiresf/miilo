@@ -15,6 +15,13 @@ import { OrderStatusPoller } from "@/components/order/order-status-poller";
 import { PurchaseTracker } from "@/components/order/purchase-tracker";
 import { PixQr } from "@/components/checkout/pix-qr";
 
+/** "15991295541" -> "(15) 99129-5541" (devolve como veio se não for número BR). */
+function formatPhone(raw: string) {
+  const d = raw.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  const m = /^(\d{2})(\d{4,5})(\d{4})$/.exec(d);
+  return m ? `(${m[1]}) ${m[2]}-${m[3]}` : raw;
+}
+
 export const metadata: Metadata = { title: "Pedido", robots: { index: false } };
 
 export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
@@ -135,7 +142,9 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
               <div className="flex-1 text-sm">
                 <p className="font-semibold">{it.product_name}</p>
                 <p className="text-xs text-muted">
-                  {it.variant_label} · {it.qty}x
+                  {[it.variant_label && it.variant_label !== "Único" ? it.variant_label : null, `${it.qty}x`]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               </div>
               <span className="text-sm font-semibold">
@@ -173,7 +182,7 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
           {order.delivery_mode === "pickup" ? "Retirada na loja" : "Entrega"}
         </h2>
         {order.customer_name && <p className="font-semibold">{order.customer_name}</p>}
-        {order.phone && <p className="text-muted">{order.phone}</p>}
+        {order.phone && <p className="text-muted">{formatPhone(order.phone)}</p>}
         {order.delivery_mode === "pickup" ? (
           <>
             <p className="mt-1 font-semibold">{site.storeAddress}</p>

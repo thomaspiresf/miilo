@@ -55,6 +55,23 @@ function formatPhone(v: string) {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
+/** Motivo da recusa do Mercado Pago (status_detail) em português claro. */
+function rejectionMessage(detail?: string | null): string {
+  const base = "Pagamento recusado.";
+  if (!detail) return `${base} Tente outro cartão ou pague com Pix.`;
+  if (detail === "cc_rejected_insufficient_amount")
+    return `${base} Saldo ou limite insuficiente — tente outro cartão ou pague com Pix.`;
+  if (detail.startsWith("cc_rejected_bad_filled"))
+    return `${base} Confira número, validade e código de segurança do cartão.`;
+  if (detail === "cc_rejected_call_for_authorize" || detail === "cc_rejected_card_disabled")
+    return `${base} O banco não autorizou — fale com ele ou use outro cartão (ou Pix).`;
+  if (detail === "cc_rejected_high_risk")
+    return `${base} Não foi autorizado por segurança — pague com Pix ou outro cartão.`;
+  if (detail === "cc_rejected_max_attempts")
+    return `${base} Muitas tentativas — use outro cartão ou pague com Pix.`;
+  return `${base} Tente outro cartão ou pague com Pix.`;
+}
+
 export function CheckoutClient({
   initialEmail,
   savedAddress,
@@ -73,7 +90,8 @@ export function CheckoutClient({
   // por cima do QR do Pix / do resumo antes de abrir o pedido.
   const [frozenLines, setFrozenLines] = useState<typeof cartLines | null>(null);
   const lines = frozenLines ?? cartLines;
-  const [paid, setPaid] = useState(false);
+  // cartão processado: "approved" (pago) ou "review" (em análise no Mercado Pago)
+  const [paid, setPaid] = useState<null | "approved" | "review">(null);
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
 
   // uma vez por visita ao checkout, não a cada mudança na sacola
@@ -311,11 +329,11 @@ export function CheckoutClient({
         setPix(data.pix);
         clear();
       } else if (data.status === "rejected") {
-        setError("Pagamento recusado. Tente outro método ou cartão.");
+        setError(rejectionMessage(data.status_detail));
       } else {
         // cartão aprovado / pendente
         setFrozenLines(cartLines);
-        setPaid(true);
+        setPaid(data.status === "approved" ? "approved" : "review");
         clear();
         router.push(`/pedido/${order.orderId}`);
       }
@@ -422,12 +440,24 @@ export function CheckoutClient({
 
   if (!mounted) return null;
 
-  if (paid) {
+  if (paid && order) {
     return (
       <div className="mx-auto max-w-lg rounded-2xl border border-border bg-surface p-8 text-center">
         <Spinner className="mx-auto" />
-        <h1 className="mt-3 text-lg font-black">Pagamento recebido!</h1>
-        <p className="mt-1 text-sm text-muted">Abrindo o seu pedido… não feche esta página.</p>
+        <h1 className="mt-3 text-lg font-black">
+          {paid === "approved" ? "Pagamento recebido!" : "Pedido recebido!"}
+        </h1>
+        <p className="mt-1 text-sm text-muted">
+          {paid === "approved"
+            ? "Abrindo o seu pedido… não feche esta página."
+            : "Seu pagamento está em análise. Abrindo o seu pedido… não feche esta página."}
+        </p>
+        <Link
+          href={`/pedido/${order.orderId}`}
+          className="mt-4 inline-block text-sm font-semibold text-primary underline underline-offset-2"
+        >
+          Ver o meu pedido
+        </Link>
       </div>
     );
   }

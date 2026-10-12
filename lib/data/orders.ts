@@ -500,9 +500,7 @@ export async function approveOrder(
         mockMoveStock(item.variant_id, -item.qty, "sale", order.id);
       }
     }
-    await incrementCouponUse(order.coupon_code);
-    await sendOrderConfirmationEmail(order);
-    await notifySale(order);
+    await afterPaid(order);
     revalidateStorefrontStock();
     return;
   }
@@ -542,11 +540,54 @@ export async function approveOrder(
   if (wasPaid) return; // já estava pago — não conta cupom nem reenvia e-mail
 
   const fresh = await getOrderById(id);
-  if (fresh && fresh.status === "paid") {
-    await incrementCouponUse(fresh.coupon_code);
-    await sendOrderConfirmationEmail(fresh);
-    await notifySale(fresh);
+  // webhook, página do pedido e polling podem aprovar ao mesmo tempo: só quem
+  // "reivindicar" a confirmação manda e-mail/WhatsApp e conta o cupom.
+  if (fresh && fresh.status === "paid" && (await claimPaidSideEffects(id))) {
+    await afterPaid(fresh);
   }
+}
+
+/**
+ * Efeitos depois que o pagamento foi aprovado (cupom, e-mail ao cliente, aviso no WhatsApp).
+ * Nenhum deles pode derrubar a aprovação: o pedido já está pago no banco, então uma falha aqui
+ * só é registrada — se subisse, o cliente veria "não foi possível processar o pagamento" e o
+ * Mercado Pago repetiria o webhook à toa.
+ */
+async function afterPaid(order: Order): Promise<void> {
+  const steps: [string, () => Promise<unknown>][] = [
+    ["cupom", () => incrementCouponUse(order.coupon_code)],
+    ["e-mail de confirmação", () => sendOrderConfirmationEmail(order)],
+    ["aviso de venda (WhatsApp)", () => notifySale(order)],
+  ];
+  for (const [label, run] of steps) {
+    try {
+      await run();
+    } catch (err) {
+      console.error(`approveOrder ${order.number}: falhou ${label}`, err);
+    }
+  }
+}
+
+/**
+ * Marca (uma única vez) que a confirmação do pedido já foi disparada. Atômico: dois
+ * aprovadores simultâneos disputam o mesmo UPDATE e só um recebe a linha de volta.
+ * Se a coluna ainda não existe (migration-order-confirmation.sql não rodou) ou o banco
+ * falhar, segue o comportamento antigo (dispara) em vez de deixar o cliente sem aviso.
+ */
+async function claimPaidSideEffects(id: string): Promise<boolean> {
+  const { data, error } = await createAdminClient()
+    .from("orders")
+    .update({ confirmation_sent_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("confirmation_sent_at", null)
+    .select("id");
+  if (error) {
+    if (!/confirmation_sent_at/i.test(error.message)) {
+      console.error("claimPaidSideEffects", id, error.message);
+    }
+    return true;
+  }
+  return (data?.length ?? 0) > 0;
 }
 
 /**

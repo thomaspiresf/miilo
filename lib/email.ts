@@ -1,6 +1,7 @@
 import "server-only";
 import { formatBRL } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/order-status";
+import { site } from "@/lib/site";
 import type { Order } from "@/lib/types";
 
 /**
@@ -87,7 +88,7 @@ function itemsTable(order: Order) {
     .map(
       (it) => `<tr>
         <td style="padding:8px 0;font-size:14px;">
-          ${escapeHtml(it.product_name)}${it.variant_label ? ` <span style="color:#6b7280;">· ${escapeHtml(it.variant_label)}</span>` : ""}
+          ${escapeHtml(it.product_name)}${it.variant_label && it.variant_label !== "Único" ? ` <span style="color:#6b7280;">· ${escapeHtml(it.variant_label)}</span>` : ""}
           <span style="color:#6b7280;"> ×${it.qty}</span>
         </td>
         <td style="padding:8px 0;font-size:14px;text-align:right;white-space:nowrap;">${formatBRL(it.unit_price * it.qty)}</td>
@@ -109,6 +110,14 @@ function itemsTable(order: Order) {
       <td style="padding:2px 0;font-size:14px;color:#6b7280;">Subtotal</td>
       <td style="padding:2px 0;font-size:14px;text-align:right;color:#6b7280;">${formatBRL(order.subtotal)}</td>
     </tr>
+    ${
+      order.discount > 0
+        ? `<tr>
+      <td style="padding:2px 0;font-size:14px;color:#16a34a;">Desconto${order.coupon_code ? ` (${escapeHtml(order.coupon_code)})` : ""}</td>
+      <td style="padding:2px 0;font-size:14px;text-align:right;color:#16a34a;">−${formatBRL(order.discount)}</td>
+    </tr>`
+        : ""
+    }
     <tr>
       <td style="padding:2px 0;font-size:14px;color:#6b7280;">Frete</td>
       <td style="padding:2px 0;font-size:14px;text-align:right;color:#6b7280;">${frete}</td>
@@ -122,7 +131,11 @@ function itemsTable(order: Order) {
 
 function addressBlock(order: Order) {
   if (order.delivery_mode === "pickup" || !order.address) {
-    return `<p style="font-size:14px;color:#6b7280;margin:0;">Retirada na loja — avisaremos quando estiver pronto.</p>`;
+    return `<p style="font-size:14px;color:#6b7280;margin:0;line-height:1.6;">
+    <strong style="color:#16181d;">Retirada na loja</strong><br>
+    ${escapeHtml(site.storeAddress)}<br>
+    ${escapeHtml(site.pickupNote)}
+  </p>`;
   }
   const a = order.address;
   return `<p style="font-size:14px;color:#6b7280;margin:0;line-height:1.6;">
