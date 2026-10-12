@@ -1,7 +1,7 @@
 import "server-only";
 import { paymentsMocked } from "@/lib/env";
 import { getPayment } from "@/lib/mercadopago";
-import { approveOrder, getOrderById, setOrderStatus } from "@/lib/data/orders";
+import { approveOrder, clearOrderPayment, getOrderById, setOrderStatus } from "@/lib/data/orders";
 
 /**
  * Re-consulta o pagamento de um pedido no Mercado Pago e atualiza o status.
@@ -31,6 +31,10 @@ export async function reconcileOrderPayment(
         netAmount: payment.netReceivedAmount ?? null,
       });
     } else if (payment.status === "rejected" || payment.status === "cancelled") {
+      if (order.channel === "pos") {
+        await clearOrderPayment(orderId, payment.status); // venda na loja continua a receber
+        return;
+      }
       await setOrderStatus(orderId, "failed", {
         mpStatus: payment.status,
         mpPaymentId: payment.id,

@@ -48,15 +48,21 @@ export async function createPayment(params: {
   amount: number;
   payerEmail: string;
   form: BrickFormData;
+  /** true se a tentativa anterior venceu/foi recusada — é uma nova tentativa, não um clique duplo */
+  retry?: boolean;
 }): Promise<PaymentResult> {
-  const { orderId, orderNumber, amount, payerEmail, form } = params;
+  const { orderId, orderNumber, amount, payerEmail, form, retry } = params;
 
   if (paymentsMocked()) return mockPayment(amount, form);
 
   const isPix = form.payment_method_id === "pix";
   // o valor entra na chave: se o pagamento for editado (parte em dinheiro), o MP gera um Pix novo
   // em vez de devolver o antigo (mesma chave = mesma resposta, com o valor velho)
-  const idempotencyKey = `order-${orderId}-${Math.round(amount * 100)}`;
+  // Depois de um Pix vencido ou cartão recusado, a mesma chave devolveria o pagamento morto de novo:
+  // a nova tentativa ganha um sufixo por minuto (cliques duplos no mesmo minuto continuam deduplicados).
+  const idempotencyKey = `order-${orderId}-${Math.round(amount * 100)}${
+    retry ? `-r${Math.floor(Date.now() / 60_000)}` : ""
+  }`;
 
   // O Pix expira em 1h — o mesmo tempo que o estoque fica reservado. Assim o
   // cliente não consegue pagar depois que a reserva já foi devolvida.

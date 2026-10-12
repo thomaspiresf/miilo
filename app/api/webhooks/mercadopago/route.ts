@@ -3,6 +3,7 @@ import { assertValidWebhook, getPayment } from "@/lib/mercadopago";
 import { env, paymentsMocked } from "@/lib/env";
 import {
   approveOrder,
+  clearOrderPayment,
   getOrderById,
   recordPaymentEvent,
   setOrderStatus,
@@ -92,6 +93,11 @@ export async function POST(request: Request) {
     const current = await getOrderById(orderId);
     if (current?.mp_payment_id && current.mp_payment_id !== String(payment.id)) {
       return NextResponse.json({ ok: true, stalePayment: true });
+    }
+    if (current?.channel === "pos") {
+      // venda na loja a receber: o Pix venceu/foi recusado, mas a dívida continua
+      await clearOrderPayment(orderId, payment.status);
+      return NextResponse.json({ ok: true, posKeptPending: true });
     }
     await setOrderStatus(orderId, "failed", {
       mpStatus: payment.status,

@@ -59,6 +59,7 @@ export async function POST(request: Request) {
       amount: amountDue(order), // valor do servidor (total − parte já paga na loja) — nunca o do cliente
       payerEmail: order.email,
       form,
+      retry: ["cancelled", "rejected", "expired"].includes(order.mp_status ?? ""),
     });
 
     if (result.status === "approved") {

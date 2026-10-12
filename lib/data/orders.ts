@@ -591,6 +591,27 @@ async function claimPaidSideEffects(id: string): Promise<boolean> {
 }
 
 /**
+ * Pix vencido / pagamento recusado de uma venda feita na loja: o pedido continua "a receber"
+ * (o cliente já levou os itens e ainda deve) — só solta o pagamento antigo pra poder gerar outro
+ * link/Pix. Diferente do pedido online, que falha e devolve o estoque.
+ */
+export async function clearOrderPayment(id: string, mpStatus: string): Promise<void> {
+  if (!hasSupabaseAdmin()) {
+    const order = mockDB().orders.find((o) => o.id === id);
+    if (!order || order.status !== "pending") return;
+    order.mp_payment_id = null;
+    order.mp_status = mpStatus;
+    return;
+  }
+  const { error } = await createAdminClient()
+    .from("orders")
+    .update({ mp_payment_id: null, mp_status: mpStatus })
+    .eq("id", id)
+    .eq("status", "pending");
+  if (error) throw error;
+}
+
+/**
  * Define quanto do pedido já foi recebido em dinheiro/maquininha (o link cobra o resto).
  * Só pedido pendente. Zera o pagamento do MP associado (o Pix/cartão antigo tinha o valor
  * velho) — quem chama cancela o pagamento antigo no MP antes.
