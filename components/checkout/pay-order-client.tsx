@@ -39,7 +39,7 @@ export function PayOrderClient({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const [pix, setPix] = useState<{ qr_code: string; qr_code_base64?: string } | null>(null);
+  const [pix, setPix] = useState<{ qr_code: string; qr_code_base64?: string; expires_at?: string | null } | null>(null);
 
   async function processPayment(formData: Record<string, unknown>) {
     setSubmitting(true);
@@ -145,7 +145,7 @@ export function PayOrderClient({
 
       {pix ? (
         <>
-          <PixQr qrCode={pix.qr_code} qrCodeBase64={pix.qr_code_base64} amount={amount} />
+          <PixQr qrCode={pix.qr_code} qrCodeBase64={pix.qr_code_base64} amount={amount} expiresAt={pix.expires_at} />
           <OrderStatusPoller orderId={orderId} initialStatus="pending" demo={paymentsMocked} redirectTo={`/pedido/${orderId}`} />
           <Button asChild variant="outline" className="w-full">
             <Link href={`/pedido/${orderId}`}>Ver o pedido</Link>

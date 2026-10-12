@@ -164,7 +164,7 @@ export function CheckoutClient({
   const [order, setOrder] = useState<{ orderId: string; amount: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [pix, setPix] = useState<{ qr_code: string; qr_code_base64: string } | null>(null);
+  const [pix, setPix] = useState<{ qr_code: string; qr_code_base64: string; expires_at?: string | null } | null>(null);
 
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percentOff: number } | null>(null);
@@ -744,7 +744,7 @@ export function CheckoutClient({
         {/* Pagamento */}
         {pix && order ? (
           <div className="space-y-4">
-            <PixQr qrCode={pix.qr_code} qrCodeBase64={pix.qr_code_base64} amount={order.amount} />
+            <PixQr qrCode={pix.qr_code} qrCodeBase64={pix.qr_code_base64} amount={order.amount} expiresAt={pix.expires_at} />
             <OrderStatusPoller orderId={order.orderId} initialStatus="pending" demo={paymentsMocked} redirectTo={`/pedido/${order.orderId}`} />
             <Button asChild variant="outline" className="w-full">
               <Link href={`/pedido/${order.orderId}`}>Ver o pedido</Link>

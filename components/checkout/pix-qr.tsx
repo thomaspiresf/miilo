@@ -2,16 +2,19 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, formatDateTime } from "@/lib/format";
 
 export function PixQr({
   qrCode,
   qrCodeBase64,
   amount,
+  expiresAt,
 }: {
   qrCode: string;
   qrCodeBase64?: string | null;
   amount: number;
+  /** validade do Pix (ISO), como o Mercado Pago informou */
+  expiresAt?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -30,7 +33,7 @@ export function PixQr({
       <h2 className="font-black">Pague com Pix — {formatBRL(amount)}</h2>
       <p className="mt-1 text-sm text-muted">
         Abra o app do seu banco, escolha pagar com Pix e escaneie o QR ou cole o
-        código. O código vale por 24h.
+        código.{expiresAt ? ` Vale até ${formatDateTime(expiresAt)}.` : ""}
       </p>
 
       {qrCodeBase64 && (

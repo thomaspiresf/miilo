@@ -122,6 +122,7 @@ export default async function OrderPage(props: PageProps<"/pedido/[id]">) {
           qrCode={pixQr.qr_code}
           qrCodeBase64={pixQr.qr_code_base64}
           amount={order.total}
+          expiresAt={pixQr.expires_at}
         />
       )}
 

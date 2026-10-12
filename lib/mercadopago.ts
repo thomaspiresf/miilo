@@ -25,6 +25,8 @@ export type PaymentResult = {
     qr_code: string;
     qr_code_base64: string;
     ticket_url?: string;
+    /** até quando o Pix pode ser pago (ISO) — vem do Mercado Pago, não do que pedimos */
+    expires_at?: string | null;
   };
   /**
    * Valor que efetivamente cai na conta, já descontada a taxa do Mercado Pago
@@ -50,10 +52,12 @@ export async function createPayment(params: {
   form: BrickFormData;
   /** true se a tentativa anterior venceu/foi recusada — é uma nova tentativa, não um clique duplo */
   retry?: boolean;
+  /** validade do Pix em minutos (padrão 60 — o mesmo tempo da reserva de estoque do site) */
+  pixMinutes?: number;
 }): Promise<PaymentResult> {
-  const { orderId, orderNumber, amount, payerEmail, form, retry } = params;
+  const { orderId, orderNumber, amount, payerEmail, form, retry, pixMinutes = 60 } = params;
 
-  if (paymentsMocked()) return mockPayment(amount, form);
+  if (paymentsMocked()) return mockPayment(amount, form, pixMinutes);
 
   const isPix = form.payment_method_id === "pix";
   // o valor entra na chave: se o pagamento for editado (parte em dinheiro), o MP gera um Pix novo
@@ -64,10 +68,11 @@ export async function createPayment(params: {
     retry ? `-r${Math.floor(Date.now() / 60_000)}` : ""
   }`;
 
-  // O Pix expira em 1h — o mesmo tempo que o estoque fica reservado. Assim o
-  // cliente não consegue pagar depois que a reserva já foi devolvida.
+  // Compra do site: o Pix expira em 1h — o mesmo tempo que o estoque fica reservado, assim o
+  // cliente não paga depois que a reserva já foi devolvida. Venda na loja a receber: prazo longo
+  // (o estoque não é reservado por tempo, o cliente já levou os itens).
   // O MP exige offset de fuso explícito (não aceita o "Z" do toISOString()).
-  const pixExpiresAt = new Date(Date.now() + 60 * 60_000)
+  const pixExpiresAt = new Date(Date.now() + pixMinutes * 60_000)
     .toISOString()
     .replace("Z", "+00:00");
 
@@ -147,7 +152,7 @@ export function assertValidWebhook(input: {
 // --------------------------------------------------------------------------
 //  Mock
 // --------------------------------------------------------------------------
-function mockPayment(amount: number, form: BrickFormData): PaymentResult {
+function mockPayment(amount: number, form: BrickFormData, pixMinutes = 60): PaymentResult {
   const id = `MOCK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   if (form.payment_method_id === "pix") {
     const fakeCode =
@@ -163,6 +168,7 @@ function mockPayment(amount: number, form: BrickFormData): PaymentResult {
         qr_code: fakeCode,
         qr_code_base64:
           "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        expires_at: new Date(Date.now() + pixMinutes * 60_000).toISOString(),
       },
     };
   }
@@ -189,6 +195,7 @@ function normalize(res: any): PaymentResult {
           qr_code: pi.qr_code,
           qr_code_base64: pi.qr_code_base64,
           ticket_url: pi.ticket_url,
+          expires_at: res?.date_of_expiration ?? null,
         }
       : undefined,
     netReceivedAmount: netReceivedAmount(res),

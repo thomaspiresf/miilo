@@ -59,6 +59,8 @@ export async function POST(request: Request) {
       amount: amountDue(order), // valor do servidor (total − parte já paga na loja) — nunca o do cliente
       payerEmail: order.email,
       form,
+      // venda na loja por link: Pix vale 7 dias (compra do site continua 1h)
+      pixMinutes: order.channel === "pos" ? 7 * 24 * 60 : undefined,
       retry: ["cancelled", "rejected", "expired"].includes(order.mp_status ?? ""),
     });
 
