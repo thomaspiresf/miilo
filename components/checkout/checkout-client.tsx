@@ -55,6 +55,33 @@ function formatPhone(v: string) {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
+const LAST_ORDER_KEY = "miilo-last-order";
+const LAST_ORDER_TTL_MS = 48 * 60 * 60 * 1000;
+
+/** Guarda o pedido recém-criado: se a tela recarregar (ex.: voltou do app do banco), dá pra achá-lo. */
+function rememberOrder(id: string, number?: string) {
+  try {
+    window.localStorage.setItem(
+      LAST_ORDER_KEY,
+      JSON.stringify({ id, number: number ?? null, at: Date.now() }),
+    );
+  } catch {
+    /* modo privado etc. — só perde o atalho */
+  }
+}
+
+function readLastOrder(): { id: string; number: string | null } | null {
+  try {
+    const raw = window.localStorage.getItem(LAST_ORDER_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { id?: string; number?: string | null; at?: number };
+    if (!v.id || !v.at || Date.now() - v.at > LAST_ORDER_TTL_MS) return null;
+    return { id: v.id, number: v.number ?? null };
+  } catch {
+    return null;
+  }
+}
+
 /** Motivo da recusa do Mercado Pago (status_detail) em português claro. */
 function rejectionMessage(detail?: string | null): string {
   const base = "Pagamento recusado.";
@@ -301,6 +328,7 @@ export function CheckoutClient({
         }
         throw new Error(data.error || "Falha ao criar pedido");
       }
+      rememberOrder(data.orderId, data.orderNumber);
       setOrder({ orderId: data.orderId, amount: data.amount });
       setPhase("payment");
     } catch (err) {
@@ -463,6 +491,28 @@ export function CheckoutClient({
   }
 
   if (lines.length === 0) {
+    // sacola é esvaziada ao pagar: se a tela recarregou, mostra o pedido recente em vez de só "vazia"
+    const last = readLastOrder();
+    if (last) {
+      return (
+        <div className="mx-auto max-w-lg rounded-2xl border border-border bg-surface p-8 text-center">
+          <h1 className="text-lg font-black">Seu pedido já foi feito</h1>
+          <p className="mt-1 text-sm text-muted">
+            {last.number ? `O pedido ${last.number} está registrado.` : "Seu pedido está registrado."}{" "}
+            Veja o status do pagamento — se for Pix, o código continua lá para pagar.
+          </p>
+          <Button asChild className="mt-4 w-full">
+            <Link href={`/pedido/${last.id}`}>Ver o meu pedido</Link>
+          </Button>
+          <Link
+            href="/c/roupas"
+            className="mt-3 inline-block text-sm font-semibold text-muted underline underline-offset-2"
+          >
+            Continuar comprando
+          </Link>
+        </div>
+      );
+    }
     return (
       <EmptyState
         title="Sacola vazia"
